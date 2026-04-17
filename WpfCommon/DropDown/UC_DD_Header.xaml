@@ -1,0 +1,100 @@
+﻿<UserControl x:Name="userControl" x:Class="WPFCommon.DropDown.UC_DD_Header"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:WPFCommon.DropDown"
+             mc:Ignorable="d" Loaded="userControl_Loaded">
+    <UserControl.Resources>
+        <Style x:Key="border" TargetType="Border">
+            <Setter Property="Background" Value="#FF232323"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Trigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <ColorAnimation Storyboard.TargetProperty="(Button.Background).(SolidColorBrush.Color)"
+                                                     From="#FF232323" To="#FF333333"
+                                                     Duration="0:0:0.2"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.EnterActions>
+                    <Trigger.ExitActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <ColorAnimation Storyboard.TargetProperty="(Button.Background).(SolidColorBrush.Color)"
+                                                     From="#FF333333" To="#FF232323"
+                                                     Duration="0:0:0.2"/>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </Trigger.ExitActions>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Resources>
+    <Border x:Name="border" CornerRadius="5" MouseLeftButtonUp="Border_MouseLeftButtonUp" 
+            BorderBrush="#FF333333" BorderThickness="0" Style="{Binding Mode=OneWay, Source={StaticResource border}}"
+            Cursor="Hand">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="auto"/>
+                <RowDefinition x:Name="rdContent" Height="0"/>
+            </Grid.RowDefinitions>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition x:Name="cdIcon" Width="0"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="15"/>
+                </Grid.ColumnDefinitions>
+                <Viewbox x:Name="vbImage" Margin="5">
+                    <Image x:Name="iIcon" Source="{Binding Path=Icon,ElementName=userControl}"/>
+                </Viewbox>
+                <Viewbox x:Name="vbIcon" Margin="5" Visibility="Collapsed"/>
+                <Label x:Name="lText" Grid.Column="1" Foreground="White" VerticalAlignment="Top" Content="{Binding Path=Text,ElementName=userControl}"></Label>
+                <Border Grid.Column="2" Padding="0 2.5 8 2.5">
+                    <Viewbox>
+                        <Canvas Height="512" Width="320">
+                            <Canvas.RenderTransform>
+                                <RotateTransform Angle="0"/>
+                            </Canvas.RenderTransform>
+                            <Canvas.Style>
+                                <Style TargetType="Canvas">
+                                    <Setter Property="RenderTransformOrigin" Value=".5 .5"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Path=IsOpen, 
+                                                                        ElementName=userControl}" Value="True">
+                                            <DataTrigger.EnterActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                                                     From="0" To="90"
+                                                                                     Duration="0:0:0.2"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </DataTrigger.EnterActions>
+                                            <DataTrigger.ExitActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard>
+                                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                                                                                     From="90" To="0"
+                                                                                     Duration="0:0:0.2"/>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </DataTrigger.ExitActions>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Canvas.Style>
+                            <!--W: 50 H: 50-->
+                            <Path Fill="White" Data="M310.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-192 192c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L242.7 256 73.4 86.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l192 192z">
+                            </Path>
+                        </Canvas>
+                    </Viewbox>
+                </Border>
+            </Grid>
+            <Border x:Name="bContent" Grid.Row="1" Visibility="Visible">
+                <!--Content-->
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

@@ -1,0 +1,20 @@
+﻿<UserControl x:Class="TestFrameworkDebugUI.Controls.TimelineBoard.UC_TimelineBoard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:TestFrameworkDebugUI.Controls.TimelineBoard"
+             xmlns:timeline="clr-namespace:TestFrameworkDebugUI.Controls.TimelineBoard.Timeline"
+             mc:Ignorable="d" 
+             d:DesignHeight="450" d:DesignWidth="800">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="5*"/>
+            <ColumnDefinition Width="3*"/>
+        </Grid.ColumnDefinitions>
+        <timeline:UC_Timeline/>
+        <Border Grid.Column="1" CornerRadius="2.5" Margin="5" Background="#32000000">
+            <Label VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="DarkGray">WIP</Label>
+        </Border>
+    </Grid>
+</UserControl>

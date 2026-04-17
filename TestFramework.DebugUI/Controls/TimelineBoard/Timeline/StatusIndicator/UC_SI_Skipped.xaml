@@ -1,0 +1,14 @@
+﻿<UserControl x:Class="TestFrameworkDebugUI.Controls.TimelineBoard.Timeline.StatusIndicator.UC_SI_Skipped"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:TestFrameworkDebugUI.Controls.TimelineBoard.Timeline.StatusIndicator"
+             mc:Ignorable="d" 
+             d:DesignHeight="100" d:DesignWidth="100">
+    <Viewbox ToolTip="Skipped">
+        <Border CornerRadius="50" Height="100" Width="100" Background="White" BorderThickness="10" BorderBrush="White">
+            <Border Width="50" Height="15" Background="Gray" CornerRadius="7.5"/>
+        </Border>
+    </Viewbox>
+</UserControl>

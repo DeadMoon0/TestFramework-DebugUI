@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="FormsProxy/FormsProxy.csproj" />
+  <Project Path="TestFramework.DebugUI.PipeAdapter/TestFramework.DebugUI.PipeAdapter.csproj" />
+  <Project Path="TestFramework.DebugUI/TestFramework.DebugUI.csproj" />
+  <Project Path="WpfCommon/WpfCommon.csproj" />
+  <Project Path="WpfStateService/WpfStateService.csproj" />
+</Solution>

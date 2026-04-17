@@ -1,0 +1,25 @@
+﻿<UserControl x:Name="usercontrol" x:Class="WPFCommon.SlidingSelectPanel.UC_SLP_Base"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:WPFCommon.SlidingSelectPanel"
+             mc:Ignorable="d" Loaded="usercontrol_Loaded">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="auto"/>
+            <RowDefinition Height="auto"/>
+        </Grid.RowDefinitions>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="auto"/>
+                <RowDefinition Height="2"/>
+            </Grid.RowDefinitions>
+            <StackPanel x:Name="spHead" Orientation="Horizontal">
+            </StackPanel>
+            <Canvas Grid.Row="1" VerticalAlignment="Stretch">
+                <Border x:Name="bHeadCursor" Canvas.Left="0" Width="0" Margin="5 0 5 0" CornerRadius="5" Height="2" Background="{Binding ElementName=usercontrol, Path=CursorColor}" SnapsToDevicePixels="True"/>
+            </Canvas>
+        </Grid>
+    </Grid>
+</UserControl>

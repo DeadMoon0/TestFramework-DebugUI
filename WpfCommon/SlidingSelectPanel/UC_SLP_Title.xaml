@@ -1,0 +1,52 @@
+﻿<UserControl x:Name="usercontrol" x:Class="WPFCommon.SlidingSelectPanel.UC_SLP_Title"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:WPFCommon.SlidingSelectPanel"
+             mc:Ignorable="d">
+    <Button x:Name="button" Grid.Row="2" Margin="5 5 5 0" Cursor="Hand" Click="button_Click">
+        <Button.Style>
+            <Style TargetType="{x:Type Button}">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type Button}">
+                            <Border Background="{TemplateBinding Background}">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="Background" Value="#00000000"/>
+                <Style.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Trigger.EnterActions>
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <ColorAnimation Storyboard.TargetProperty="(Button.Background).(SolidColorBrush.Color)"
+From="#00000000" To="#3F000000"
+Duration="0:0:0.2"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </Trigger.EnterActions>
+                        <Trigger.ExitActions>
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <ColorAnimation Storyboard.TargetProperty="(Button.Background).(SolidColorBrush.Color)"
+From="#3F000000" To="#00000000"
+Duration="0:0:0.2"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </Trigger.ExitActions>
+                    </Trigger>
+                </Style.Triggers>
+                <Style.Resources>
+                    <Style TargetType="Border">
+                        <Setter x:Name="sCR" Property="CornerRadius" Value="5 5 0 0"/>
+                    </Style>
+                </Style.Resources>
+            </Style>
+        </Button.Style>
+        <Label Grid.Column="1" Foreground="White" Content="{Binding ElementName=usercontrol, Path=Title}" FontWeight="Bold" FontSize="16"></Label>
+    </Button>
+</UserControl>

@@ -11,5 +11,7 @@ public record ArtifactUpdateSignal : ISignal
 
     public required string SessionId { get; init; }
     public required string Name { get; init; }
+    public string? Stage { get; init; }
+    public int? StepId { get; init; }
     public required ArtifactState Artifact { get; init; }
 }

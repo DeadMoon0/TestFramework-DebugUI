@@ -36,8 +36,14 @@ public abstract class StateObject
         {
             if (_defaults.ContainsKey(this.GetType())) foreach (var item in _defaults[this.GetType()])
             {
-                _objectStore[item.Key] = item.Value;
-                if (item.Value is StateObject stateObject) GraphStore.Link(Id, item.Key, stateObject.Id);
+                object? defaultValue = item.Value;
+                if (defaultValue is StateObject stateObject)
+                {
+                    defaultValue = Activator.CreateInstance(stateObject.GetType()) ?? throw new InvalidOperationException($"Could not create default state object instance for {stateObject.GetType().FullName}.");
+                }
+
+                _objectStore[item.Key] = defaultValue;
+                if (defaultValue is StateObject stateObjectInstance) GraphStore.Link(Id, item.Key, stateObjectInstance.Id);
             }
             GraphStore.AddNode(this);
             tcs.SetResult();
@@ -73,6 +79,9 @@ public abstract class StateObject
         StateServiceDispatcher.Dispatch(() =>
         {
             object? oldValue = _objectStore[propertyName];
+            if (oldValue is StateObject oldStateObject)
+                GraphStore.Unlink(Id, propertyName, oldStateObject.Id);
+
             _objectStore[propertyName] = value;
             if (value is StateObject stateObject) GraphStore.Link(Id, propertyName, stateObject.Id);
             GraphStore.SignalChange(Id, propertyName, value, oldValue);
@@ -88,6 +97,20 @@ public abstract class StateObject
     protected void RemovePropertyDynamic(string propertyName)
     {
         _objectStore.TryRemove(propertyName, out _);
+    }
+
+    protected void RemoveValue(string propertyName)
+    {
+        StateServiceDispatcher.Dispatch(() =>
+        {
+            if (!_objectStore.TryRemove(propertyName, out object? oldValue))
+                return;
+
+            if (oldValue is StateObject oldStateObject)
+                GraphStore.Unlink(Id, propertyName, oldStateObject.Id);
+
+            GraphStore.SignalChange(Id, propertyName, null, oldValue);
+        });
     }
 
     protected List<string> GetPropertyNames() => [.. _objectStore.Keys];

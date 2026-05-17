@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="FormsProxy/FormsProxy.csproj" />
+  <Project Path="TestFramework.DebugUI.Data/TestFramework.DebugUI.Data.csproj" />
   <Project Path="TestFramework.DebugUI.PipeAdapter/TestFramework.DebugUI.PipeAdapter.csproj" />
   <Project Path="TestFramework.DebugUI/TestFramework.DebugUI.csproj" />
   <Project Path="WpfCommon/WpfCommon.csproj" />

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using WpfStateService.Dispatching;
 using WpfStateService.Callbacks;
 using WpfStateService.Graph;
 
@@ -34,11 +35,17 @@ internal static class StateServiceDispatcher
     {
         foreach (var action in _actionQueue.GetConsumingEnumerable())
         {
-            action();
-            if (_nextCleanup <= DateTimeOffset.UtcNow)
+            try
             {
-                GraphStore.RunGC();
-                _nextCleanup = DateTimeOffset.UtcNow + _cleanUpTimeout;
+                action();
+                if (_nextCleanup <= DateTimeOffset.UtcNow)
+                {
+                    GraphStore.RunGC();
+                    _nextCleanup = DateTimeOffset.UtcNow + _cleanUpTimeout;
+                }
+            }
+            catch
+            {
             }
         }
     }
@@ -47,17 +54,35 @@ internal static class StateServiceDispatcher
     {
         foreach (var callbackMessage in _callbackQueue.GetConsumingEnumerable())
         {
-            callbackMessage.Call();
+            try
+            {
+                callbackMessage.Call();
+            }
+            catch
+            {
+            }
         }
     }
 
     internal static void Dispatch(Action action)
     {
+        if (StateCommonDispatcher.StateDispatcher is IStateMutationDispatcher mutationDispatcher)
+        {
+            mutationDispatcher.DispatchState(action);
+            return;
+        }
+
         _actionQueue.Add(action);
     }
 
     internal static void DispatchCallback(CallbackChangeMessage message)
     {
+        if (StateCommonDispatcher.StateDispatcher is IStateMutationDispatcher)
+        {
+            message.Call();
+            return;
+        }
+
         _callbackQueue.Add(message);
     }
 

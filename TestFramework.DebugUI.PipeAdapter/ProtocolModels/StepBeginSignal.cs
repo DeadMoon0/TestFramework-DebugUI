@@ -9,5 +9,6 @@ public record StepBeginSignal : ISignal
     public SignalKind Kind => SignalKind.StepBegin;
 
     public required string SessionId { get; init; }
+    public required string Stage { get; init; }
     public required int StepId { get; init; }
 }

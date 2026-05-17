@@ -56,7 +56,14 @@ public class StateObjectPath : IEquatable<StateObjectPath>
             stateObject = GraphStore.QueryChildNode(stateObject!.Id, item);
             if (stateObject is null) return null;
         }
-        return stateObject.GetValue<object>(PropertySteps.Last());
+        try
+        {
+            return stateObject.GetValue<object>(PropertySteps.Last());
+        }
+        catch (KeyNotFoundException)
+        {
+            return null;
+        }
     }
 
     public bool SetValue<T>(T value)
@@ -68,8 +75,15 @@ public class StateObjectPath : IEquatable<StateObjectPath>
             stateObject = GraphStore.QueryChildNode(stateObject!.Id, item);
             if (stateObject is null) return false;
         }
-        stateObject.SetValue<T>(PropertySteps.Last(), value);
-        return true;
+        try
+        {
+            stateObject.SetValue<T>(PropertySteps.Last(), value);
+            return true;
+        }
+        catch (KeyNotFoundException)
+        {
+            return false;
+        }
     }
 
     public override bool Equals(object? obj)

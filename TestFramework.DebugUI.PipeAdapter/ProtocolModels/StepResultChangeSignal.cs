@@ -10,5 +10,7 @@ public record StepResultChangeSignal : ISignal
     public SignalKind Kind => SignalKind.StepResultChange;
 
     public required string SessionId { get; init; }
+    public required string Stage { get; init; }
+    public required int StepId { get; init; }
     public required StepResultGeneric Result { get; init; }
 }

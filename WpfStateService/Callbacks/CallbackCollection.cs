@@ -8,6 +8,7 @@ internal class CallbackCollection
     private record WeakAction(MethodInfo Method, WeakReference<object> Target);
     private record CallbackItem(WeakAction WeakAction, CallbackFlags Flags);
 
+    private readonly object syncRoot = new();
     private readonly List<CallbackItem> _callbacks = [];
 
     internal void Invoke(object? value, object? oldValue, CallbackCallingFlags flags)
@@ -15,9 +16,19 @@ internal class CallbackCollection
         if (value is null) flags |= CallbackCallingFlags.IsNowNull;
         if (value?.Equals(oldValue) ?? oldValue is null) flags |= CallbackCallingFlags.IsEqual;
 
+        StateCallbackGeneric[] actions;
+        lock (syncRoot)
+        {
+            actions = [.. _callbacks
+                .Where(x => MeetsCallingFlagRequirements(flags, x.Flags))
+                .Select(x => GetActionFromWeakAction(x.WeakAction))
+                .Where(x => x is not null)
+                .Cast<StateCallbackGeneric>()];
+        }
+
         StateServiceDispatcher.DispatchCallback(new CallbackChangeMessage
         (
-            [.. _callbacks.Where(x => MeetsCallingFlagRequirements(flags, x.Flags)).Select(x => GetActionFromWeakAction(x.WeakAction)).Where(x => x is not null).Cast<StateCallbackGeneric>()],
+            actions,
             value,
             oldValue
         ));
@@ -25,13 +36,19 @@ internal class CallbackCollection
 
     internal void RunGC()
     {
-        _callbacks.RemoveAll(x => !x.WeakAction.Target.TryGetTarget(out _));
+        lock (syncRoot)
+        {
+            _callbacks.RemoveAll(x => !x.WeakAction.Target.TryGetTarget(out _));
+        }
     }
 
     internal void AddCallback<T>(StateCallback<T> callback, CallbackFlags flags)
     {
         Debug.Assert(callback.Target is not null, "Target of the Action cannot be NULL. This can happen if the Action is Static.");
-        _callbacks.Add(new CallbackItem(new WeakAction(callback.Method, new WeakReference<object>(callback.Target)), flags));
+        lock (syncRoot)
+        {
+            _callbacks.Add(new CallbackItem(new WeakAction(callback.Method, new WeakReference<object>(callback.Target)), flags));
+        }
     }
 
     private static bool MeetsCallingFlagRequirements(CallbackCallingFlags callingFlags, CallbackFlags callbackFlags)

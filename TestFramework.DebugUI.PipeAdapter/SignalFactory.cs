@@ -13,6 +13,8 @@ internal static class SignalFactory
         {
             case SignalKind.ArtifactUpdate:
                 return JsonConvert.DeserializeObject<ArtifactUpdateSignal>(json) ?? throw new InvalidOperationException("Could not Deserialize Signal: " + json);
+            case SignalKind.EntityTransition:
+                return JsonConvert.DeserializeObject<EntityTransitionSignal>(json) ?? throw new InvalidOperationException("Could not Deserialize Signal: " + json);
             case SignalKind.InitTimelineRun:
                 return JsonConvert.DeserializeObject<InitTimelineRunSignal>(json) ?? throw new InvalidOperationException("Could not Deserialize Signal: " + json);
             case SignalKind.StageBegin:
@@ -23,6 +25,12 @@ internal static class SignalFactory
                 return JsonConvert.DeserializeObject<StepResultChangeSignal>(json) ?? throw new InvalidOperationException("Could not Deserialize Signal: " + json);
             case SignalKind.TimelineRunFinished:
                 return JsonConvert.DeserializeObject<TimelineRunFinishedSignal>(json) ?? throw new InvalidOperationException("Could not Deserialize Signal: " + json);
+            case SignalKind.ValueUpdate:
+                return JsonConvert.DeserializeObject<ValueUpdateSignal>(json) ?? throw new InvalidOperationException("Could not Deserialize Signal: " + json);
+            case SignalKind.LogEntry:
+                return JsonConvert.DeserializeObject<LogEntrySignal>(json) ?? throw new InvalidOperationException("Could not Deserialize Signal: " + json);
+            case SignalKind.Assertion:
+                return JsonConvert.DeserializeObject<AssertionSignal>(json) ?? throw new InvalidOperationException("Could not Deserialize Signal: " + json);
             case SignalKind.VariableUpdate:
                 return JsonConvert.DeserializeObject<VariableUpdateSignal>(json) ?? throw new InvalidOperationException("Could not Deserialize Signal: " + json);
             case SignalKind.BreakpointHitRequest:

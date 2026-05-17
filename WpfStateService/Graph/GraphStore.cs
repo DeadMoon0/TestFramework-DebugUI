@@ -14,53 +14,82 @@ internal static class GraphStore
 
     private record GuidWithProperty(Guid Guid, string PropertyToChild);
 
+    private static readonly object _graphLock = new();
     private static readonly Dictionary<Guid, GraphNode> _nodes = [];
     private static readonly Dictionary<GuidWithProperty, Guid> _edges = [];
     private static readonly ConcurrentDictionary<StateObjectPath, CallbackCollection> _callbacks = [];
 
     internal static void AddNode(StateObject stateObject)
     {
-        if (_nodes.ContainsKey(stateObject.Id)) return;
-        _nodes.Add(stateObject.Id, new GraphNode(new WeakReference<StateObject>(stateObject)));
+        lock (_graphLock)
+        {
+            if (_nodes.ContainsKey(stateObject.Id)) return;
+            _nodes.Add(stateObject.Id, new GraphNode(new WeakReference<StateObject>(stateObject)));
+        }
     }
 
     internal static void RemoveNode(Guid guid)
     {
-        if (_nodes.ContainsKey(guid)) return;
-        foreach (GuidWithProperty parent in FindParents(guid))
+        lock (_graphLock)
         {
-            Unlink(parent.Guid, parent.PropertyToChild);
+            if (!_nodes.ContainsKey(guid)) return;
+            foreach (GuidWithProperty parent in FindParents(guid))
+            {
+                Unlink(parent.Guid, parent.PropertyToChild, guid);
+            }
+            _nodes.Remove(guid);
         }
-        _nodes.Remove(guid);
     }
 
     internal static void Link(Guid parent, string propertyName, Guid child)
     {
-        bool found = false;
-        if ((found = _edges.TryGetValue(new GuidWithProperty(parent, propertyName), out Guid oldChild)) && oldChild == child) return;
-        if (found) DegradeReference(oldChild);
+        lock (_graphLock)
+        {
+            bool found = false;
+            if ((found = _edges.TryGetValue(new GuidWithProperty(parent, propertyName), out Guid oldChild)) && oldChild == child) return;
+            if (found) DegradeReference(oldChild);
 
-        _edges[new GuidWithProperty(parent, propertyName)] = child;
+            _edges[new GuidWithProperty(parent, propertyName)] = child;
+        }
     }
 
     internal static void Unlink(Guid parent, string propertyName)
     {
-        if (_edges.TryGetValue(new GuidWithProperty(parent, propertyName), out var child))
+        Unlink(parent, propertyName, null);
+    }
+
+    internal static void Unlink(Guid parent, string propertyName, Guid? expectedChild)
+    {
+        lock (_graphLock)
         {
-            _edges.Remove(new GuidWithProperty(parent, propertyName));
-            DegradeReference(child);
+            if (_edges.TryGetValue(new GuidWithProperty(parent, propertyName), out var child))
+            {
+                if (expectedChild is not null && child != expectedChild.Value)
+                    return;
+
+                _edges.Remove(new GuidWithProperty(parent, propertyName));
+                DegradeReference(child);
+            }
         }
     }
 
     internal static bool TryQueryNode(Guid guid, [NotNullWhen(true)] out StateObject? state)
     {
-        state = null;
-        return _nodes.TryGetValue(guid, out var node) && node.StateObjectRef.TryGetTarget(out state);
+        lock (_graphLock)
+        {
+            state = null;
+            return _nodes.TryGetValue(guid, out var node) && node.StateObjectRef.TryGetTarget(out state);
+        }
     }
 
     internal static StateObject? QueryChildNode(Guid parent, string propertyName)
     {
-        if (!_edges.TryGetValue(new GuidWithProperty(parent, propertyName), out Guid child)) return null;
+        Guid child;
+        lock (_graphLock)
+        {
+            if (!_edges.TryGetValue(new GuidWithProperty(parent, propertyName), out child)) return null;
+        }
+
         return TryQueryNode(child, out var state) ? state : null;
     }
 

@@ -10,5 +10,7 @@ public record VariableUpdateSignal : ISignal
 
     public required string SessionId { get; init; }
     public required string Name { get; init; }
+    public string? Stage { get; init; }
+    public int? StepId { get; init; }
     public required VariableState Variable { get; init; }
 }

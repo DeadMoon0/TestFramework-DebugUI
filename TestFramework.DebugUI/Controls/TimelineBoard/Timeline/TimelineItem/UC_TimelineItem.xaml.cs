@@ -14,6 +14,7 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using TestFramework.Core.Debugger;
 using TestFramework.Core.Steps;
+using TestFramework.Core.Steps.Options;
 using TestFramework.DebugUI.State;
 using TestFrameworkDebugUI.Controls.TimelineBoard.Timeline.StatusIndicator;
 using WpfStateService.Callbacks;
@@ -40,28 +41,30 @@ namespace TestFrameworkDebugUI.Controls.TimelineBoard.Timeline.TimelineItem
             lName.Content = name;
             lDescription.Content = description;
 
-            var stepUpdateStatePath = StatePath.For(MainWindow.State).Property(MainState.ActiveRunProperty).Property(RunState.StageUpdatesProperty).PropertyKey<StageUpdateState>(stageName).Property(StageUpdateState.StepUpdatesProperty).PropertyKey<StepUpdateState>(id + "");
-            stepUpdateStatePath.Property(StepUpdateState.StateProperty).CallbackAsync(OnStateChange, CallbackFlags.OnNotNull);
-            stepUpdateStatePath.Property(StepUpdateState.HasStartedProperty).CallbackAsync(OnHasStartedChange, CallbackFlags.OnNotNull);
-            stepUpdateStatePath.Property(StepUpdateState.OutputVariablesProperty).CallbackAsync(OnOutputVariablesChange, CallbackFlags.OnNotNull | CallbackFlags.OnChildChange);
-            stepUpdateStatePath.Property(StepUpdateState.OutputArtifactsProperty).CallbackAsync(OnOutputArtifactsChange, CallbackFlags.OnNotNull | CallbackFlags.OnChildChange);
+            var stepUpdateStatePath = StatePath.For(MainWindow.State).Property(MainState.ActiveRunProperty).Property(RunState.StagesProperty).PropertyKey<StageNodeState>(stageName).Property(StageNodeState.StepsProperty).PropertyKey<StepNodeState>(id + "");
+            stepUpdateStatePath.Property(StepNodeState.StateProperty).CallbackAsync(OnStateChange, CallbackFlags.OnNotNull);
+            stepUpdateStatePath.Property(StepNodeState.AttemptCountProperty).CallbackAsync(OnAttemptCountChange, CallbackFlags.OnNotNull);
+            stepUpdateStatePath.Property(StepNodeState.OutputsProperty).CallbackAsync(OnOutputsChange, CallbackFlags.OnNotNull | CallbackFlags.OnChildChange);
         }
 
-        private async Task OnHasStartedChange(bool hasStarted, bool old)
+        private async Task OnAttemptCountChange(int attemptCount, int old)
         {
-            if (!hasStarted) return;
+            if (attemptCount <= 0 || old > 0) return;
             gStatusHost.Children.Clear();
             gStatusHost.Children.Add(new UC_SI_InProgress());
 
             spInput.Children.Clear();
-            foreach (ArtifactState art in MainWindow.State.ActiveRun!.StageUpdates[_stageName].StepUpdates[_id + ""].InputArtifacts.Select(x => x.Value).ToList())
+            foreach (IOConnectionState connection in MainWindow.State.ActiveRun!.Stages[_stageName].Steps[_id + ""].Inputs.Values.Where(x => x.HasValue).ToList())
             {
-                spInput.Children.Add(new UC_TI_Artifact(art.Key));
-            }
-
-            foreach (VariableState var in MainWindow.State.ActiveRun!.StageUpdates[_stageName].StepUpdates[_id + ""].InputVariables.Select(x => x.Value).ToList())
-            {
-                spInput.Children.Add(new UC_TI_Var(var.Key));
+                switch (connection.Kind)
+                {
+                    case StepIOKind.Artifact:
+                        spInput.Children.Add(new UC_TI_Artifact(connection.Name));
+                        break;
+                    case StepIOKind.Variable:
+                        spInput.Children.Add(new UC_TI_Var(connection.Name));
+                        break;
+                }
             }
         }
 
@@ -89,38 +92,38 @@ namespace TestFrameworkDebugUI.Controls.TimelineBoard.Timeline.TimelineItem
             }
         }
 
-        private async Task OnOutputVariablesChange(StateDictionary<VariableState> variableStates, StateDictionary<VariableState> old)
+        private async Task OnOutputsChange(StateDictionary<IOConnectionState> outputs, StateDictionary<IOConnectionState> old)
         {
-            foreach (var var in variableStates.ToList())
+            foreach (IOConnectionState connection in outputs.Values.Where(x => x.HasValue).ToList())
             {
-                List<UC_TI_Var> removed = new List<UC_TI_Var>();
-                foreach (var spItem in spOutput.Children)
+                if (connection.Kind == StepIOKind.Variable)
                 {
-                    if (spItem is UC_TI_Var varItem && varItem.name == var.Key) removed.Add(varItem);
-                }
-                spOutput.Children.Add(new UC_TI_Var(var.Key));
+                    List<UC_TI_Var> removed = new List<UC_TI_Var>();
+                    foreach (var spItem in spOutput.Children)
+                    {
+                        if (spItem is UC_TI_Var varItem && varItem.name == connection.Name) removed.Add(varItem);
+                    }
+                    spOutput.Children.Add(new UC_TI_Var(connection.Name));
 
-                foreach (var item in removed)
-                {
-                    spOutput.Children.Remove(item);
+                    foreach (var item in removed)
+                    {
+                        spOutput.Children.Remove(item);
+                    }
                 }
-            }
-        }
 
-        private async Task OnOutputArtifactsChange(StateDictionary<ArtifactState> artifactStates, StateDictionary<ArtifactState> old)
-        {
-            foreach (var art in artifactStates.ToList())
-            {
-                List<UC_TI_Artifact> removed = new List<UC_TI_Artifact>();
-                foreach (var spItem in spOutput.Children)
+                if (connection.Kind == StepIOKind.Artifact)
                 {
-                    if (spItem is UC_TI_Artifact artItem && artItem.name == art.Key) removed.Add(artItem);
-                }
-                spOutput.Children.Add(new UC_TI_Artifact(art.Key));
+                    List<UC_TI_Artifact> removed = new List<UC_TI_Artifact>();
+                    foreach (var spItem in spOutput.Children)
+                    {
+                        if (spItem is UC_TI_Artifact artItem && artItem.name == connection.Name) removed.Add(artItem);
+                    }
+                    spOutput.Children.Add(new UC_TI_Artifact(connection.Name));
 
-                foreach (var item in removed)
-                {
-                    spOutput.Children.Remove(item);
+                    foreach (var item in removed)
+                    {
+                        spOutput.Children.Remove(item);
+                    }
                 }
             }
         }

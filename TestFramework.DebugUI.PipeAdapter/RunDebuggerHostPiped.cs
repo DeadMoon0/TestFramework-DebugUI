@@ -21,26 +21,23 @@ public abstract class RunDebuggerHostPiped
                     if (signal is null) break;
                     switch (signal.Kind)
                     {
-                        case SignalKind.ArtifactUpdate:
-                            await OnArtifactUpdateAsync((ArtifactUpdateSignal)signal);
+                        case SignalKind.EntityTransition:
+                            await OnEntityTransitionAsync((EntityTransitionSignal)signal);
                             break;
                         case SignalKind.InitTimelineRun:
                             await OnInitTimelineRunAsync((InitTimelineRunSignal)signal);
                             break;
-                        case SignalKind.StageBegin:
-                            await OnStageBeginAsync((StageBeginSignal)signal);
-                            break;
-                        case SignalKind.StepBegin:
-                            await OnStepBeginAsync((StepBeginSignal)signal);
-                            break;
-                        case SignalKind.StepResultChange:
-                            await OnStepResultChangeAsync((StepResultChangeSignal)signal);
-                            break;
                         case SignalKind.TimelineRunFinished:
                             await OnTimelineRunFinishedAsync((TimelineRunFinishedSignal)signal);
                             break;
-                        case SignalKind.VariableUpdate:
-                            await OnVariableUpdateAsync((VariableUpdateSignal)signal);
+                        case SignalKind.ValueUpdate:
+                            await OnValueUpdateAsync((ValueUpdateSignal)signal);
+                            break;
+                        case SignalKind.LogEntry:
+                            await OnLogEntryAsync((LogEntrySignal)signal);
+                            break;
+                        case SignalKind.Assertion:
+                            await OnAssertionAsync((AssertionSignal)signal);
                             break;
                         case SignalKind.BreakpointHitRequest:
                             await OnBreakpointHitRequestAsync((BreakpointHitRequestSignal)signal);
@@ -59,12 +56,11 @@ public abstract class RunDebuggerHostPiped
         return pipeHost.SendSignalAsync(signal);
     }
 
-    public abstract Task OnArtifactUpdateAsync(ArtifactUpdateSignal signal);
+    public abstract Task OnEntityTransitionAsync(EntityTransitionSignal signal);
     public abstract Task OnInitTimelineRunAsync(InitTimelineRunSignal signal);
-    public abstract Task OnStageBeginAsync(StageBeginSignal signal);
-    public abstract Task OnStepBeginAsync(StepBeginSignal signal);
-    public abstract Task OnStepResultChangeAsync(StepResultChangeSignal signal);
     public abstract Task OnTimelineRunFinishedAsync(TimelineRunFinishedSignal signal);
-    public abstract Task OnVariableUpdateAsync(VariableUpdateSignal signal);
+    public abstract Task OnValueUpdateAsync(ValueUpdateSignal signal);
+    public abstract Task OnLogEntryAsync(LogEntrySignal signal);
+    public abstract Task OnAssertionAsync(AssertionSignal signal);
     public abstract Task OnBreakpointHitRequestAsync(BreakpointHitRequestSignal signal);
 }

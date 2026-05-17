@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using TestFramework.Core.Debugger;
-using TestFramework.Core.Steps;
 using TestFramework.DebugUI.PipeAdapter.ProtocolModels;
 
 namespace TestFramework.DebugUI.PipeAdapter;
@@ -10,8 +9,6 @@ namespace TestFramework.DebugUI.PipeAdapter;
 public class RunDebuggerPiped : IRunDebugger
 {
     private PipeClient client = PipeStreamController.CreateClient();
-
-    public static IRunDebugger CreateNew() => new RunDebuggerPiped();
 
     public async Task SignalAndWaitBreakpointHitAsync(string sessionId, string stage, int stepId)
     {
@@ -24,13 +21,17 @@ public class RunDebuggerPiped : IRunDebugger
         await client.WaitForAsync(SignalKind.BreakpointHitContinue);
     }
 
-    public Task SignalArtifactUpdateAsync(string sessionId, string name, ArtifactState artifact)
+    public Task SignalEntityTransitionAsync(string sessionId, DebugEntityKind entityKind, string? stage, int? stepId, DebugLifecycleState state, DebugLifecycleState? previousState = null, DebugLifecycleState? outcomeState = null)
     {
-        return client.SignalAsync(new ArtifactUpdateSignal
+        return client.SignalAsync(new EntityTransitionSignal
         {
             SessionId = sessionId,
-            Name = name,
-            Artifact = artifact
+            EntityKind = entityKind,
+            Stage = stage,
+            StepId = stepId,
+            PreviousState = previousState,
+            OutcomeState = outcomeState,
+            State = state
         });
     }
 
@@ -45,30 +46,34 @@ public class RunDebuggerPiped : IRunDebugger
         });
     }
 
-    public Task SignalStageBeginAsync(string sessionId, string name)
+    public Task SignalValueUpdateAsync(string sessionId, string name, DebugValueKind valueKind, string? stage, int? stepId, DebugValueEnvelope value)
     {
-        return client.SignalAsync(new StageBeginSignal
+        return client.SignalAsync(new ValueUpdateSignal
         {
             SessionId = sessionId,
-            Name = name
+            Name = name,
+            ValueKind = valueKind,
+            Stage = stage,
+            StepId = stepId,
+            Envelope = value
         });
     }
 
-    public Task SignalStepBeginAsync(string sessionId, int stepId)
+    public Task SignalLogEntryAsync(string sessionId, DebugLogEntry entry)
     {
-        return client.SignalAsync(new StepBeginSignal
+        return client.SignalAsync(new LogEntrySignal
         {
             SessionId = sessionId,
-            StepId = stepId
+            Entry = entry
         });
     }
 
-    public Task SignalStepResultChangeAsync(string sessionId, StepResultGeneric result)
+    public Task SignalAssertionAsync(string sessionId, DebugAssertionEntry entry)
     {
-        return client.SignalAsync(new StepResultChangeSignal
+        return client.SignalAsync(new AssertionSignal
         {
             SessionId = sessionId,
-            Result = result
+            Entry = entry
         });
     }
 
@@ -79,15 +84,5 @@ public class RunDebuggerPiped : IRunDebugger
             SessionId = sessionId
         });
         await client.WaitForFlushedAsync();
-    }
-
-    public Task SignalVariableUpdateAsync(string sessionId, string name, VariableState variable)
-    {
-        return client.SignalAsync(new VariableUpdateSignal
-        {
-            SessionId = sessionId,
-            Name = name,
-            Variable = variable
-        });
     }
 }

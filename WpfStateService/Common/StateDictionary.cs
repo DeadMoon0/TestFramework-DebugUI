@@ -37,10 +37,8 @@ public class StateDictionary<TValue> : StateObject, IDictionary<string, TValue>
 
     public void Clear()
     {
-        foreach (var item in GetPropertyNames())
-        {
-            RemovePropertyDynamic(item);
-        }
+        foreach (string item in GetPropertyNames().ToArray())
+            RemoveValue(item);
     }
 
     public bool Contains(KeyValuePair<string, TValue> item)
@@ -59,6 +57,7 @@ public class StateDictionary<TValue> : StateObject, IDictionary<string, TValue>
         foreach (var item in this)
         {
             array[i] = item;
+            i++;
         }
     }
 
@@ -70,7 +69,7 @@ public class StateDictionary<TValue> : StateObject, IDictionary<string, TValue>
     public bool Remove(string key)
     {
         if (!ContainsKey(key)) return false;
-        RemovePropertyDynamic(key);
+        RemoveValue(key);
         return true;
     }
 

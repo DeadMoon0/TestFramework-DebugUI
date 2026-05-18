@@ -12,11 +12,10 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
-using TestFramework.Core.Debugger;
-using TestFramework.Core.Stages;
-using TestFramework.Core.Steps;
 using TestFramework.DebugUI.State;
 using TestFrameworkDebugUI.Controls.TimelineBoard.Timeline.TimelineItem;
+using WpfStateService.Callbacks;
+using WpfStateService.Common;
 using WpfStateService.Graph;
 
 namespace TestFrameworkDebugUI.Controls.TimelineBoard.Timeline
@@ -30,20 +29,18 @@ namespace TestFrameworkDebugUI.Controls.TimelineBoard.Timeline
         {
             InitializeComponent();
 
-            StatePath.For(MainWindow.State).Property(MainState.ActiveRunProperty).Property(RunState.StructureProperty).CallbackAsync(LoadStructure, WpfStateService.Callbacks.CallbackFlags.OnNotNull);
+            StatePath.For(MainWindow.State).Property(MainState.ActiveRunProperty).Property(RunState.StagesProperty).CallbackAsync(LoadStages, CallbackFlags.OnNotNull);
         }
 
-        private async Task LoadStructure(TimelineRunStructure structure, TimelineRunStructure old)
+        private async Task LoadStages(StateDictionary<StageNodeState> stages, StateDictionary<StageNodeState> old)
         {
             spContent.Children.Clear();
-            foreach (DebugStageState stage in structure.Stages)
+            foreach (StageNodeState stage in DebugRunStateQueries.GetOrderedStages(stages))
             {
                 spContent.Children.Add(new UC_StageMarker(stage.Name, stage.Description));
-                int id = 0;
-                foreach (DebugStepState step in stage.Steps)
+                foreach (StepNodeState step in DebugRunStateQueries.GetOrderedSteps(stage))
                 {
-                    spContent.Children.Add(new UC_TimelineItem(stage.Name, id, step.Name, step.Description));
-                    id++;
+                    spContent.Children.Add(new UC_TimelineItem(stage.Name, step.StepId, step.Name, step.Description));
                 }
             }
         }

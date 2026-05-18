@@ -28,12 +28,6 @@ public class StageNodeState : StateObject
     public int Order { get => GetValue(OrderProperty); set => SetValue(OrderProperty, value); }
     public static StateProperty<int> OrderProperty { get; } = Property(nameof(Order), 0);
 
-    public string[] ExecutionLayerOrder { get => GetValue(ExecutionLayerOrderProperty); set => SetValue(ExecutionLayerOrderProperty, value); }
-    public static StateProperty<string[]> ExecutionLayerOrderProperty { get; } = Property(nameof(ExecutionLayerOrder), System.Array.Empty<string>());
-
-    public string CurrentExecutionLayerKey { get => GetValue(CurrentExecutionLayerKeyProperty); set => SetValue(CurrentExecutionLayerKeyProperty, value); }
-    public static StateProperty<string> CurrentExecutionLayerKeyProperty { get; } = Property(nameof(CurrentExecutionLayerKey), "");
-
     public StateDictionary<StageLayerState> ExecutionLayers { get => GetValue(ExecutionLayersProperty); set => SetValue(ExecutionLayersProperty, value); }
     public static StateProperty<StateDictionary<StageLayerState>> ExecutionLayersProperty { get; } = Property(nameof(ExecutionLayers), new StateDictionary<StageLayerState>());
 

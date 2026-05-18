@@ -40,12 +40,12 @@ public class DebugRunStateReducerTests
         Assert.Equal(DebugLifecycleState.Initialized, mainState.ActiveRun.Stages["Main"].Steps["0"].LifecycleState);
         Assert.Equal("Main stage", mainState.ActiveRun.Stages["Main"].Description);
         Assert.Equal("Step 1", mainState.ActiveRun.Stages["Main"].Steps["0"].Name);
-        Assert.Equal(new[] { "layer-0" }, mainState.ActiveRun.Stages["Main"].ExecutionLayerOrder);
+        Assert.Equal(new[] { "layer-0" }, DebugRunStateQueries.GetExecutionLayerKeys(mainState.ActiveRun.Stages["Main"]));
         Assert.True(mainState.ActiveRun.Stages["Main"].ExecutionLayers.ContainsKey("layer-0"));
         Assert.Equal("layer-0", mainState.ActiveRun.Stages["Main"].Steps["0"].ExecutionLayerKey);
         Assert.True(mainState.ActiveRun.Stages["Main"].Steps["0"].Inputs.ContainsKey("Variable:input"));
         Assert.True(mainState.ActiveRun.Stages["Main"].Steps["0"].Inputs.ContainsKey("Artifact:artifact"));
-        Assert.Empty(mainState.ActiveRun.Stages["Main"].Steps["0"].Iterations);
+        Assert.Empty(mainState.ActiveRun.Stages["Main"].Steps["0"].Attempts);
     }
 
     [Fact]
@@ -82,9 +82,9 @@ public class DebugRunStateReducerTests
 
         StepNodeState stepState = mainState.ActiveRun!.Stages["Main"].Steps["0"];
         Assert.Equal(1, stepState.AttemptCount);
-        Assert.True(stepState.Iterations.ContainsKey("1"));
-        Assert.Equal("Iteration 1", stepState.Iterations["1"].Name);
-        Assert.Equal(DebugLifecycleState.Running, stepState.Iterations["1"].LifecycleState);
+        Assert.True(stepState.Attempts.ContainsKey("1"));
+        Assert.Equal("Attempt 1", stepState.Attempts["1"].Name);
+        Assert.Equal(DebugLifecycleState.Running, stepState.Attempts["1"].LifecycleState);
         Assert.True(stepState.Inputs["Variable:input"].HasValue);
         Assert.Equal("updated", stepState.Inputs["Variable:input"].DisplayText);
         Assert.True(mainState.ActiveRun.Stages["Main"].ExecutionLayers["layer-0"].IsActive);
@@ -129,9 +129,9 @@ public class DebugRunStateReducerTests
         Assert.Equal(StepState.NotRun, stepState.State);
         Assert.Equal(DebugLifecycleState.Running, stepState.LifecycleState);
         Assert.Equal(2, stepState.AttemptCount);
-        Assert.True(stepState.Iterations.ContainsKey("1"));
-        Assert.True(stepState.Iterations.ContainsKey("2"));
-        Assert.Equal(DebugLifecycleState.Timeout, stepState.Iterations["1"].LifecycleState);
+        Assert.True(stepState.Attempts.ContainsKey("1"));
+        Assert.True(stepState.Attempts.ContainsKey("2"));
+        Assert.Equal(DebugLifecycleState.Timeout, stepState.Attempts["1"].LifecycleState);
     }
 
     [Fact]
@@ -162,7 +162,7 @@ public class DebugRunStateReducerTests
         Assert.True(mainState.ActiveRun!.Variables.ContainsKey("output"));
         Assert.True(mainState.ActiveRun.Stages["Main"].Steps["0"].Outputs.ContainsKey("Variable:output"));
         Assert.True(mainState.ActiveRun.Stages["Main"].Steps["0"].Outputs["Variable:output"].HasValue);
-        Assert.Contains("Set Variable (output) = 42", mainState.ActiveRun.Stages["Main"].Steps["0"].Iterations["1"].DebugOut);
+        Assert.Contains("Set Variable (output) = 42", DebugRunStateQueries.GetDebugOut(mainState.ActiveRun.Stages["Main"].Steps["0"].Attempts["1"]));
     }
 
     [Fact]
@@ -213,11 +213,11 @@ public class DebugRunStateReducerTests
         });
 
         StepNodeState stepState = mainState.ActiveRun!.Stages["Main"].Steps["0"];
-        Assert.True(stepState.Iterations.ContainsKey("1"));
-        Assert.Equal("step output", stepState.Iterations["1"].DebugOut);
-        Assert.NotNull(stepState.Iterations["1"].LatestLogEntry);
-        Assert.Equal("step output", stepState.Iterations["1"].LatestLogEntry.Message);
-        Assert.Single(stepState.Iterations["1"].LogEntries);
+        Assert.True(stepState.Attempts.ContainsKey("1"));
+        Assert.Equal("step output", DebugRunStateQueries.GetDebugOut(stepState.Attempts["1"]));
+        Assert.NotNull(DebugRunStateQueries.GetLatestLogEntry(stepState.Attempts["1"]));
+        Assert.Equal("step output", DebugRunStateQueries.GetLatestLogEntry(stepState.Attempts["1"])!.Message);
+        Assert.Single(stepState.Attempts["1"].LogEntries);
     }
 
     [Fact]
@@ -235,7 +235,7 @@ public class DebugRunStateReducerTests
         });
 
         StageNodeState stageState = mainState.ActiveRun!.Stages["Main"];
-        Assert.Equal(new[] { "layer-0" }, stageState.ExecutionLayerOrder);
+        Assert.Equal(new[] { "layer-0" }, DebugRunStateQueries.GetExecutionLayerKeys(stageState));
         Assert.Equal(new[] { 0, 1 }, stageState.ExecutionLayers["layer-0"].StepIds);
 
         await reducer.ApplyEntityTransitionAsync(new EntityTransitionSignal
@@ -298,7 +298,7 @@ public class DebugRunStateReducerTests
         });
 
         StageNodeState stageState = mainState.ActiveRun!.Stages["Main"];
-        Assert.Equal(new[] { "layer-0", "layer-1", "layer-2" }, stageState.ExecutionLayerOrder);
+        Assert.Equal(new[] { "layer-0", "layer-1", "layer-2" }, DebugRunStateQueries.GetExecutionLayerKeys(stageState));
         Assert.Equal(new[] { 0, 1 }, stageState.ExecutionLayers["layer-0"].StepIds);
         Assert.Equal(new[] { 2 }, stageState.ExecutionLayers["layer-1"].StepIds);
         Assert.Equal(new[] { 3 }, stageState.ExecutionLayers["layer-2"].StepIds);
@@ -354,7 +354,94 @@ public class DebugRunStateReducerTests
         Assert.Equal("Ada", assertion.Expected);
         Assert.Equal("Grace", assertion.Actual);
         Assert.Equal("expected Ada, was Grace", assertion.FailureReason);
-        Assert.Empty(mainState.ActiveRun.Stages["Main"].Steps["0"].Iterations);
+        Assert.Empty(mainState.ActiveRun.Stages["Main"].Steps["0"].Attempts);
+    }
+
+    [Fact]
+    public async Task QueryHelpers_ExposeOrderedCanonicalTree()
+    {
+        MainState mainState = await CreateInitializedMainStateAsync();
+        DebugRunStateReducer reducer = new DebugRunStateReducer(mainState);
+
+        await reducer.ApplyEntityTransitionAsync(new EntityTransitionSignal
+        {
+            SessionId = "session-1",
+            EntityKind = DebugEntityKind.Step,
+            Stage = "Main",
+            StepId = 0,
+            State = DebugLifecycleState.Running,
+            PreviousState = DebugLifecycleState.Initialized
+        });
+
+        RunState runState = mainState.ActiveRun!;
+        StageNodeState stageState = Assert.Single(DebugRunStateQueries.GetOrderedStages(runState));
+        StepNodeState stepState = Assert.Single(DebugRunStateQueries.GetOrderedSteps(stageState));
+        StepAttemptState attemptState = Assert.Single(DebugRunStateQueries.GetOrderedAttempts(stepState));
+
+        Assert.Equal("Main", stageState.Name);
+        Assert.Equal(0, stepState.StepId);
+        Assert.Equal(1, attemptState.AttemptNumber);
+        Assert.True(DebugRunStateQueries.TryGetStep(runState, "Main", 0, out StepNodeState queriedStepState));
+        Assert.Same(stepState, queriedStepState);
+    }
+
+    [Fact]
+    public async Task RunState_UsesDebugUiValueWrappers_ForVariablesAndArtifacts()
+    {
+        MainState mainState = await CreateInitializedMainStateAsync();
+
+        DebugValueState variableState = mainState.ActiveRun!.Variables["input"];
+        DebugValueState artifactState = mainState.ActiveRun.Artifacts["artifact"];
+
+        Assert.Equal("input", variableState.Key);
+        Assert.Equal("initial", variableState.Envelope.DisplayText);
+        Assert.Equal("artifact", artifactState.Key);
+        Assert.Equal("artifact", artifactState.Envelope.DisplayText);
+    }
+
+    [Fact]
+    public async Task QueryHelpers_ExposeOrderedLayers_LatestAttemptSummary_AndOrderedLogs()
+    {
+        MainState mainState = await CreateInitializedMainStateAsync();
+        DebugRunStateReducer reducer = new DebugRunStateReducer(mainState);
+
+        await reducer.ApplyEntityTransitionAsync(new EntityTransitionSignal
+        {
+            SessionId = "session-1",
+            EntityKind = DebugEntityKind.Step,
+            Stage = "Main",
+            StepId = 0,
+            State = DebugLifecycleState.Running,
+            PreviousState = DebugLifecycleState.Initialized
+        });
+
+        await reducer.ApplyLogEntryAsync(new LogEntrySignal
+        {
+            SessionId = "session-1",
+            Entry = new DebugLogEntry
+            {
+                OccurredAtUtc = DateTimeOffset.UtcNow,
+                Level = DebugLogLevel.Information,
+                EventName = "SecondLogEvent",
+                Message = "second",
+                Lines = ["second"],
+                Stage = "Main",
+                StepId = 0,
+                Iteration = 1
+            }
+        });
+
+        StageNodeState stageState = Assert.Single(DebugRunStateQueries.GetOrderedStages(mainState.ActiveRun!));
+        StageLayerState layerState = Assert.Single(DebugRunStateQueries.GetOrderedLayers(stageState));
+        StepNodeState stepState = Assert.Single(DebugRunStateQueries.GetOrderedSteps(stageState, layerState));
+        StepAttemptSummary summary = Assert.IsType<StepAttemptSummary>(DebugRunStateQueries.GetLatestAttemptSummary(stepState));
+        IReadOnlyList<LogEntryState> logs = DebugRunStateQueries.GetOrderedLogs(stepState);
+
+        Assert.Equal("layer-0", layerState.Key);
+        Assert.Equal(1, summary.AttemptNumber);
+        Assert.Equal(DebugRunStateQueries.GetLatestLogEntry(stepState.Attempts["1"])?.Message, summary.LatestLogEntry?.Message);
+        Assert.True(logs.Count >= 2);
+        Assert.Equal("second", logs[^1].Message);
     }
 
     private static async Task<MainState> CreateInitializedMainStateAsync()

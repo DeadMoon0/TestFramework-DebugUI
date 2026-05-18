@@ -1,10 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
-using TestFramework.Core.Artifacts;
-using TestFramework.Core.Debugger;
-using TestFramework.Core.Steps;
-using TestFramework.Core.Variables;
 using TestFramework.DebugUI;
 using TestFramework.DebugUI.State;
 using WpfStateService.Dispatching;
@@ -29,52 +25,6 @@ namespace TestFrameworkDebugUI
             InitializeComponent();
 
             new DebugPipeTranslator().Begin();
-
-            //var stage = new DebugStageState
-            //{
-            //    Name = "Stage",
-            //    Description = "Description",
-
-            //    Steps =
-            //    [
-            //        new DebugStepState
-            //        {
-            //            Name = "Step1",
-            //            Description = "Description1",
-            //            DoesReturn = true,
-            //            ErrorHandlingOptions = null!,
-            //            ExecutionOptions = null!,
-            //            IOContract = null!,
-            //            LabelOptions = null!,
-            //            RetryOptions = null!,
-            //            TimeOutOptions = null!,
-            //        },
-            //        new DebugStepState
-            //        {
-            //            Name = "Step2",
-            //            Description = "Description2",
-            //            DoesReturn = true,
-            //            ErrorHandlingOptions = null!,
-            //            ExecutionOptions = null!,
-            //            IOContract = null!,
-            //            LabelOptions = null!,
-            //            RetryOptions = null!,
-            //            TimeOutOptions = null!,
-            //        }
-            //    ]
-            //};
-
-            //State.ActiveRun = new RunState
-            //{
-            //    Name = "Name",
-            //    ProjectPath = "",
-            //    Structure = new TestFrameworkCore.Debugger.TimelineRunStructure
-            //    {
-            //        Stages = [stage],
-            //        Artifacts = new Dictionary<ArtifactIdentifier, TestFrameworkCore.Debugger.ArtifactState>(),
-            //        Variables = new Dictionary<VariableIdentifier, VariableState>()
-            //    }
-            //};
         }
 
         private void Window_SourceInitialized(object sender, EventArgs e)

@@ -6,7 +6,7 @@ namespace TestFramework.DebugUI.State;
 
 /// <summary>
 /// Bindable state for one concrete execution attempt of a step.
-/// It describes attempt-scoped data only: timing, status, log stream, and the aggregated debug text for that single iteration or retry.
+/// It describes attempt-scoped data only: timing, status, log stream, and the aggregated debug text for that single attempt or retry.
 /// </summary>
 public class StepAttemptState : StateObject
 {
@@ -16,8 +16,8 @@ public class StepAttemptState : StateObject
     public string Name { get => GetValue(NameProperty); set => SetValue(NameProperty, value); }
     public static StateProperty<string> NameProperty { get; } = Property(nameof(Name), "");
 
-    public int IterationNumber { get => GetValue(IterationNumberProperty); set => SetValue(IterationNumberProperty, value); }
-    public static StateProperty<int> IterationNumberProperty { get; } = Property(nameof(IterationNumber), 0);
+    public int AttemptNumber { get => GetValue(AttemptNumberProperty); set => SetValue(AttemptNumberProperty, value); }
+    public static StateProperty<int> AttemptNumberProperty { get; } = Property(nameof(AttemptNumber), 0);
 
     public bool IsActive { get => GetValue(IsActiveProperty); set => SetValue(IsActiveProperty, value); }
     public static StateProperty<bool> IsActiveProperty { get; } = Property(nameof(IsActive), false);
@@ -31,12 +31,6 @@ public class StepAttemptState : StateObject
     public DebugLifecycleState LifecycleState { get => GetValue(LifecycleStateProperty); set => SetValue(LifecycleStateProperty, value); }
     public static StateProperty<DebugLifecycleState> LifecycleStateProperty { get; } = Property(nameof(LifecycleState), DebugLifecycleState.Initialized);
 
-    public string DebugOut { get => GetValue(DebugOutProperty); set => SetValue(DebugOutProperty, value); }
-    public static StateProperty<string> DebugOutProperty { get; } = Property(nameof(DebugOut), "");
-
     public StateDictionary<LogEntryState> LogEntries { get => GetValue(LogEntriesProperty); set => SetValue(LogEntriesProperty, value); }
     public static StateProperty<StateDictionary<LogEntryState>> LogEntriesProperty { get; } = Property(nameof(LogEntries), new StateDictionary<LogEntryState>());
-
-    public LogEntryState LatestLogEntry { get => GetValue(LatestLogEntryProperty); set => SetValue(LatestLogEntryProperty, value); }
-    public static StateProperty<LogEntryState> LatestLogEntryProperty { get; } = Property<LogEntryState>(nameof(LatestLogEntry), null!);
 }

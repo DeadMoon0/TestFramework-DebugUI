@@ -19,11 +19,10 @@ public sealed class DebugRunStateReducer(MainState mainState)
             SessionId = signal.SessionId,
             Name = signal.Name,
             ProjectPath = signal.ProjectPath,
-            Structure = signal.RunStructure,
             LifecycleState = DebugLifecycleState.Initialized,
             LastTransitionAtUtc = DateTimeOffset.UtcNow,
-            Artifacts = new StateDictionary<ArtifactState>(),
-            Variables = new StateDictionary<VariableState>(),
+            Artifacts = new StateDictionary<DebugValueState>(),
+            Variables = new StateDictionary<DebugValueState>(),
             Assertions = new StateDictionary<AssertionEntryState>(),
             Stages = new StateDictionary<StageNodeState>()
         };
@@ -40,8 +39,6 @@ public sealed class DebugRunStateReducer(MainState mainState)
                 Name = stage.Name,
                 Description = stage.Description,
                 Order = stageIndex,
-                ExecutionLayerOrder = executionLayers.Select(layer => layer.Key).ToArray(),
-                CurrentExecutionLayerKey = "",
                 LifecycleState = DebugLifecycleState.Initialized,
                 ExecutionLayers = new StateDictionary<StageLayerState>(),
                 Steps = new StateDictionary<StepNodeState>()
@@ -76,7 +73,7 @@ public sealed class DebugRunStateReducer(MainState mainState)
                     Phase = step.Phase,
                     LifecycleState = DebugLifecycleState.Initialized,
                     State = StepState.NotRun,
-                    Iterations = new StateDictionary<StepAttemptState>(),
+                    Attempts = new StateDictionary<StepAttemptState>(),
                     Inputs = new StateDictionary<IOConnectionState>(),
                     Outputs = new StateDictionary<IOConnectionState>()
                 };
@@ -120,18 +117,18 @@ public sealed class DebugRunStateReducer(MainState mainState)
                 if (signal.State == DebugLifecycleState.Running)
                 {
                     stepState.AttemptCount++;
-                    StepAttemptState iterationState = EnsureIteration(stepState, stepState.AttemptCount, signal.OccurredAtUtc);
+                    StepAttemptState attemptState = EnsureAttempt(stepState, stepState.AttemptCount, signal.OccurredAtUtc);
                     PopulateStepInputs(runState, signal.Stage!, signal.StepId!.Value, stepState);
-                    iterationState.LifecycleState = DebugLifecycleState.Running;
-                    AddFrameworkLogEntry(stepState, iterationState, signal.OccurredAtUtc, DebugLogLevel.Information, "StepRunning", stepState.AttemptCount == 1 ? $"Executing Step: {GetStepDisplayName(stepState)}" : $"Executing Step Iteration {stepState.AttemptCount}: {GetStepDisplayName(stepState)}");
+                    attemptState.LifecycleState = DebugLifecycleState.Running;
+                    AddFrameworkLogEntry(stepState, attemptState, signal.OccurredAtUtc, DebugLogLevel.Information, "StepRunning", stepState.AttemptCount == 1 ? $"Executing Step: {GetStepDisplayName(stepState)}" : $"Executing Step Attempt {stepState.AttemptCount}: {GetStepDisplayName(stepState)}");
                 }
 
-                if (signal.PreviousState == DebugLifecycleState.Running && TryGetLatestIteration(stepState, out StepAttemptState latestIteration))
+                if (signal.PreviousState == DebugLifecycleState.Running && TryGetLatestAttempt(stepState, out StepAttemptState latestAttempt))
                 {
-                    latestIteration.IsActive = false;
-                    latestIteration.FinishedAtUtc = signal.OccurredAtUtc;
-                    latestIteration.LifecycleState = signal.OutcomeState ?? signal.State;
-                    AddFrameworkLogEntry(stepState, latestIteration, signal.OccurredAtUtc, signal.State == DebugLifecycleState.WaitingForRetry ? DebugLogLevel.Warning : MapLogLevel(signal.OutcomeState ?? signal.State), "StepOutcome", $"{MapStatePrefix(signal.OutcomeState ?? signal.State)}  {GetStepDisplayName(stepState)}");
+                    latestAttempt.IsActive = false;
+                    latestAttempt.FinishedAtUtc = signal.OccurredAtUtc;
+                    latestAttempt.LifecycleState = signal.OutcomeState ?? signal.State;
+                    AddFrameworkLogEntry(stepState, latestAttempt, signal.OccurredAtUtc, signal.State == DebugLifecycleState.WaitingForRetry ? DebugLogLevel.Warning : MapLogLevel(signal.OutcomeState ?? signal.State), "StepOutcome", $"{MapStatePrefix(signal.OutcomeState ?? signal.State)}  {GetStepDisplayName(stepState)}");
                 }
 
                 stepState.State = MapStepState(signal.State, signal.OutcomeState, stepState.State);
@@ -152,12 +149,12 @@ public sealed class DebugRunStateReducer(MainState mainState)
         if (!TryGetStep(runState, signal.Entry.Stage, signal.Entry.StepId, out _, out StepNodeState stepState))
             return Task.CompletedTask;
 
-        int iterationNumber = signal.Entry.Iteration ?? 0;
-        if (iterationNumber <= 0)
+        int attemptNumber = signal.Entry.Iteration ?? 0;
+        if (attemptNumber <= 0)
             return Task.CompletedTask;
 
-        StepAttemptState iterationState = EnsureIteration(stepState, iterationNumber, signal.Entry.OccurredAtUtc);
-        string key = iterationState.LogEntries.Count.ToString();
+        StepAttemptState attemptState = EnsureAttempt(stepState, attemptNumber, signal.Entry.OccurredAtUtc);
+        string key = attemptState.LogEntries.Count.ToString();
         LogEntryState entryState = new()
         {
             Key = key,
@@ -168,11 +165,11 @@ public sealed class DebugRunStateReducer(MainState mainState)
             IndentLevel = signal.Entry.IndentLevel,
             StageName = signal.Entry.Stage ?? "",
             StepId = signal.Entry.StepId,
-            IterationNumber = signal.Entry.Iteration,
+            AttemptNumber = signal.Entry.Iteration,
             AssertionScope = signal.Entry.AssertionScope ?? ""
         };
 
-        AppendIterationLog(stepState, iterationState, entryState);
+        AppendAttemptLog(stepState, attemptState, entryState);
 
         return Task.CompletedTask;
     }
@@ -209,25 +206,25 @@ public sealed class DebugRunStateReducer(MainState mainState)
         switch (signal.ValueKind)
         {
             case DebugValueKind.Variable:
-                VariableState variableState = new VariableState { Key = signal.Name, Envelope = signal.Envelope };
+                DebugValueState variableState = CreateDebugValueState(signal.Name, signal.Envelope);
                 Upsert(runState.Variables, variableState.Key, variableState);
 
                 if (TryGetStep(runState, signal.Stage, signal.StepId, out _, out StepNodeState variableStepState))
                 {
                     UpsertConnectionValue(variableStepState, IOConnectionDirection.Output, StepIOKind.Variable, variableState.Key, variableState.Envelope);
-                    if (TryGetActiveIteration(variableStepState, out StepAttemptState activeIteration))
-                        AddFrameworkLogEntry(variableStepState, activeIteration, signal.ObservedAtUtc, DebugLogLevel.Information, "VariableUpdate", $"Set Variable ({variableState.Key}) = {signal.Envelope.DisplayText}");
+                    if (TryGetActiveAttempt(variableStepState, out StepAttemptState activeAttempt))
+                        AddFrameworkLogEntry(variableStepState, activeAttempt, signal.ObservedAtUtc, DebugLogLevel.Information, "VariableUpdate", $"Set Variable ({variableState.Key}) = {signal.Envelope.DisplayText}");
                 }
                 break;
             case DebugValueKind.Artifact:
-                ArtifactState artifactState = new ArtifactState { Key = signal.Name, Envelope = signal.Envelope };
+                DebugValueState artifactState = CreateDebugValueState(signal.Name, signal.Envelope);
                 Upsert(runState.Artifacts, artifactState.Key, artifactState);
 
                 if (TryGetStep(runState, signal.Stage, signal.StepId, out _, out StepNodeState artifactStepState))
                 {
                     UpsertConnectionValue(artifactStepState, IOConnectionDirection.Output, StepIOKind.Artifact, artifactState.Key, artifactState.Envelope);
-                    if (TryGetActiveIteration(artifactStepState, out StepAttemptState activeIteration))
-                        AddFrameworkLogEntry(artifactStepState, activeIteration, signal.ObservedAtUtc, DebugLogLevel.Information, "ArtifactUpdate", $"Set Artifact ({artifactState.Key}) = {signal.Envelope.DisplayText}");
+                    if (TryGetActiveAttempt(artifactStepState, out StepAttemptState activeAttempt))
+                        AddFrameworkLogEntry(artifactStepState, activeAttempt, signal.ObservedAtUtc, DebugLogLevel.Information, "ArtifactUpdate", $"Set Artifact ({artifactState.Key}) = {signal.Envelope.DisplayText}");
                 }
                 break;
             default:
@@ -248,8 +245,8 @@ public sealed class DebugRunStateReducer(MainState mainState)
         stepState.BreakpointHitCount++;
         stepState.IsWaitingAtBreakpoint = true;
         stepState.LastBreakpointAtUtc = DateTimeOffset.UtcNow;
-        if (TryGetActiveIteration(stepState, out StepAttemptState activeIteration))
-            AddFrameworkLogEntry(stepState, activeIteration, DateTimeOffset.UtcNow, DebugLogLevel.Information, "Breakpoint", $"Breakpoint Hit: {GetStepDisplayName(stepState)}");
+        if (TryGetActiveAttempt(stepState, out StepAttemptState activeAttempt))
+            AddFrameworkLogEntry(stepState, activeAttempt, DateTimeOffset.UtcNow, DebugLogLevel.Information, "Breakpoint", $"Breakpoint Hit: {GetStepDisplayName(stepState)}");
         return Task.CompletedTask;
     }
 
@@ -263,24 +260,20 @@ public sealed class DebugRunStateReducer(MainState mainState)
         return Task.CompletedTask;
     }
 
-    private static void CopyValues<TState>(IEnumerable<TState> values, StateDictionary<TState> target) where TState : class
+    private static void CopyValues(IEnumerable<VariableState> values, StateDictionary<DebugValueState> target)
     {
         target.Clear();
 
-        foreach (TState value in values)
-        {
-            switch (value)
-            {
-                case VariableState variableState:
-                    Upsert(target, variableState.Key, value);
-                    break;
-                case ArtifactState artifactState:
-                    Upsert(target, artifactState.Key, value);
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(value), value, null);
-            }
-        }
+        foreach (VariableState value in values)
+            Upsert(target, value.Key, CreateDebugValueState(value.Key, value.Envelope));
+    }
+
+    private static void CopyValues(IEnumerable<ArtifactState> values, StateDictionary<DebugValueState> target)
+    {
+        target.Clear();
+
+        foreach (ArtifactState value in values)
+            Upsert(target, value.Key, CreateDebugValueState(value.Key, value.Envelope));
     }
 
     private static void Upsert<TValue>(StateDictionary<TValue> dictionary, string key, TValue value)
@@ -311,22 +304,29 @@ public sealed class DebugRunStateReducer(MainState mainState)
 
     private static void PopulateStepInputs(RunState runState, string stageName, int stepId, StepNodeState stepState)
     {
-        DebugStepState debugStep = runState.Structure.Stages.First(x => x.Name == stageName).Steps[stepId];
-
         ResetConnectionValues(stepState.Inputs);
 
-        foreach (StepIOEntry ioEntry in debugStep.IOContract.Inputs)
+        foreach (IOConnectionState inputConnection in stepState.Inputs.Values.ToArray())
         {
-            switch (ioEntry.Kind)
+            switch (inputConnection.Kind)
             {
-                case StepIOKind.Variable when runState.Variables.TryGetValue(ioEntry.Key, out VariableState? variableState) && variableState is not null:
-                    UpsertConnectionValue(stepState, IOConnectionDirection.Input, StepIOKind.Variable, variableState.Key, variableState.Envelope, ioEntry.Required, ioEntry.DeclaredType?.FullName ?? ioEntry.DeclaredType?.Name ?? "");
+                case StepIOKind.Variable when runState.Variables.TryGetValue(inputConnection.Name, out DebugValueState? variableState) && variableState is not null:
+                    UpsertConnectionValue(stepState, IOConnectionDirection.Input, StepIOKind.Variable, variableState.Key, variableState.Envelope, inputConnection.IsRequired, inputConnection.DeclaredTypeName);
                     break;
-                case StepIOKind.Artifact when runState.Artifacts.TryGetValue(ioEntry.Key, out ArtifactState? artifactState) && artifactState is not null:
-                    UpsertConnectionValue(stepState, IOConnectionDirection.Input, StepIOKind.Artifact, artifactState.Key, artifactState.Envelope, ioEntry.Required, ioEntry.DeclaredType?.FullName ?? ioEntry.DeclaredType?.Name ?? "");
+                case StepIOKind.Artifact when runState.Artifacts.TryGetValue(inputConnection.Name, out DebugValueState? artifactState) && artifactState is not null:
+                    UpsertConnectionValue(stepState, IOConnectionDirection.Input, StepIOKind.Artifact, artifactState.Key, artifactState.Envelope, inputConnection.IsRequired, inputConnection.DeclaredTypeName);
                     break;
             }
         }
+    }
+
+    private static DebugValueState CreateDebugValueState(string key, DebugValueEnvelope envelope)
+    {
+        return new DebugValueState
+        {
+            Key = key,
+            Envelope = envelope
+        };
     }
 
     private static void ApplyLifecycle(RunState runState, DebugLifecycleState state, DebugLifecycleState? previousState, DateTimeOffset occurredAtUtc)
@@ -366,36 +366,35 @@ public sealed class DebugRunStateReducer(MainState mainState)
         };
     }
 
-    private static StepAttemptState EnsureIteration(StepNodeState stepState, int iterationNumber, DateTimeOffset startedAtUtc)
+    private static StepAttemptState EnsureAttempt(StepNodeState stepState, int attemptNumber, DateTimeOffset startedAtUtc)
     {
-        string key = iterationNumber.ToString();
-        if (!stepState.Iterations.TryGetValue(key, out StepAttemptState? iterationState) || iterationState is null)
+        string key = attemptNumber.ToString();
+        if (!stepState.Attempts.TryGetValue(key, out StepAttemptState? attemptState) || attemptState is null)
         {
-            iterationState = new StepAttemptState
+            attemptState = new StepAttemptState
             {
                 Key = key,
-                Name = $"Iteration {iterationNumber}",
-                IterationNumber = iterationNumber,
+                Name = $"Attempt {attemptNumber}",
+                AttemptNumber = attemptNumber,
                 StartedAtUtc = startedAtUtc,
                 IsActive = true,
                 LifecycleState = DebugLifecycleState.Running,
-                DebugOut = "",
                 LogEntries = new StateDictionary<LogEntryState>()
             };
-            stepState.Iterations[key] = iterationState;
+            stepState.Attempts[key] = attemptState;
         }
 
-        iterationState.IsActive = true;
-        iterationState.StartedAtUtc ??= startedAtUtc;
-        iterationState.LifecycleState = DebugLifecycleState.Running;
-        return iterationState;
+        attemptState.IsActive = true;
+        attemptState.StartedAtUtc ??= startedAtUtc;
+        attemptState.LifecycleState = DebugLifecycleState.Running;
+        return attemptState;
     }
 
-    private static void AddFrameworkLogEntry(StepNodeState stepState, StepAttemptState iterationState, DateTimeOffset occurredAtUtc, DebugLogLevel level, string eventName, string message)
+    private static void AddFrameworkLogEntry(StepNodeState stepState, StepAttemptState attemptState, DateTimeOffset occurredAtUtc, DebugLogLevel level, string eventName, string message)
     {
         LogEntryState entryState = new()
         {
-            Key = iterationState.LogEntries.Count.ToString(),
+            Key = attemptState.LogEntries.Count.ToString(),
             OccurredAtUtc = occurredAtUtc,
             Level = level,
             EventName = eventName,
@@ -403,20 +402,16 @@ public sealed class DebugRunStateReducer(MainState mainState)
             IndentLevel = 0,
             StageName = stepState.StageName,
             StepId = stepState.StepId,
-            IterationNumber = iterationState.IterationNumber,
+            AttemptNumber = attemptState.AttemptNumber,
             AssertionScope = ""
         };
 
-        AppendIterationLog(stepState, iterationState, entryState);
+        AppendAttemptLog(stepState, attemptState, entryState);
     }
 
-    private static void AppendIterationLog(StepNodeState stepState, StepAttemptState iterationState, LogEntryState entryState)
+    private static void AppendAttemptLog(StepNodeState stepState, StepAttemptState attemptState, LogEntryState entryState)
     {
-        Upsert(iterationState.LogEntries, entryState.Key, entryState);
-        iterationState.LatestLogEntry = entryState;
-        iterationState.DebugOut = string.IsNullOrEmpty(iterationState.DebugOut)
-            ? entryState.Message
-            : iterationState.DebugOut + Environment.NewLine + entryState.Message;
+        Upsert(attemptState.LogEntries, entryState.Key, entryState);
     }
 
     private static string GetStepDisplayName(StepNodeState stepState)
@@ -585,27 +580,25 @@ public sealed class DebugRunStateReducer(MainState mainState)
         return $"{kind}:{name}";
     }
 
-    private static bool TryGetActiveIteration(StepNodeState stepState, out StepAttemptState iterationState)
+    private static bool TryGetActiveAttempt(StepNodeState stepState, out StepAttemptState attemptState)
     {
-        iterationState = stepState.Iterations.Values
+        attemptState = stepState.Attempts.Values
             .Where(candidate => candidate.IsActive)
-            .OrderByDescending(candidate => candidate.IterationNumber)
+            .OrderByDescending(candidate => candidate.AttemptNumber)
             .FirstOrDefault()!;
-        return iterationState is not null;
+        return attemptState is not null;
     }
 
-    private static bool TryGetLatestIteration(StepNodeState stepState, out StepAttemptState iterationState)
+    private static bool TryGetLatestAttempt(StepNodeState stepState, out StepAttemptState attemptState)
     {
-        iterationState = stepState.Iterations.Values
-            .OrderByDescending(candidate => candidate.IterationNumber)
+        attemptState = stepState.Attempts.Values
+            .OrderByDescending(candidate => candidate.AttemptNumber)
             .FirstOrDefault()!;
-        return iterationState is not null;
+        return attemptState is not null;
     }
 
     private static void RefreshStageExecutionLayers(StageNodeState stageState)
     {
-        string currentExecutionLayerKey = "";
-
         foreach (StageLayerState layerState in stageState.ExecutionLayers.Values.OrderBy(layer => layer.Order))
         {
             StepNodeState[] layerSteps = layerState.StepIds.Select(stepId => stageState.Steps[stepId.ToString()]).ToArray();
@@ -615,12 +608,7 @@ public sealed class DebugRunStateReducer(MainState mainState)
 
             layerState.IsComplete = isComplete;
             layerState.IsActive = isActive;
-
-            if (string.IsNullOrEmpty(currentExecutionLayerKey) && isActive)
-                currentExecutionLayerKey = layerState.Key;
         }
-
-        stageState.CurrentExecutionLayerKey = currentExecutionLayerKey;
     }
 
     private static bool IsStepInFinalLifecycleState(StepNodeState stepState)

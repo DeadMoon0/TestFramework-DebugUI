@@ -74,7 +74,6 @@ That means `DebugPipeTranslator` is intentionally thin. The real behavior lives 
 - `SessionId`
 - `Name`
 - `ProjectPath`
-- `Structure`
 - initial lifecycle values
 - run-level `Variables`
 - run-level `Artifacts`
@@ -127,17 +126,17 @@ The reducer keeps the full `DebugValueEnvelope`, so the UI/data layer has access
 
 ### 4. LogEntry
 
-`ApplyLogEntryAsync(...)` appends the structured log entry to the binding-facing step-iteration state graph.
+`ApplyLogEntryAsync(...)` appends the structured log entry to the binding-facing step-attempt state graph.
 
 Projection rules:
 
-- the signal is ignored unless it identifies a concrete step iteration
+- the signal is ignored unless it identifies a concrete step attempt
 - every explicit log entry is stored in `StepAttemptState.LogEntries`
 - `StepAttemptState.LatestLogEntry` is updated
 
 This gives the UI both:
 
-- a rich object model owned by a specific attempt/iteration
+- a rich object model owned by a specific attempt
 - a step node with the full ordered attempt collection
 
 ### 4a. Diagnostic
@@ -147,7 +146,7 @@ This gives the UI both:
 Projection rules:
 
 - diagnostics are stored in `RunState.Diagnostics`
-- diagnostics are not copied into stage, step, or iteration log collections
+- diagnostics are not copied into stage, step, or attempt log collections
 - diagnostics are not part of `DebugOut`
 
 ### 5. Derived framework logs
@@ -157,9 +156,9 @@ The reducer also derives framework-owned log entries from the state-machine sign
 Current derivation rules:
 
 - step `Running` creates or activates a `StepAttemptState` and appends an execution line
-- step terminal transitions append pass/fail/timeout/retry lines to the current iteration
-- step-scoped `ValueUpdate` signals append variable/artifact update lines to the current iteration
-- `BreakpointHitRequest` appends a breakpoint line to the current iteration
+- step terminal transitions append pass/fail/timeout/retry lines to the current attempt
+- step-scoped `ValueUpdate` signals append variable/artifact update lines to the current attempt
+- `BreakpointHitRequest` appends a breakpoint line to the current attempt
 
 This means the UI data layer no longer depends on Core emitting framework log text as a separate signal stream.
 
@@ -186,12 +185,16 @@ After that, `DebugPipeTranslator` immediately sends `BreakpointHitContinueSignal
 The current DebugUI data layer exposes the pieces the reducer needs to project the protocol:
 
 - `MainState.ActiveRun`
-- `RunState` with lifecycle, structure, run-level values, and finish markers
+- `RunState` with lifecycle, run-level values, finish markers, and the canonical stage tree
 - `StageNodeState` with lifecycle, direct stage metadata, ordered execution layers, and the step collection for that stage
 - `StageLayerState` with parallel-ready step groups and completion tracking for each dependency layer
 - `StepNodeState` with direct step metadata, lifecycle, attempts, breakpoints, unified inputs/outputs, mapped `StepState`, and the attempt collection
-- `StepAttemptState` with per-attempt log ownership, timestamps, active state, and aggregated debug text
-- `LogEntryState` with direct binding properties for message, severity, timestamp, stage, step, iteration, and assertion scope
+- `StepAttemptState` with per-attempt log ownership, timestamps, and active state
+- `LogEntryState` with direct binding properties for message, severity, timestamp, stage, step, attempt, and assertion scope
+
+The WPF layer should consume the canonical tree through `DebugRunStateQueries` instead of binding the old run structure snapshot or traversing raw dictionaries directly.
+
+Derived UI conveniences such as ordered layer keys, current active layer, latest attempt summary, latest log entry, and aggregated attempt debug text should come from `DebugRunStateQueries`, not persisted state properties.
 
 This keeps the WPF surface separate from the protocol/data-processing layer.
 
@@ -212,7 +215,7 @@ The WPF app still uses the normal host-side behavior. The synchronous dispatch p
 End-to-end, the current flow is:
 
 1. Core emits `InitTimelineRun` with the full run structure.
-2. DebugUI creates the initial run tree.
+2. DebugUI creates the initial canonical run tree.
 3. Core emits run, stage, and step `EntityTransition` signals as execution advances.
 4. Core emits `ValueUpdate` signals whenever variables or artifacts change.
 5. Core emits `LogEntry` signals whenever `ScopedLogger` formats an event.

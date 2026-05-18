@@ -5,7 +5,7 @@ using WpfStateService.StateServiceObject;
 namespace TestFramework.DebugUI.State;
 
 /// <summary>
-/// Bindable state for one structured log entry emitted during a step iteration.
+/// Bindable state for one structured log entry emitted during a step attempt.
 /// It describes a single message with its timing, severity, ownership, and indentation metadata.
 /// </summary>
 public class LogEntryState : StateObject
@@ -34,8 +34,8 @@ public class LogEntryState : StateObject
     public int? StepId { get => GetValue(StepIdProperty); set => SetValue(StepIdProperty, value); }
     public static StateProperty<int?> StepIdProperty { get; } = Property<int?>(nameof(StepId), null);
 
-    public int? IterationNumber { get => GetValue(IterationNumberProperty); set => SetValue(IterationNumberProperty, value); }
-    public static StateProperty<int?> IterationNumberProperty { get; } = Property<int?>(nameof(IterationNumber), null);
+    public int? AttemptNumber { get => GetValue(AttemptNumberProperty); set => SetValue(AttemptNumberProperty, value); }
+    public static StateProperty<int?> AttemptNumberProperty { get; } = Property<int?>(nameof(AttemptNumber), null);
 
     public string AssertionScope { get => GetValue(AssertionScopeProperty); set => SetValue(AssertionScopeProperty, value); }
     public static StateProperty<string> AssertionScopeProperty { get; } = Property(nameof(AssertionScope), "");

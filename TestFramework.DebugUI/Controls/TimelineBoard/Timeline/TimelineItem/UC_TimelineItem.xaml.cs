@@ -41,10 +41,10 @@ namespace TestFrameworkDebugUI.Controls.TimelineBoard.Timeline.TimelineItem
             lName.Content = name;
             lDescription.Content = description;
 
-            var stepUpdateStatePath = StatePath.For(MainWindow.State).Property(MainState.ActiveRunProperty).Property(RunState.StagesProperty).PropertyKey<StageNodeState>(stageName).Property(StageNodeState.StepsProperty).PropertyKey<StepNodeState>(id + "");
-            stepUpdateStatePath.Property(StepNodeState.StateProperty).CallbackAsync(OnStateChange, CallbackFlags.OnNotNull);
-            stepUpdateStatePath.Property(StepNodeState.AttemptCountProperty).CallbackAsync(OnAttemptCountChange, CallbackFlags.OnNotNull);
-            stepUpdateStatePath.Property(StepNodeState.OutputsProperty).CallbackAsync(OnOutputsChange, CallbackFlags.OnNotNull | CallbackFlags.OnChildChange);
+            var stepNodeStatePath = StatePath.For(MainWindow.State).Property(MainState.ActiveRunProperty).Property(RunState.StagesProperty).PropertyKey<StageNodeState>(stageName).Property(StageNodeState.StepsProperty).PropertyKey<StepNodeState>(id + "");
+            stepNodeStatePath.Property(StepNodeState.StateProperty).CallbackAsync(OnStateChange, CallbackFlags.OnNotNull);
+            stepNodeStatePath.Property(StepNodeState.AttemptCountProperty).CallbackAsync(OnAttemptCountChange, CallbackFlags.OnNotNull);
+            stepNodeStatePath.Property(StepNodeState.OutputsProperty).CallbackAsync(OnOutputsChange, CallbackFlags.OnNotNull | CallbackFlags.OnChildChange);
         }
 
         private async Task OnAttemptCountChange(int attemptCount, int old)
@@ -53,8 +53,11 @@ namespace TestFrameworkDebugUI.Controls.TimelineBoard.Timeline.TimelineItem
             gStatusHost.Children.Clear();
             gStatusHost.Children.Add(new UC_SI_InProgress());
 
+            if (!DebugRunStateQueries.TryGetStep(MainWindow.State.ActiveRun, _stageName, _id, out StepNodeState stepState))
+                return;
+
             spInput.Children.Clear();
-            foreach (IOConnectionState connection in MainWindow.State.ActiveRun!.Stages[_stageName].Steps[_id + ""].Inputs.Values.Where(x => x.HasValue).ToList())
+            foreach (IOConnectionState connection in DebugRunStateQueries.GetPopulatedInputs(stepState))
             {
                 switch (connection.Kind)
                 {

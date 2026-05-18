@@ -64,8 +64,8 @@ public class StepNodeState : StateObject
     public StepState State { get => GetValue(StateProperty); set => SetValue(StateProperty, value); }
     public static StateProperty<StepState> StateProperty { get; } = Property(nameof(State), StepState.NotRun);
 
-    public StateDictionary<StepAttemptState> Iterations { get => GetValue(IterationsProperty); set => SetValue(IterationsProperty, value); }
-    public static StateProperty<StateDictionary<StepAttemptState>> IterationsProperty { get; } = Property(nameof(Iterations), new StateDictionary<StepAttemptState>());
+    public StateDictionary<StepAttemptState> Attempts { get => GetValue(AttemptsProperty); set => SetValue(AttemptsProperty, value); }
+    public static StateProperty<StateDictionary<StepAttemptState>> AttemptsProperty { get; } = Property(nameof(Attempts), new StateDictionary<StepAttemptState>());
 
     public StateDictionary<IOConnectionState> Inputs { get => GetValue(InputsProperty); set => SetValue(InputsProperty, value); }
     public static StateProperty<StateDictionary<IOConnectionState>> InputsProperty { get; } = Property(nameof(Inputs), new StateDictionary<IOConnectionState>());

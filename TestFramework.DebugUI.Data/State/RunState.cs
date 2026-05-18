@@ -37,14 +37,11 @@ public class RunState : StateObject
     public StateDictionary<AssertionEntryState> Assertions { get => GetValue(AssertionsProperty); set => SetValue(AssertionsProperty, value); }
     public static StateProperty<StateDictionary<AssertionEntryState>> AssertionsProperty { get; } = Property(nameof(Assertions), new StateDictionary<AssertionEntryState>());
 
-    public TimelineRunStructure Structure { get => GetValue(StructureProperty); set => SetValue(StructureProperty, value); }
-    public static StateProperty<TimelineRunStructure> StructureProperty { get; } = Property<TimelineRunStructure>(nameof(Structure), null!);
+    public StateDictionary<DebugValueState> Artifacts { get => GetValue(ArtifactsProperty); set => SetValue(ArtifactsProperty, value); }
+    public static StateProperty<StateDictionary<DebugValueState>> ArtifactsProperty { get; } = Property(nameof(Artifacts), new StateDictionary<DebugValueState>());
 
-    public StateDictionary<ArtifactState> Artifacts { get => GetValue(ArtifactsProperty); set => SetValue(ArtifactsProperty, value); }
-    public static StateProperty<StateDictionary<ArtifactState>> ArtifactsProperty { get; } = Property(nameof(Artifacts), new StateDictionary<ArtifactState>());
-
-    public StateDictionary<VariableState> Variables { get => GetValue(VariablesProperty); set => SetValue(VariablesProperty, value); }
-    public static StateProperty<StateDictionary<VariableState>> VariablesProperty { get; } = Property(nameof(Variables), new StateDictionary<VariableState>());
+    public StateDictionary<DebugValueState> Variables { get => GetValue(VariablesProperty); set => SetValue(VariablesProperty, value); }
+    public static StateProperty<StateDictionary<DebugValueState>> VariablesProperty { get; } = Property(nameof(Variables), new StateDictionary<DebugValueState>());
 
     public StateDictionary<StageNodeState> Stages { get => GetValue(StagesProperty); set => SetValue(StagesProperty, value); }
     public static StateProperty<StateDictionary<StageNodeState>> StagesProperty { get; } = Property(nameof(Stages), new StateDictionary<StageNodeState>());

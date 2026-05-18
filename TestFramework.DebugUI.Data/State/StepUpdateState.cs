@@ -37,6 +37,9 @@ public class StepNodeState : StateObject
     public StepParallelizationMode ParallelizationMode { get => GetValue(ParallelizationModeProperty); set => SetValue(ParallelizationModeProperty, value); }
     public static StateProperty<StepParallelizationMode> ParallelizationModeProperty { get; } = Property(nameof(ParallelizationMode), StepParallelizationMode.Parallelizable);
 
+    public StepExecutionPhase Phase { get => GetValue(PhaseProperty); set => SetValue(PhaseProperty, value); }
+    public static StateProperty<StepExecutionPhase> PhaseProperty { get; } = Property(nameof(Phase), StepExecutionPhase.Act);
+
     public DebugLifecycleState LifecycleState { get => GetValue(LifecycleStateProperty); set => SetValue(LifecycleStateProperty, value); }
     public static StateProperty<DebugLifecycleState> LifecycleStateProperty { get; } = Property(nameof(LifecycleState), DebugLifecycleState.Initialized);
 

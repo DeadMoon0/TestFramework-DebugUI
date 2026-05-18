@@ -284,6 +284,30 @@ public class DebugRunStateReducerTests
     }
 
     [Fact]
+    public async Task InitTimelineRun_SplitsLayersAcrossPhaseBoundaries()
+    {
+        MainState mainState = new MainState();
+        DebugRunStateReducer reducer = new DebugRunStateReducer(mainState);
+
+        await reducer.ApplyInitTimelineRunAsync(new InitTimelineRunSignal
+        {
+            SessionId = "session-1",
+            Name = "Run",
+            ProjectPath = "project.csproj",
+            RunStructure = CreatePhaseStructuredRun()
+        });
+
+        StageNodeState stageState = mainState.ActiveRun!.Stages["Main"];
+        Assert.Equal(new[] { "layer-0", "layer-1", "layer-2" }, stageState.ExecutionLayerOrder);
+        Assert.Equal(new[] { 0, 1 }, stageState.ExecutionLayers["layer-0"].StepIds);
+        Assert.Equal(new[] { 2 }, stageState.ExecutionLayers["layer-1"].StepIds);
+        Assert.Equal(new[] { 3 }, stageState.ExecutionLayers["layer-2"].StepIds);
+        Assert.Equal(StepExecutionPhase.Prepare, stageState.Steps["0"].Phase);
+        Assert.Equal(StepExecutionPhase.Act, stageState.Steps["2"].Phase);
+        Assert.Equal(StepExecutionPhase.Materialize, stageState.Steps["3"].Phase);
+    }
+
+    [Fact]
     public async Task SignalsForOtherSession_AreIgnored()
     {
         MainState mainState = await CreateInitializedMainStateAsync();
@@ -391,6 +415,7 @@ public class DebugRunStateReducerTests
                                     new StepIOEntry("artifact", StepIOKind.Artifact, false, typeof(object))
                                 }
                             },
+                            Phase = StepExecutionPhase.Act,
                             LabelOptions = new LabelOptions(),
                             RetryOptions = new RetryOptions(),
                             TimeOutOptions = new TimeOutOptions()
@@ -423,7 +448,36 @@ public class DebugRunStateReducerTests
         };
     }
 
+    private static TimelineRunStructure CreatePhaseStructuredRun()
+    {
+        return new TimelineRunStructure
+        {
+            Variables = new Dictionary<VariableIdentifier, VariableState>(),
+            Artifacts = new Dictionary<ArtifactIdentifier, TestFramework.Core.Debugger.ArtifactState>(),
+            Stages =
+            [
+                new DebugStageState
+                {
+                    Name = "Main",
+                    Description = "Main stage",
+                    Steps =
+                    [
+                        CreateStep("Prepare Left", StepExecutionPhase.Prepare),
+                        CreateStep("Prepare Right", StepExecutionPhase.Prepare),
+                        CreateStep("Trigger", StepExecutionPhase.Act),
+                        CreateStep("Register Artifact", StepExecutionPhase.Materialize)
+                    ]
+                }
+            ]
+        };
+    }
+
     private static DebugStepState CreateIndependentStep(string name)
+    {
+        return CreateStep(name, StepExecutionPhase.Prepare);
+    }
+
+    private static DebugStepState CreateStep(string name, StepExecutionPhase phase)
     {
         return new DebugStepState
         {
@@ -433,6 +487,7 @@ public class DebugRunStateReducerTests
             ErrorHandlingOptions = new ErrorHandlingOptions(),
             ExecutionOptions = new ExecutionOptions(),
             IOContract = new StepIOContract(),
+            Phase = phase,
             LabelOptions = new LabelOptions(),
             RetryOptions = new RetryOptions(),
             TimeOutOptions = new TimeOutOptions()

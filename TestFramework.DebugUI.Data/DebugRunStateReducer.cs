@@ -73,6 +73,7 @@ public sealed class DebugRunStateReducer(MainState mainState)
                     Description = step.Description,
                     DoesReturn = step.DoesReturn,
                     ParallelizationMode = step.ExecutionOptions.ParallelizationMode,
+                    Phase = step.Phase,
                     LifecycleState = DebugLifecycleState.Initialized,
                     State = StepState.NotRun,
                     Iterations = new StateDictionary<StepAttemptState>(),
@@ -470,10 +471,26 @@ public sealed class DebugRunStateReducer(MainState mainState)
 
     private static bool RequiresSequentialOrdering(DebugStepState left, DebugStepState right)
     {
+        if (RequiresPhaseOrdering(left, right))
+            return true;
+
         if (left.ExecutionOptions.ParallelizationMode == StepParallelizationMode.DoNotParallelize || right.ExecutionOptions.ParallelizationMode == StepParallelizationMode.DoNotParallelize)
             return true;
 
         return HasAccessConflict(left.IOContract, right.IOContract);
+    }
+
+    private static bool RequiresPhaseOrdering(DebugStepState left, DebugStepState right)
+    {
+        if (left.Phase != right.Phase)
+            return true;
+
+        return !IsMergeablePhase(left.Phase);
+    }
+
+    private static bool IsMergeablePhase(StepExecutionPhase phase)
+    {
+        return phase is StepExecutionPhase.Prepare or StepExecutionPhase.Materialize;
     }
 
     private static bool HasAccessConflict(StepIOContract left, StepIOContract right)

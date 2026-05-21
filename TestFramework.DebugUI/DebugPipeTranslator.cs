@@ -8,6 +8,21 @@ internal class DebugPipeTranslator : RunDebuggerHostPiped
 {
     private readonly DebugRunStateReducer reducer = new(MainWindow.State);
 
+    protected override Task OnPipeServerReadyAsync()
+    {
+        return reducer.ApplyPipeServerReadyAsync(PipeName);
+    }
+
+    protected override Task OnPipeConnectionAttachedAsync()
+    {
+        return reducer.ApplyPipeConnectionAttachedAsync(PipeName);
+    }
+
+    protected override Task OnPipeConnectionDetachedAsync(string reason)
+    {
+        return reducer.ApplyPipeConnectionDetachedAsync(reason);
+    }
+
     public override async Task OnBreakpointHitRequestAsync(BreakpointHitRequestSignal signal)
     {
         await reducer.ApplyBreakpointHitRequestAsync(signal);

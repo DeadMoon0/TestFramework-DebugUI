@@ -1,4 +1,5 @@
-﻿using System.Diagnostics.CodeAnalysis;
+﻿using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.PipeAdapter.ProtocolModels;
@@ -6,9 +7,9 @@ using TestFramework.DebugUI.PipeAdapter.ProtocolModels;
 namespace TestFramework.DebugUI.PipeAdapter;
 
 [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
-public class RunDebuggerPiped : IRunDebugger
+public class RunDebuggerPiped : IRunDebugger, IDisposable
 {
-    private PipeClient client = PipeStreamController.CreateClient();
+    private readonly PipeClient client = PipeStreamController.CreateClient();
 
     public async Task SignalAndWaitBreakpointHitAsync(string sessionId, string stage, int stepId)
     {
@@ -84,5 +85,11 @@ public class RunDebuggerPiped : IRunDebugger
             SessionId = sessionId
         });
         await client.WaitForFlushedAsync();
+        client.Dispose();
+    }
+
+    public void Dispose()
+    {
+        client.Dispose();
     }
 }

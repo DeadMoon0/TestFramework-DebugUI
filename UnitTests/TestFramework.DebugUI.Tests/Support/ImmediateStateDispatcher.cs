@@ -4,6 +4,8 @@ namespace TestFramework.DebugUI.Tests.Support;
 
 internal sealed class ImmediateStateDispatcher : IStateMutationDispatcher
 {
+    private readonly object stateLock = new();
+
     public Task DispatchCallbackAsync(Func<Task> func)
     {
         return func();
@@ -11,6 +13,9 @@ internal sealed class ImmediateStateDispatcher : IStateMutationDispatcher
 
     public void DispatchState(Action action)
     {
-        action();
+        lock (stateLock)
+        {
+            action();
+        }
     }
 }

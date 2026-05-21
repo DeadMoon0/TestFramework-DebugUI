@@ -7,11 +7,12 @@ internal static class StateTestHelpers
 {
     static StateTestHelpers()
     {
-        StateCommonDispatcher.StateDispatcher = new ImmediateStateDispatcher();
+        EnsureDispatcherInitialized();
     }
 
     internal static void EnsureDispatcherInitialized()
     {
+        StateCommonDispatcher.StateDispatcher = new ImmediateStateDispatcher();
     }
 
     internal static void Eventually(Func<bool> assertion, string failureMessage)
@@ -20,5 +21,20 @@ internal static class StateTestHelpers
             return;
 
         throw new Xunit.Sdk.XunitException(failureMessage);
+    }
+
+    internal static async Task WithQueuedDispatcherAsync(Func<Task> action)
+    {
+        IStateDispatcher previousDispatcher = StateCommonDispatcher.StateDispatcher;
+        StateCommonDispatcher.StateDispatcher = null!;
+
+        try
+        {
+            await action();
+        }
+        finally
+        {
+            StateCommonDispatcher.StateDispatcher = previousDispatcher;
+        }
     }
 }

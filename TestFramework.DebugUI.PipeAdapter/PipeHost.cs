@@ -1,25 +1,32 @@
-﻿using System.IO.Pipes;
+﻿using System;
+using System.IO.Pipes;
+using System.Threading;
 using System.Threading.Tasks;
 using TestFramework.DebugUI.PipeAdapter.ProtocolModels;
 
 namespace TestFramework.DebugUI.PipeAdapter;
 
-internal class PipeHost(NamedPipeServerStream pipeServer)
+internal sealed class PipeHost(NamedPipeServerStream pipeServer) : IDisposable
 {
     private ProtocolStream stream = new ProtocolStream(pipeServer);
+    private bool disposed;
 
     public bool Connected { get; private set; }
 
-    internal async Task WaitForNewConnectionAsync()
+    public string LastDisconnectReason { get; private set; } = "Pipe not connected.";
+
+    internal async Task WaitForNewConnectionAsync(CancellationToken cancellationToken)
     {
-        await pipeServer.WaitForConnectionAsync();
+        await pipeServer.WaitForConnectionAsync(cancellationToken);
         Connected = true;
+        LastDisconnectReason = "Connected.";
     }
 
     internal async Task<ISignal?> WaitForSignalAsync()
     {
         ISignal? signal = await stream.WaitSignalAsync();
-        if (signal is null) Disconnect();
+        if (signal is null)
+            Disconnect(stream.LastFailureReason);
         return signal;
     }
 
@@ -28,9 +35,25 @@ internal class PipeHost(NamedPipeServerStream pipeServer)
         return stream.SendSignalAsync(signal);
     }
 
-    internal void Disconnect()
+    internal void Disconnect(string reason)
     {
-        pipeServer.Disconnect();
+        if (disposed)
+            return;
+
+        LastDisconnectReason = reason;
+        if (pipeServer.IsConnected)
+            pipeServer.Disconnect();
         Connected = false;
+        stream = new ProtocolStream(pipeServer);
+    }
+
+    public void Dispose()
+    {
+        if (disposed)
+            return;
+
+        disposed = true;
+        Connected = false;
+        pipeServer.Dispose();
     }
 }

@@ -7,6 +7,7 @@ using TestFramework.Core.Variables;
 using TestFramework.DebugUI.PipeAdapter.ProtocolModels;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.Tests.Support;
+using WpfStateService;
 
 namespace TestFramework.DebugUI.Tests;
 
@@ -443,6 +444,180 @@ public class DebugRunStateReducerTests
         Assert.True(logs.Count >= 2);
         Assert.Equal("second", logs[^1].Message);
     }
+
+    [Fact]
+    public async Task PipeConnectionState_TracksLifecycleAndDiagnostics()
+    {
+        MainState mainState = new MainState();
+        DebugRunStateReducer reducer = new DebugRunStateReducer(mainState);
+
+        await reducer.ApplyPipeServerReadyAsync("pipe-1");
+        Assert.Equal(PipeConnectionStatus.Listening, mainState.PipeConnection.Status);
+        Assert.Equal("pipe-1", mainState.PipeConnection.PipeName);
+
+        await reducer.ApplyPipeConnectionAttachedAsync("pipe-1");
+        Assert.True(mainState.PipeConnection.IsConnected);
+        Assert.Equal(PipeConnectionStatus.Connected, mainState.PipeConnection.Status);
+        Assert.Equal(1, mainState.PipeConnection.ConnectionCount);
+        Assert.Contains("Piped Debugger Attached", mainState.PipeConnection.DebugInfo);
+
+        await reducer.ApplyInitTimelineRunAsync(new InitTimelineRunSignal
+        {
+            SessionId = "session-1",
+            Name = "Run",
+            ProjectPath = "project.csproj",
+            RunStructure = CreateRunStructure()
+        });
+
+        Assert.Equal("session-1", mainState.PipeConnection.ConnectedSessionId);
+        Assert.Equal("session-1", mainState.PipeConnection.LastSessionId);
+
+        await reducer.ApplyPipeConnectionDetachedAsync("Run completed.");
+
+        Assert.False(mainState.PipeConnection.IsConnected);
+        Assert.Equal(PipeConnectionStatus.Disconnected, mainState.PipeConnection.Status);
+        Assert.Equal(1, mainState.PipeConnection.DisconnectCount);
+        Assert.Equal("Run completed.", mainState.PipeConnection.LastDisconnectReason);
+        Assert.Contains("Piped Debugger Dettached (Run completed.)", mainState.PipeConnection.DebugInfo);
+    }
+
+    [Fact]
+    public async Task Reducer_WritesFromDifferentThreads_DoNotLoseIndependentRunStateUpdates()
+    {
+        await StateTestHelpers.WithQueuedDispatcherAsync(async () =>
+        {
+            MainState mainState = new MainState();
+            DebugRunStateReducer reducer = new DebugRunStateReducer(mainState);
+
+            await reducer.ApplyInitTimelineRunAsync(new InitTimelineRunSignal
+            {
+                SessionId = "session-1",
+                Name = "Run",
+                ProjectPath = "project.csproj",
+                RunStructure = CreateRunStructure()
+            });
+
+            await StateServiceDispatcher.DispatchAsync(() => { });
+
+            TaskCompletionSource start = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            Task updateVariable = Task.Run(async () =>
+            {
+                await start.Task;
+                await reducer.ApplyValueUpdateAsync(new ValueUpdateSignal
+                {
+                    SessionId = "session-1",
+                    Name = "output-variable",
+                    ValueKind = DebugValueKind.Variable,
+                    Stage = "Main",
+                    StepId = 0,
+                    Envelope = CreateEnvelope(DebugValueKind.Variable, "System.String", "value-1", new JObject { ["value"] = "value-1" })
+                });
+            });
+
+            Task updateArtifact = Task.Run(async () =>
+            {
+                await start.Task;
+                await reducer.ApplyValueUpdateAsync(new ValueUpdateSignal
+                {
+                    SessionId = "session-1",
+                    Name = "output-artifact",
+                    ValueKind = DebugValueKind.Artifact,
+                    Stage = "Main",
+                    StepId = 0,
+                    Envelope = CreateEnvelope(DebugValueKind.Artifact, "Artifact", "artifact-1", new JObject { ["reference"] = "artifact-1" })
+                });
+            });
+
+            start.SetResult();
+            await Task.WhenAll(updateVariable, updateArtifact);
+
+            ReducerUpdateSnapshot snapshot = await StateServiceDispatcher.DispatchAsync(() =>
+            {
+                StepNodeState stepState = mainState.ActiveRun!.Stages["Main"].Steps["0"];
+                return new ReducerUpdateSnapshot(
+                    mainState.ActiveRun.Variables["output-variable"].Envelope.DisplayText,
+                    mainState.ActiveRun.Artifacts["output-artifact"].Envelope.DisplayText,
+                    stepState.Outputs["Variable:output-variable"].DisplayText,
+                    stepState.Outputs["Artifact:output-artifact"].DisplayText);
+            });
+
+            Assert.Equal("value-1", snapshot.VariableDisplay);
+            Assert.Equal("artifact-1", snapshot.ArtifactDisplay);
+            Assert.Equal("value-1", snapshot.VariableOutputDisplay);
+            Assert.Equal("artifact-1", snapshot.ArtifactOutputDisplay);
+        });
+    }
+
+    [Fact]
+    public async Task Reducer_OrderedCrossThreadLifecycleTransitions_PreserveOrder_AndLastStateWins()
+    {
+        await StateTestHelpers.WithQueuedDispatcherAsync(async () =>
+        {
+            MainState mainState = new MainState();
+            DebugRunStateReducer reducer = new DebugRunStateReducer(mainState);
+
+            await reducer.ApplyInitTimelineRunAsync(new InitTimelineRunSignal
+            {
+                SessionId = "session-1",
+                Name = "Run",
+                ProjectPath = "project.csproj",
+                RunStructure = CreateRunStructure()
+            });
+
+            await StateServiceDispatcher.DispatchAsync(() => { });
+
+            TaskCompletionSource runningQueued = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            Task markRunning = Task.Run(async () =>
+            {
+                await reducer.ApplyEntityTransitionAsync(new EntityTransitionSignal
+                {
+                    SessionId = "session-1",
+                    EntityKind = DebugEntityKind.Step,
+                    Stage = "Main",
+                    StepId = 0,
+                    State = DebugLifecycleState.Running,
+                    PreviousState = DebugLifecycleState.Initialized
+                });
+                runningQueued.SetResult();
+            });
+
+            Task markComplete = Task.Run(async () =>
+            {
+                await runningQueued.Task;
+                await reducer.ApplyEntityTransitionAsync(new EntityTransitionSignal
+                {
+                    SessionId = "session-1",
+                    EntityKind = DebugEntityKind.Step,
+                    Stage = "Main",
+                    StepId = 0,
+                    State = DebugLifecycleState.Complete,
+                    PreviousState = DebugLifecycleState.Running
+                });
+            });
+
+            await Task.WhenAll(markRunning, markComplete);
+
+            ReducerLifecycleSnapshot snapshot = await StateServiceDispatcher.DispatchAsync(() =>
+            {
+                StepNodeState stepState = mainState.ActiveRun!.Stages["Main"].Steps["0"];
+                StepAttemptState attemptState = stepState.Attempts["1"];
+                return new ReducerLifecycleSnapshot(
+                    stepState.LifecycleState,
+                    stepState.PreviousLifecycleState,
+                    stepState.AttemptCount,
+                    attemptState.LifecycleState);
+            });
+
+            Assert.Equal(DebugLifecycleState.Complete, snapshot.StepLifecycleState);
+            Assert.Equal(DebugLifecycleState.Running, snapshot.PreviousLifecycleState);
+            Assert.Equal(1, snapshot.AttemptCount);
+            Assert.Equal(DebugLifecycleState.Complete, snapshot.AttemptLifecycleState);
+        });
+    }
+
+    private sealed record ReducerUpdateSnapshot(string VariableDisplay, string ArtifactDisplay, string VariableOutputDisplay, string ArtifactOutputDisplay);
+
+    private sealed record ReducerLifecycleSnapshot(DebugLifecycleState StepLifecycleState, DebugLifecycleState? PreviousLifecycleState, int AttemptCount, DebugLifecycleState AttemptLifecycleState);
 
     private static async Task<MainState> CreateInitializedMainStateAsync()
     {

@@ -16,6 +16,7 @@ namespace TestFrameworkDebugUI
         public static MainWindow Instance;
 
         public static MainState State = new MainState();
+        private readonly DebugPipeTranslator debugPipeTranslator = new();
 
         public MainWindow()
         {
@@ -24,7 +25,7 @@ namespace TestFrameworkDebugUI
             Instance = this;
             InitializeComponent();
 
-            new DebugPipeTranslator().Begin();
+            debugPipeTranslator.Begin();
         }
 
         private void Window_SourceInitialized(object sender, EventArgs e)
@@ -126,6 +127,7 @@ namespace TestFrameworkDebugUI
 
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
+            debugPipeTranslator.Dispose();
             //e.Cancel = true;
             //Hide();
         }

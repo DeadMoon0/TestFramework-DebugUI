@@ -1,31 +1,66 @@
-﻿using System.IO.Pipes;
+﻿using System;
+using System.IO.Pipes;
 using System.Threading.Tasks;
 using TestFramework.DebugUI.PipeAdapter.ProtocolModels;
 
 namespace TestFramework.DebugUI.PipeAdapter;
 
-internal class PipeClient(NamedPipeClientStream? pipeClient)
+internal sealed class PipeClient : IDisposable
 {
-    private ProtocolStream? stream = pipeClient is null ? null : new ProtocolStream(pipeClient);
+    private NamedPipeClientStream? pipeClient;
+    private ProtocolStream? stream;
+
+    internal PipeClient(NamedPipeClientStream? pipeClient)
+    {
+        this.pipeClient = pipeClient;
+        stream = pipeClient is null ? null : new ProtocolStream(pipeClient);
+    }
+
+    private bool IsConnected => pipeClient?.IsConnected == true && stream is not null && !stream.PipeIsDead;
 
     internal Task SignalAsync(ISignal signal)
     {
-        if (stream is null) return Task.CompletedTask;
+        if (!IsConnected || stream is null)
+            return Task.CompletedTask;
+
         return stream.SendSignalAsync(signal);
     }
 
     internal async Task<ISignal?> WaitForAsync(SignalKind kind)
     {
-        if (stream is null) return null;
+        if (!IsConnected || stream is null)
+            return null;
+
         ISignal? signal = await stream.WaitSignalAsync();
-        if (signal is null) return null;
-        if (signal.Kind != kind) throw new System.InvalidOperationException("Expected Signal to be " + kind + " but got: " + signal.Kind);
+        if (signal is null)
+        {
+            Dispose();
+            return null;
+        }
+
+        if (signal.Kind != kind)
+        {
+            Dispose();
+            return null;
+        }
+
         return signal;
     }
 
-    internal Task WaitForFlushedAsync()
+    internal async Task WaitForFlushedAsync()
     {
-        if (pipeClient is null) return Task.CompletedTask;
-        return pipeClient.FlushAsync();
+        if (!IsConnected || stream is null)
+            return;
+
+        await stream.FlushAsync();
+        if (stream.PipeIsDead)
+            Dispose();
+    }
+
+    public void Dispose()
+    {
+        stream = null;
+        pipeClient?.Dispose();
+        pipeClient = null;
     }
 }

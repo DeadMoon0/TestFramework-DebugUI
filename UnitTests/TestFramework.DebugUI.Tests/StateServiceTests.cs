@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using TestFramework.DebugUI.Tests.Support;
+using WpfStateService;
 using WpfStateService.Callbacks;
 using WpfStateService.Common;
 using WpfStateService.Graph;
@@ -95,6 +96,92 @@ public class StateServiceTests
 
         Assert.True(removed);
         StateTestHelpers.Eventually(() => StatePath.For(root).Property(TestRootState.ChildrenProperty).PropertyKey<TestChildState>("child").GetValue() is null, "Expected dictionary child path to be removed.");
+    }
+
+    [Fact]
+    public async Task NestedStateObject_WritesFromDifferentThreads_PreserveOrder_AndLastValueWins()
+    {
+        await StateTestHelpers.WithQueuedDispatcherAsync(async () =>
+        {
+            TestRootState root = new() { Child = new TestChildState() };
+            TaskCompletionSource firstWriteQueued = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            Task writeFirst = Task.Run(() =>
+            {
+                root.Child.Name = "first";
+                firstWriteQueued.SetResult();
+            });
+
+            Task writeSecond = Task.Run(async () =>
+            {
+                await firstWriteQueued.Task;
+                root.Child.Name = "second";
+            });
+
+            await Task.WhenAll(writeFirst, writeSecond);
+
+            string finalValue = await StateServiceDispatcher.DispatchAsync(() => root.Child.Name);
+            Assert.Equal("second", finalValue);
+        });
+    }
+
+    [Fact]
+    public async Task StatePath_WritesFromDifferentThreads_ToDifferentNestedPaths_DoNotLoseAssignedValues()
+    {
+        await StateTestHelpers.WithQueuedDispatcherAsync(async () =>
+        {
+            TestRootState root = new() { Child = new TestChildState() };
+            StateObjectPathBuilder<string> titlePath = StatePath.For(root).Property(TestRootState.TitleProperty);
+            StateObjectPathBuilder<string> childNamePath = StatePath.For(root).Property(TestRootState.ChildProperty).Property(TestChildState.NameProperty);
+            TaskCompletionSource start = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            Task writeTitle = Task.Run(async () =>
+            {
+                await start.Task;
+                Assert.True(titlePath.SetValue("updated-title"));
+            });
+
+            Task writeChild = Task.Run(async () =>
+            {
+                await start.Task;
+                Assert.True(childNamePath.SetValue("updated-child"));
+            });
+
+            start.SetResult();
+            await Task.WhenAll(writeTitle, writeChild);
+
+            (string Title, string ChildName) snapshot = await StateServiceDispatcher.DispatchAsync(() => (root.Title, root.Child.Name));
+            Assert.Equal("updated-title", snapshot.Title);
+            Assert.Equal("updated-child", snapshot.ChildName);
+        });
+    }
+
+    [Fact]
+    public async Task StatePath_WritesFromDifferentThreads_ToSameNestedPath_PreserveOrder_AndLastValueWins()
+    {
+        await StateTestHelpers.WithQueuedDispatcherAsync(async () =>
+        {
+            TestRootState root = new() { Child = new TestChildState() };
+            StateObjectPathBuilder<string> childNamePath = StatePath.For(root).Property(TestRootState.ChildProperty).Property(TestChildState.NameProperty);
+            TaskCompletionSource firstWriteQueued = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            Task writeFirst = Task.Run(() =>
+            {
+                Assert.True(childNamePath.SetValue("first"));
+                firstWriteQueued.SetResult();
+            });
+
+            Task writeSecond = Task.Run(async () =>
+            {
+                await firstWriteQueued.Task;
+                Assert.True(childNamePath.SetValue("second"));
+            });
+
+            await Task.WhenAll(writeFirst, writeSecond);
+
+            string finalValue = await StateServiceDispatcher.DispatchAsync(() => childNamePath.GetValue()!);
+            Assert.Equal("second", finalValue);
+        });
     }
 
     public sealed class TestRootState : StateObject

@@ -66,6 +66,12 @@ internal static class StateServiceDispatcher
 
     internal static void Dispatch(Action action)
     {
+        if (Thread.CurrentThread == _workerThread)
+        {
+            action();
+            return;
+        }
+
         if (StateCommonDispatcher.StateDispatcher is IStateMutationDispatcher mutationDispatcher)
         {
             mutationDispatcher.DispatchState(action);
@@ -73,6 +79,52 @@ internal static class StateServiceDispatcher
         }
 
         _actionQueue.Add(action);
+    }
+
+    internal static Task DispatchAsync(Action action)
+    {
+        if (Thread.CurrentThread == _workerThread)
+        {
+            action();
+            return Task.CompletedTask;
+        }
+
+        if (StateCommonDispatcher.StateDispatcher is IStateMutationDispatcher mutationDispatcher)
+        {
+            TaskCompletionSource completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            mutationDispatcher.DispatchState(() =>
+            {
+                try
+                {
+                    action();
+                    completion.SetResult();
+                }
+                catch (Exception ex)
+                {
+                    completion.SetException(ex);
+                }
+            });
+
+            return completion.Task;
+        }
+
+        TaskCompletionSource tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        _actionQueue.Add(() =>
+        {
+            try
+            {
+                action();
+                tcs.SetResult();
+            }
+            catch (Exception ex)
+            {
+                tcs.SetException(ex);
+            }
+        });
+
+        return tcs.Task;
     }
 
     internal static void DispatchCallback(CallbackChangeMessage message)
@@ -86,23 +138,44 @@ internal static class StateServiceDispatcher
         _callbackQueue.Add(message);
     }
 
-    //internal static Task<T> DispatchAsync<T>(Func<T> func)
-    //{
-    //    var tcs = new TaskCompletionSource<T>();
+    internal static Task<T> DispatchAsync<T>(Func<T> func)
+    {
+        if (Thread.CurrentThread == _workerThread)
+            return Task.FromResult(func());
 
-    //    Dispatch(() =>
-    //    {
-    //        try
-    //        {
-    //            var result = func();
-    //            tcs.SetResult(result);
-    //        }
-    //        catch (Exception ex)
-    //        {
-    //            tcs.SetException(ex);
-    //        }
-    //    });
+        if (StateCommonDispatcher.StateDispatcher is IStateMutationDispatcher mutationDispatcher)
+        {
+            TaskCompletionSource<T> completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    //    return tcs.Task;
-    //}
+            mutationDispatcher.DispatchState(() =>
+            {
+                try
+                {
+                    completion.SetResult(func());
+                }
+                catch (Exception ex)
+                {
+                    completion.SetException(ex);
+                }
+            });
+
+            return completion.Task;
+        }
+
+        TaskCompletionSource<T> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        _actionQueue.Add(() =>
+        {
+            try
+            {
+                tcs.SetResult(func());
+            }
+            catch (Exception ex)
+            {
+                tcs.SetException(ex);
+            }
+        });
+
+        return tcs.Task;
+    }
 }

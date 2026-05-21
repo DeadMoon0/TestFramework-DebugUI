@@ -9,6 +9,19 @@ namespace TestFrameworkDebugUI
     /// </summary>
     public partial class App : Application
     {
+        protected override void OnStartup(StartupEventArgs e)
+        {
+            base.OnStartup(e);
+
+            if (MainWindow is not null)
+            {
+                return;
+            }
+
+            MainWindow window = new();
+            MainWindow = window;
+            window.Show();
+        }
     }
 
 }

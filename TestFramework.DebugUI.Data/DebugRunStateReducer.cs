@@ -6,258 +6,319 @@ using TestFramework.Core.Steps;
 using TestFramework.Core.Steps.Options;
 using TestFramework.DebugUI.PipeAdapter.ProtocolModels;
 using TestFramework.DebugUI.State;
+using WpfStateService;
 using WpfStateService.Common;
 
 namespace TestFramework.DebugUI;
 
 public sealed class DebugRunStateReducer(MainState mainState)
 {
+    public Task ApplyPipeServerReadyAsync(string pipeName)
+    {
+        return StateServiceDispatcher.DispatchAsync(() =>
+        {
+            PipeConnectionState connectionState = mainState.PipeConnection;
+            connectionState.PipeName = pipeName;
+            connectionState.Status = PipeConnectionStatus.Listening;
+            connectionState.LastUpdatedAtUtc = DateTimeOffset.UtcNow;
+            AppendConnectionDebugInfo($"Pipe server ready ({pipeName})");
+        });
+    }
+
+    public Task ApplyPipeConnectionAttachedAsync(string pipeName)
+    {
+        return StateServiceDispatcher.DispatchAsync(() =>
+        {
+            PipeConnectionState connectionState = mainState.PipeConnection;
+            connectionState.PipeName = pipeName;
+            connectionState.Status = PipeConnectionStatus.Connected;
+            connectionState.IsConnected = true;
+            connectionState.ConnectionCount++;
+            connectionState.LastConnectedAtUtc = DateTimeOffset.UtcNow;
+            connectionState.LastUpdatedAtUtc = connectionState.LastConnectedAtUtc;
+            connectionState.LastDisconnectReason = "";
+            connectionState.LastFailureReason = "";
+            connectionState.ConnectedSessionId = "";
+            AppendConnectionDebugInfo("Piped Debugger Attached");
+        });
+    }
+
+    public Task ApplyPipeConnectionDetachedAsync(string reason)
+    {
+        return StateServiceDispatcher.DispatchAsync(() =>
+        {
+            PipeConnectionState connectionState = mainState.PipeConnection;
+            connectionState.Status = ClassifyDisconnect(reason);
+            connectionState.IsConnected = false;
+            connectionState.DisconnectCount++;
+            connectionState.LastDisconnectedAtUtc = DateTimeOffset.UtcNow;
+            connectionState.LastUpdatedAtUtc = connectionState.LastDisconnectedAtUtc;
+            connectionState.LastDisconnectReason = reason;
+            connectionState.LastFailureReason = connectionState.Status == PipeConnectionStatus.Faulted ? reason : "";
+            connectionState.ConnectedSessionId = "";
+            AppendConnectionDebugInfo($"Piped Debugger Dettached ({reason})");
+        });
+    }
+
     public Task ApplyInitTimelineRunAsync(InitTimelineRunSignal signal)
     {
-        RunState runState = new RunState
+        return StateServiceDispatcher.DispatchAsync(() =>
         {
-            SessionId = signal.SessionId,
-            Name = signal.Name,
-            ProjectPath = signal.ProjectPath,
-            LifecycleState = DebugLifecycleState.Initialized,
-            LastTransitionAtUtc = DateTimeOffset.UtcNow,
-            Artifacts = new StateDictionary<DebugValueState>(),
-            Variables = new StateDictionary<DebugValueState>(),
-            Assertions = new StateDictionary<AssertionEntryState>(),
-            Stages = new StateDictionary<StageNodeState>()
-        };
-
-        CopyValues(signal.RunStructure.Variables.Values, runState.Variables);
-        CopyValues(signal.RunStructure.Artifacts.Values, runState.Artifacts);
-
-        for (int stageIndex = 0; stageIndex < signal.RunStructure.Stages.Length; stageIndex++)
-        {
-            DebugStageState stage = signal.RunStructure.Stages[stageIndex];
-            ExecutionLayerPlan[] executionLayers = BuildExecutionLayers(stage.Steps).ToArray();
-            StageNodeState stageState = new StageNodeState
+            RunState runState = new RunState
             {
-                Name = stage.Name,
-                Description = stage.Description,
-                Order = stageIndex,
+                SessionId = signal.SessionId,
+                Name = signal.Name,
+                ProjectPath = signal.ProjectPath,
                 LifecycleState = DebugLifecycleState.Initialized,
-                ExecutionLayers = new StateDictionary<StageLayerState>(),
-                Steps = new StateDictionary<StepNodeState>()
+                LastTransitionAtUtc = DateTimeOffset.UtcNow,
+                Artifacts = new StateDictionary<DebugValueState>(),
+                Variables = new StateDictionary<DebugValueState>(),
+                Assertions = new StateDictionary<AssertionEntryState>(),
+                Stages = new StateDictionary<StageNodeState>()
             };
 
-            foreach (ExecutionLayerPlan layer in executionLayers)
-            {
-                stageState.ExecutionLayers[layer.Key] = new StageLayerState
-                {
-                    Key = layer.Key,
-                    Order = layer.Order,
-                    StepIds = layer.StepIds,
-                    IsActive = false,
-                    IsComplete = false
-                };
-            }
+            CopyValues(signal.RunStructure.Variables.Values, runState.Variables);
+            CopyValues(signal.RunStructure.Artifacts.Values, runState.Artifacts);
 
-            for (int index = 0; index < stage.Steps.Length; index++)
+            for (int stageIndex = 0; stageIndex < signal.RunStructure.Stages.Length; stageIndex++)
             {
-                DebugStepState step = stage.Steps[index];
-                string layerKey = executionLayers.First(layer => layer.StepIds.Contains(index)).Key;
-                StepNodeState stepState = new StepNodeState
+                DebugStageState stage = signal.RunStructure.Stages[stageIndex];
+                ExecutionLayerPlan[] executionLayers = BuildExecutionLayers(stage.Steps).ToArray();
+                StageNodeState stageState = new StageNodeState
                 {
-                    StageName = stage.Name,
-                    StepId = index,
-                    Order = index,
-                    ExecutionLayerKey = layerKey,
-                    Name = step.Name,
-                    Description = step.Description,
-                    DoesReturn = step.DoesReturn,
-                    ParallelizationMode = step.ExecutionOptions.ParallelizationMode,
-                    Phase = step.Phase,
+                    Name = stage.Name,
+                    Description = stage.Description,
+                    Order = stageIndex,
                     LifecycleState = DebugLifecycleState.Initialized,
-                    State = StepState.NotRun,
-                    Attempts = new StateDictionary<StepAttemptState>(),
-                    Inputs = new StateDictionary<IOConnectionState>(),
-                    Outputs = new StateDictionary<IOConnectionState>()
+                    ExecutionLayers = new StateDictionary<StageLayerState>(),
+                    Steps = new StateDictionary<StepNodeState>()
                 };
-                SeedDeclaredConnections(stepState, step.IOContract.Inputs, IOConnectionDirection.Input);
-                SeedDeclaredConnections(stepState, step.IOContract.Outputs, IOConnectionDirection.Output);
-                stageState.Steps[index.ToString()] = stepState;
+
+                foreach (ExecutionLayerPlan layer in executionLayers)
+                {
+                    stageState.ExecutionLayers[layer.Key] = new StageLayerState
+                    {
+                        Key = layer.Key,
+                        Order = layer.Order,
+                        StepIds = layer.StepIds,
+                        IsActive = false,
+                        IsComplete = false
+                    };
+                }
+
+                for (int index = 0; index < stage.Steps.Length; index++)
+                {
+                    DebugStepState step = stage.Steps[index];
+                    string layerKey = executionLayers.First(layer => layer.StepIds.Contains(index)).Key;
+                    StepNodeState stepState = new StepNodeState
+                    {
+                        StageName = stage.Name,
+                        StepId = index,
+                        Order = index,
+                        ExecutionLayerKey = layerKey,
+                        Name = step.Name,
+                        Description = step.Description,
+                        DoesReturn = step.DoesReturn,
+                        ParallelizationMode = step.ExecutionOptions.ParallelizationMode,
+                        Phase = step.Phase,
+                        LifecycleState = DebugLifecycleState.Initialized,
+                        State = StepState.NotRun,
+                        Attempts = new StateDictionary<StepAttemptState>(),
+                        Inputs = new StateDictionary<IOConnectionState>(),
+                        Outputs = new StateDictionary<IOConnectionState>()
+                    };
+                    SeedDeclaredConnections(stepState, step.IOContract.Inputs, IOConnectionDirection.Input);
+                    SeedDeclaredConnections(stepState, step.IOContract.Outputs, IOConnectionDirection.Output);
+                    stageState.Steps[index.ToString()] = stepState;
+                }
+
+                RefreshStageExecutionLayers(stageState);
+
+                runState.Stages[stage.Name] = stageState;
             }
 
-            RefreshStageExecutionLayers(stageState);
-
-            runState.Stages[stage.Name] = stageState;
-        }
-
-        mainState.ActiveRun = runState;
-        return Task.CompletedTask;
+            mainState.ActiveRun = runState;
+            mainState.PipeConnection.ConnectedSessionId = signal.SessionId;
+            mainState.PipeConnection.LastSessionId = signal.SessionId;
+            mainState.PipeConnection.LastUpdatedAtUtc = DateTimeOffset.UtcNow;
+        });
     }
 
     public Task ApplyEntityTransitionAsync(EntityTransitionSignal signal)
     {
-        if (!TryGetRun(signal.SessionId, out RunState runState))
-            return Task.CompletedTask;
-
-        switch (signal.EntityKind)
+        return StateServiceDispatcher.DispatchAsync(() =>
         {
-            case DebugEntityKind.Run:
-                ApplyLifecycle(runState, signal.State, signal.PreviousState, signal.OccurredAtUtc);
-                break;
-            case DebugEntityKind.Stage:
-                if (!TryGetStage(runState, signal.Stage, out StageNodeState stageState))
-                    return Task.CompletedTask;
+            if (!TryGetRun(signal.SessionId, out RunState runState))
+                return;
 
-                ApplyLifecycle(stageState, signal.State, signal.PreviousState, signal.OccurredAtUtc);
-                break;
-            case DebugEntityKind.Step:
-                if (!TryGetStep(runState, signal.Stage, signal.StepId, out StageNodeState owningStage, out StepNodeState stepState))
-                    return Task.CompletedTask;
+            switch (signal.EntityKind)
+            {
+                case DebugEntityKind.Run:
+                    ApplyLifecycle(runState, signal.State, signal.PreviousState, signal.OccurredAtUtc);
+                    break;
+                case DebugEntityKind.Stage:
+                    if (!TryGetStage(runState, signal.Stage, out StageNodeState stageState))
+                        return;
 
-                ApplyLifecycle(stepState, signal.State, signal.PreviousState, signal.OccurredAtUtc);
-                stepState.IsWaitingAtBreakpoint = false;
+                    ApplyLifecycle(stageState, signal.State, signal.PreviousState, signal.OccurredAtUtc);
+                    break;
+                case DebugEntityKind.Step:
+                    if (!TryGetStep(runState, signal.Stage, signal.StepId, out StageNodeState owningStage, out StepNodeState stepState))
+                        return;
 
-                if (signal.State == DebugLifecycleState.Running)
-                {
-                    stepState.AttemptCount++;
-                    StepAttemptState attemptState = EnsureAttempt(stepState, stepState.AttemptCount, signal.OccurredAtUtc);
-                    PopulateStepInputs(runState, signal.Stage!, signal.StepId!.Value, stepState);
-                    attemptState.LifecycleState = DebugLifecycleState.Running;
-                    AddFrameworkLogEntry(stepState, attemptState, signal.OccurredAtUtc, DebugLogLevel.Information, "StepRunning", stepState.AttemptCount == 1 ? $"Executing Step: {GetStepDisplayName(stepState)}" : $"Executing Step Attempt {stepState.AttemptCount}: {GetStepDisplayName(stepState)}");
-                }
+                    ApplyLifecycle(stepState, signal.State, signal.PreviousState, signal.OccurredAtUtc);
+                    stepState.IsWaitingAtBreakpoint = false;
 
-                if (signal.PreviousState == DebugLifecycleState.Running && TryGetLatestAttempt(stepState, out StepAttemptState latestAttempt))
-                {
-                    latestAttempt.IsActive = false;
-                    latestAttempt.FinishedAtUtc = signal.OccurredAtUtc;
-                    latestAttempt.LifecycleState = signal.OutcomeState ?? signal.State;
-                    AddFrameworkLogEntry(stepState, latestAttempt, signal.OccurredAtUtc, signal.State == DebugLifecycleState.WaitingForRetry ? DebugLogLevel.Warning : MapLogLevel(signal.OutcomeState ?? signal.State), "StepOutcome", $"{MapStatePrefix(signal.OutcomeState ?? signal.State)}  {GetStepDisplayName(stepState)}");
-                }
+                    if (signal.State == DebugLifecycleState.Running)
+                    {
+                        stepState.AttemptCount++;
+                        StepAttemptState attemptState = EnsureAttempt(stepState, stepState.AttemptCount, signal.OccurredAtUtc);
+                        PopulateStepInputs(runState, signal.Stage!, signal.StepId!.Value, stepState);
+                        attemptState.LifecycleState = DebugLifecycleState.Running;
+                        AddFrameworkLogEntry(stepState, attemptState, signal.OccurredAtUtc, DebugLogLevel.Information, "StepRunning", stepState.AttemptCount == 1 ? $"Executing Step: {GetStepDisplayName(stepState)}" : $"Executing Step Attempt {stepState.AttemptCount}: {GetStepDisplayName(stepState)}");
+                    }
 
-                stepState.State = MapStepState(signal.State, signal.OutcomeState, stepState.State);
-                RefreshStageExecutionLayers(owningStage);
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(signal.EntityKind), signal.EntityKind, null);
-        }
+                    if (signal.PreviousState == DebugLifecycleState.Running && TryGetLatestAttempt(stepState, out StepAttemptState latestAttempt))
+                    {
+                        latestAttempt.IsActive = false;
+                        latestAttempt.FinishedAtUtc = signal.OccurredAtUtc;
+                        latestAttempt.LifecycleState = signal.OutcomeState ?? signal.State;
+                        AddFrameworkLogEntry(stepState, latestAttempt, signal.OccurredAtUtc, signal.State == DebugLifecycleState.WaitingForRetry ? DebugLogLevel.Warning : MapLogLevel(signal.OutcomeState ?? signal.State), "StepOutcome", $"{MapStatePrefix(signal.OutcomeState ?? signal.State)}  {GetStepDisplayName(stepState)}");
+                    }
 
-        return Task.CompletedTask;
+                    stepState.State = MapStepState(signal.State, signal.OutcomeState, stepState.State);
+                    RefreshStageExecutionLayers(owningStage);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(signal.EntityKind), signal.EntityKind, null);
+            }
+        });
     }
 
     public Task ApplyLogEntryAsync(LogEntrySignal signal)
     {
-        if (!TryGetRun(signal.SessionId, out RunState runState))
-            return Task.CompletedTask;
-
-        if (!TryGetStep(runState, signal.Entry.Stage, signal.Entry.StepId, out _, out StepNodeState stepState))
-            return Task.CompletedTask;
-
-        int attemptNumber = signal.Entry.Iteration ?? 0;
-        if (attemptNumber <= 0)
-            return Task.CompletedTask;
-
-        StepAttemptState attemptState = EnsureAttempt(stepState, attemptNumber, signal.Entry.OccurredAtUtc);
-        string key = attemptState.LogEntries.Count.ToString();
-        LogEntryState entryState = new()
+        return StateServiceDispatcher.DispatchAsync(() =>
         {
-            Key = key,
-            OccurredAtUtc = signal.Entry.OccurredAtUtc,
-            Level = signal.Entry.Level,
-            EventName = signal.Entry.EventName,
-            Message = signal.Entry.Message,
-            IndentLevel = signal.Entry.IndentLevel,
-            StageName = signal.Entry.Stage ?? "",
-            StepId = signal.Entry.StepId,
-            AttemptNumber = signal.Entry.Iteration,
-            AssertionScope = signal.Entry.AssertionScope ?? ""
-        };
+            if (!TryGetRun(signal.SessionId, out RunState runState))
+                return;
 
-        AppendAttemptLog(stepState, attemptState, entryState);
+            if (!TryGetStep(runState, signal.Entry.Stage, signal.Entry.StepId, out _, out StepNodeState stepState))
+                return;
 
-        return Task.CompletedTask;
+            int attemptNumber = signal.Entry.Iteration ?? 0;
+            if (attemptNumber <= 0)
+                return;
+
+            StepAttemptState attemptState = EnsureAttempt(stepState, attemptNumber, signal.Entry.OccurredAtUtc);
+            string key = attemptState.LogEntries.Count.ToString();
+            LogEntryState entryState = new()
+            {
+                Key = key,
+                OccurredAtUtc = signal.Entry.OccurredAtUtc,
+                Level = signal.Entry.Level,
+                EventName = signal.Entry.EventName,
+                Message = signal.Entry.Message,
+                IndentLevel = signal.Entry.IndentLevel,
+                StageName = signal.Entry.Stage ?? "",
+                StepId = signal.Entry.StepId,
+                AttemptNumber = signal.Entry.Iteration,
+                AssertionScope = signal.Entry.AssertionScope ?? ""
+            };
+
+            AppendAttemptLog(stepState, attemptState, entryState);
+        });
     }
 
     public Task ApplyAssertionAsync(AssertionSignal signal)
     {
-        if (!TryGetRun(signal.SessionId, out RunState runState))
-            return Task.CompletedTask;
-
-        string key = runState.Assertions.Count.ToString();
-        runState.Assertions[key] = new AssertionEntryState
+        return StateServiceDispatcher.DispatchAsync(() =>
         {
-            Key = key,
-            OccurredAtUtc = signal.Entry.OccurredAtUtc,
-            TargetKind = signal.Entry.TargetKind,
-            Target = signal.Entry.Target,
-            AssertionName = signal.Entry.AssertionName,
-            AssertionDisplay = signal.Entry.AssertionDisplay,
-            Succeeded = signal.Entry.Succeeded,
-            Expected = signal.Entry.Expected,
-            Actual = signal.Entry.Actual,
-            FailureReason = signal.Entry.FailureReason,
-            AssertionScope = signal.Entry.AssertionScope ?? ""
-        };
+            if (!TryGetRun(signal.SessionId, out RunState runState))
+                return;
 
-        return Task.CompletedTask;
+            string key = runState.Assertions.Count.ToString();
+            runState.Assertions[key] = new AssertionEntryState
+            {
+                Key = key,
+                OccurredAtUtc = signal.Entry.OccurredAtUtc,
+                TargetKind = signal.Entry.TargetKind,
+                Target = signal.Entry.Target,
+                AssertionName = signal.Entry.AssertionName,
+                AssertionDisplay = signal.Entry.AssertionDisplay,
+                Succeeded = signal.Entry.Succeeded,
+                Expected = signal.Entry.Expected,
+                Actual = signal.Entry.Actual,
+                FailureReason = signal.Entry.FailureReason,
+                AssertionScope = signal.Entry.AssertionScope ?? ""
+            };
+        });
     }
 
     public Task ApplyValueUpdateAsync(ValueUpdateSignal signal)
     {
-        if (!TryGetRun(signal.SessionId, out RunState runState))
-            return Task.CompletedTask;
-
-        switch (signal.ValueKind)
+        return StateServiceDispatcher.DispatchAsync(() =>
         {
-            case DebugValueKind.Variable:
-                DebugValueState variableState = CreateDebugValueState(signal.Name, signal.Envelope);
-                Upsert(runState.Variables, variableState.Key, variableState);
+            if (!TryGetRun(signal.SessionId, out RunState runState))
+                return;
 
-                if (TryGetStep(runState, signal.Stage, signal.StepId, out _, out StepNodeState variableStepState))
-                {
-                    UpsertConnectionValue(variableStepState, IOConnectionDirection.Output, StepIOKind.Variable, variableState.Key, variableState.Envelope);
-                    if (TryGetActiveAttempt(variableStepState, out StepAttemptState activeAttempt))
-                        AddFrameworkLogEntry(variableStepState, activeAttempt, signal.ObservedAtUtc, DebugLogLevel.Information, "VariableUpdate", $"Set Variable ({variableState.Key}) = {signal.Envelope.DisplayText}");
-                }
-                break;
-            case DebugValueKind.Artifact:
-                DebugValueState artifactState = CreateDebugValueState(signal.Name, signal.Envelope);
-                Upsert(runState.Artifacts, artifactState.Key, artifactState);
+            switch (signal.ValueKind)
+            {
+                case DebugValueKind.Variable:
+                    DebugValueState variableState = CreateDebugValueState(signal.Name, signal.Envelope);
+                    Upsert(runState.Variables, variableState.Key, variableState);
 
-                if (TryGetStep(runState, signal.Stage, signal.StepId, out _, out StepNodeState artifactStepState))
-                {
-                    UpsertConnectionValue(artifactStepState, IOConnectionDirection.Output, StepIOKind.Artifact, artifactState.Key, artifactState.Envelope);
-                    if (TryGetActiveAttempt(artifactStepState, out StepAttemptState activeAttempt))
-                        AddFrameworkLogEntry(artifactStepState, activeAttempt, signal.ObservedAtUtc, DebugLogLevel.Information, "ArtifactUpdate", $"Set Artifact ({artifactState.Key}) = {signal.Envelope.DisplayText}");
-                }
-                break;
-            default:
-                throw new ArgumentOutOfRangeException(nameof(signal.ValueKind), signal.ValueKind, null);
-        }
+                    if (TryGetStep(runState, signal.Stage, signal.StepId, out _, out StepNodeState variableStepState))
+                    {
+                        UpsertConnectionValue(variableStepState, IOConnectionDirection.Output, StepIOKind.Variable, variableState.Key, variableState.Envelope);
+                        if (TryGetActiveAttempt(variableStepState, out StepAttemptState activeAttempt))
+                            AddFrameworkLogEntry(variableStepState, activeAttempt, signal.ObservedAtUtc, DebugLogLevel.Information, "VariableUpdate", $"Set Variable ({variableState.Key}) = {signal.Envelope.DisplayText}");
+                    }
+                    break;
+                case DebugValueKind.Artifact:
+                    DebugValueState artifactState = CreateDebugValueState(signal.Name, signal.Envelope);
+                    Upsert(runState.Artifacts, artifactState.Key, artifactState);
 
-        return Task.CompletedTask;
+                    if (TryGetStep(runState, signal.Stage, signal.StepId, out _, out StepNodeState artifactStepState))
+                    {
+                        UpsertConnectionValue(artifactStepState, IOConnectionDirection.Output, StepIOKind.Artifact, artifactState.Key, artifactState.Envelope);
+                        if (TryGetActiveAttempt(artifactStepState, out StepAttemptState activeAttempt))
+                            AddFrameworkLogEntry(artifactStepState, activeAttempt, signal.ObservedAtUtc, DebugLogLevel.Information, "ArtifactUpdate", $"Set Artifact ({artifactState.Key}) = {signal.Envelope.DisplayText}");
+                    }
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(signal.ValueKind), signal.ValueKind, null);
+            }
+        });
     }
 
     public Task ApplyBreakpointHitRequestAsync(BreakpointHitRequestSignal signal)
     {
-        if (!TryGetRun(signal.SessionId, out RunState runState))
-            return Task.CompletedTask;
+        return StateServiceDispatcher.DispatchAsync(() =>
+        {
+            if (!TryGetRun(signal.SessionId, out RunState runState))
+                return;
 
-        if (!TryGetStep(runState, signal.Stage, signal.StepId, out _, out StepNodeState stepState))
-            return Task.CompletedTask;
+            if (!TryGetStep(runState, signal.Stage, signal.StepId, out _, out StepNodeState stepState))
+                return;
 
-        stepState.BreakpointHitCount++;
-        stepState.IsWaitingAtBreakpoint = true;
-        stepState.LastBreakpointAtUtc = DateTimeOffset.UtcNow;
-        if (TryGetActiveAttempt(stepState, out StepAttemptState activeAttempt))
-            AddFrameworkLogEntry(stepState, activeAttempt, DateTimeOffset.UtcNow, DebugLogLevel.Information, "Breakpoint", $"Breakpoint Hit: {GetStepDisplayName(stepState)}");
-        return Task.CompletedTask;
+            stepState.BreakpointHitCount++;
+            stepState.IsWaitingAtBreakpoint = true;
+            stepState.LastBreakpointAtUtc = DateTimeOffset.UtcNow;
+            if (TryGetActiveAttempt(stepState, out StepAttemptState activeAttempt))
+                AddFrameworkLogEntry(stepState, activeAttempt, DateTimeOffset.UtcNow, DebugLogLevel.Information, "Breakpoint", $"Breakpoint Hit: {GetStepDisplayName(stepState)}");
+        });
     }
 
     public Task ApplyTimelineRunFinishedAsync(TimelineRunFinishedSignal signal)
     {
-        if (!TryGetRun(signal.SessionId, out RunState runState))
-            return Task.CompletedTask;
+        return StateServiceDispatcher.DispatchAsync(() =>
+        {
+            if (!TryGetRun(signal.SessionId, out RunState runState))
+                return;
 
-        runState.IsFinished = true;
-        runState.FinishedAtUtc = DateTimeOffset.UtcNow;
-        return Task.CompletedTask;
+            runState.IsFinished = true;
+            runState.FinishedAtUtc = DateTimeOffset.UtcNow;
+        });
     }
 
     private static void CopyValues(IEnumerable<VariableState> values, StateDictionary<DebugValueState> target)
@@ -291,6 +352,27 @@ public sealed class DebugRunStateReducer(MainState mainState)
     {
         stageState = null!;
         return stageName is not null && runState.Stages.TryGetValue(stageName, out stageState!);
+    }
+
+    private void AppendConnectionDebugInfo(string message)
+    {
+        PipeConnectionState connectionState = mainState.PipeConnection;
+        connectionState.DebugInfo = AppendLine(connectionState.DebugInfo, message);
+    }
+
+    private static string AppendLine(string existing, string line)
+    {
+        return string.IsNullOrWhiteSpace(existing) ? line : existing + Environment.NewLine + line;
+    }
+
+    private static PipeConnectionStatus ClassifyDisconnect(string reason)
+    {
+        return reason.Contains("failed", StringComparison.OrdinalIgnoreCase)
+            || reason.Contains("failure", StringComparison.OrdinalIgnoreCase)
+            || reason.Contains("invalid", StringComparison.OrdinalIgnoreCase)
+            || reason.Contains("unexpected", StringComparison.OrdinalIgnoreCase)
+            ? PipeConnectionStatus.Faulted
+            : PipeConnectionStatus.Disconnected;
     }
 
     private static bool TryGetStep(RunState runState, string? stageName, int? stepId, out StageNodeState stageState, out StepNodeState stepState)

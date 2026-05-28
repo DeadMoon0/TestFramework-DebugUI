@@ -1,19 +1,28 @@
 ﻿using Newtonsoft.Json.Linq;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using WpfStateService.Graph;
 
 namespace WpfStateService.StateServiceObject;
 
 public abstract class StateObject
 {
+    private static readonly object _defaultsSync = new();
     private static readonly Dictionary<Type, Dictionary<string, object?>> _defaults = [];
+    private static readonly HashSet<Type> _defaultsInitializing = [];
 
     protected static StateProperty<T> Property<T>(string propertyName, T defaultValue)
     {
         Type implem = GetCallingType();
-        if (!_defaults.ContainsKey(implem)) _defaults[implem] = new Dictionary<string, object?>();
-        _defaults[implem][propertyName] = defaultValue;
+        lock (_defaultsSync)
+        {
+            if (!_defaults.ContainsKey(implem))
+                _defaults[implem] = new Dictionary<string, object?>();
+
+            _defaults[implem][propertyName] = defaultValue;
+        }
+
         return new StateProperty<T>() { Name = propertyName, DefaultValue = defaultValue };
     }
 
@@ -23,22 +32,27 @@ public abstract class StateObject
 
     protected StateObject()
     {
-        //TODO: Maybe not call this every StateObject Creation :)
-        foreach (Type type in AppDomain.CurrentDomain.GetAssemblies().SelectMany(x => x.GetTypes()).Where(myType => myType.IsClass && !myType.IsAbstract && myType.IsSubclassOf(typeof(StateObject))))
-        {
-            System.Runtime.CompilerServices.RuntimeHelpers.RunClassConstructor(type.TypeHandle);
-        }
+        Type runtimeType = GetType();
+        EnsureDefaultsInitialized(runtimeType);
 
         TaskCompletionSource tcs = new TaskCompletionSource();
 
         Id = Guid.NewGuid();
         StateServiceDispatcher.Dispatch(() =>
         {
-            if (_defaults.ContainsKey(this.GetType())) foreach (var item in _defaults[this.GetType()])
+            Dictionary<string, object?>? defaults;
+            lock (_defaultsSync)
+            {
+                _defaults.TryGetValue(runtimeType, out defaults);
+            }
+
+            if (defaults is not null)
+            foreach (var item in defaults)
             {
                 object? defaultValue = item.Value;
                 if (defaultValue is StateObject stateObject)
                 {
+                    EnsureDefaultsInitialized(stateObject.GetType());
                     defaultValue = Activator.CreateInstance(stateObject.GetType()) ?? throw new InvalidOperationException($"Could not create default state object instance for {stateObject.GetType().FullName}.");
                 }
 
@@ -114,6 +128,48 @@ public abstract class StateObject
     }
 
     protected List<string> GetPropertyNames() => [.. _objectStore.Keys];
+
+    private static void EnsureDefaultsInitialized(Type runtimeType)
+    {
+        bool shouldInitialize;
+        lock (_defaultsSync)
+        {
+            shouldInitialize = !_defaults.ContainsKey(runtimeType) && !_defaultsInitializing.Contains(runtimeType);
+            if (shouldInitialize)
+                _defaultsInitializing.Add(runtimeType);
+        }
+
+        if (shouldInitialize)
+        {
+            try
+            {
+                RuntimeHelpers.RunClassConstructor(runtimeType.TypeHandle);
+            }
+            finally
+            {
+                lock (_defaultsSync)
+                {
+                    _defaultsInitializing.Remove(runtimeType);
+                }
+            }
+        }
+
+        List<Type> nestedStateTypes = [];
+        lock (_defaultsSync)
+        {
+            if (_defaults.TryGetValue(runtimeType, out Dictionary<string, object?>? defaults))
+            {
+                foreach (object? defaultValue in defaults.Values)
+                {
+                    if (defaultValue is StateObject stateObject)
+                        nestedStateTypes.Add(stateObject.GetType());
+                }
+            }
+        }
+
+        foreach (Type nestedStateType in nestedStateTypes)
+            EnsureDefaultsInitialized(nestedStateType);
+    }
 
     private static Type GetCallingType()
     {

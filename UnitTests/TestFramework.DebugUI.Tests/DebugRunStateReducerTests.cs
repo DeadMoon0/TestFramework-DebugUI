@@ -4,7 +4,6 @@ using TestFramework.Core.Debugger;
 using TestFramework.Core.Steps;
 using TestFramework.Core.Steps.Options;
 using TestFramework.Core.Variables;
-using TestFramework.DebugUI.PipeAdapter.ProtocolModels;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.Tests.Support;
 using WpfStateService;
@@ -86,6 +85,7 @@ public class DebugRunStateReducerTests
         Assert.True(stepState.Attempts.ContainsKey("1"));
         Assert.Equal("Attempt 1", stepState.Attempts["1"].Name);
         Assert.Equal(DebugLifecycleState.Running, stepState.Attempts["1"].LifecycleState);
+        Assert.Equal(StepState.NotRun, stepState.State);
         Assert.True(stepState.Inputs["Variable:input"].HasValue);
         Assert.Equal("updated", stepState.Inputs["Variable:input"].DisplayText);
         Assert.True(mainState.ActiveRun.Stages["Main"].ExecutionLayers["layer-0"].IsActive);
@@ -188,6 +188,31 @@ public class DebugRunStateReducerTests
         Assert.Equal(1, stepState.BreakpointHitCount);
         Assert.True(mainState.ActiveRun.IsFinished);
         Assert.NotNull(mainState.ActiveRun.FinishedAtUtc);
+    }
+
+    [Fact]
+    public async Task FinishedRun_IsRetained_WhenANewRunStarts()
+    {
+        MainState mainState = await CreateInitializedMainStateAsync();
+        DebugRunStateReducer reducer = new DebugRunStateReducer(mainState);
+
+        await reducer.ApplyTimelineRunFinishedAsync(new TimelineRunFinishedSignal
+        {
+            SessionId = "session-1"
+        });
+
+        await reducer.ApplyInitTimelineRunAsync(new InitTimelineRunSignal
+        {
+            SessionId = "session-2",
+            Name = "Second Run",
+            ProjectPath = "project-2.csproj",
+            RunStructure = CreateRunStructure()
+        });
+
+        Assert.Equal("session-2", mainState.ActiveRun!.SessionId);
+        Assert.True(mainState.CompletedRuns.ContainsKey("session-1"));
+        Assert.True(mainState.CompletedRuns["session-1"].IsFinished);
+        Assert.Equal("Run", mainState.CompletedRuns["session-1"].Name);
     }
 
     [Fact]

@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using WpfStateService;
+using WpfStateService.Callbacks;
 using WpfStateService.Common;
 using WpfStateService.Dispatching;
+using WpfStateService.Graph;
 using WpfStateService.StateServiceObject;
 using TestFramework.DebugUI.State;
 
@@ -154,6 +156,29 @@ public sealed class StateServiceIntegrityTests
         });
     }
 
+    [Fact]
+    public async Task NestedDefaultStateObjects_AreIsolated_PerRootInstance()
+    {
+        await WithQueuedDispatcherAsync(async () =>
+        {
+            StableRootState first = new();
+            StableRootState second = new();
+
+            Assert.NotSame(first.Child, second.Child);
+            Assert.NotSame(first.Child.Leaf, second.Child.Leaf);
+
+            first.Child.Leaf.Name = "first-live";
+            second.Child.Leaf.Name = "second-live";
+
+            await StateServiceDispatcher.DispatchAsync(() => { });
+
+            string currentFirst = await StateServiceDispatcher.DispatchAsync(() => first.Child.Leaf.Name);
+            string currentSecond = await StateServiceDispatcher.DispatchAsync(() => second.Child.Leaf.Name);
+            Assert.Equal("first-live", currentFirst);
+            Assert.Equal("second-live", currentSecond);
+        });
+    }
+
     private static async Task WithQueuedDispatcherAsync(Func<Task> action)
     {
         IStateDispatcher previousDispatcher = StateCommonDispatcher.StateDispatcher;
@@ -184,5 +209,23 @@ public sealed class StateServiceIntegrityTests
     {
         public int Value { get => GetValue(ValueProperty); set => SetValue(ValueProperty, value); }
         public static StateProperty<int> ValueProperty { get; } = Property(nameof(Value), 0);
+    }
+
+    private sealed class StableRootState : StateObject
+    {
+        public StableChildState Child { get => GetValue(ChildProperty); set => SetValue(ChildProperty, value); }
+        public static StateProperty<StableChildState> ChildProperty { get; } = Property(nameof(Child), new StableChildState());
+    }
+
+    private sealed class StableChildState : StateObject
+    {
+        public StableLeafState Leaf { get => GetValue(LeafProperty); set => SetValue(LeafProperty, value); }
+        public static StateProperty<StableLeafState> LeafProperty { get; } = Property(nameof(Leaf), new StableLeafState());
+    }
+
+    private sealed class StableLeafState : StateObject
+    {
+        public string Name { get => GetValue(NameProperty); set => SetValue(NameProperty, value); }
+        public static StateProperty<string> NameProperty { get; } = Property(nameof(Name), string.Empty);
     }
 }

@@ -4,7 +4,6 @@ using System.Linq;
 using TestFramework.Core.Debugger;
 using TestFramework.Core.Steps;
 using TestFramework.Core.Steps.Options;
-using TestFramework.DebugUI.PipeAdapter.ProtocolModels;
 using TestFramework.DebugUI.State;
 using WpfStateService;
 using WpfStateService.Common;
@@ -60,10 +59,12 @@ public sealed class DebugRunStateReducer(MainState mainState)
         });
     }
 
-    public Task ApplyInitTimelineRunAsync(InitTimelineRunSignal signal)
+    internal Task ApplyInitTimelineRunAsync(InitTimelineRunSignal signal)
     {
         return StateServiceDispatcher.DispatchAsync(() =>
         {
+            ArchiveCompletedActiveRun();
+
             RunState runState = new RunState
             {
                 SessionId = signal.SessionId,
@@ -141,10 +142,11 @@ public sealed class DebugRunStateReducer(MainState mainState)
             mainState.PipeConnection.ConnectedSessionId = signal.SessionId;
             mainState.PipeConnection.LastSessionId = signal.SessionId;
             mainState.PipeConnection.LastUpdatedAtUtc = DateTimeOffset.UtcNow;
+            mainState.HasPendingBreakpoint = false;
         });
     }
 
-    public Task ApplyEntityTransitionAsync(EntityTransitionSignal signal)
+    internal Task ApplyEntityTransitionAsync(EntityTransitionSignal signal)
     {
         return StateServiceDispatcher.DispatchAsync(() =>
         {
@@ -167,6 +169,7 @@ public sealed class DebugRunStateReducer(MainState mainState)
                         return;
 
                     ApplyLifecycle(stepState, signal.State, signal.PreviousState, signal.OccurredAtUtc);
+                    bool hadPendingBreakpoint = stepState.IsWaitingAtBreakpoint;
                     stepState.IsWaitingAtBreakpoint = false;
 
                     if (signal.State == DebugLifecycleState.Running)
@@ -188,6 +191,8 @@ public sealed class DebugRunStateReducer(MainState mainState)
 
                     stepState.State = MapStepState(signal.State, signal.OutcomeState, stepState.State);
                     RefreshStageExecutionLayers(owningStage);
+                    if (hadPendingBreakpoint)
+                        mainState.HasPendingBreakpoint = false;
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(signal.EntityKind), signal.EntityKind, null);
@@ -195,7 +200,7 @@ public sealed class DebugRunStateReducer(MainState mainState)
         });
     }
 
-    public Task ApplyLogEntryAsync(LogEntrySignal signal)
+    internal Task ApplyLogEntryAsync(LogEntrySignal signal)
     {
         return StateServiceDispatcher.DispatchAsync(() =>
         {
@@ -229,7 +234,7 @@ public sealed class DebugRunStateReducer(MainState mainState)
         });
     }
 
-    public Task ApplyAssertionAsync(AssertionSignal signal)
+    internal Task ApplyAssertionAsync(AssertionSignal signal)
     {
         return StateServiceDispatcher.DispatchAsync(() =>
         {
@@ -254,7 +259,7 @@ public sealed class DebugRunStateReducer(MainState mainState)
         });
     }
 
-    public Task ApplyValueUpdateAsync(ValueUpdateSignal signal)
+    internal Task ApplyValueUpdateAsync(ValueUpdateSignal signal)
     {
         return StateServiceDispatcher.DispatchAsync(() =>
         {
@@ -291,7 +296,7 @@ public sealed class DebugRunStateReducer(MainState mainState)
         });
     }
 
-    public Task ApplyBreakpointHitRequestAsync(BreakpointHitRequestSignal signal)
+    internal Task ApplyBreakpointHitRequestAsync(BreakpointHitRequestSignal signal)
     {
         return StateServiceDispatcher.DispatchAsync(() =>
         {
@@ -306,10 +311,28 @@ public sealed class DebugRunStateReducer(MainState mainState)
             stepState.LastBreakpointAtUtc = DateTimeOffset.UtcNow;
             if (TryGetActiveAttempt(stepState, out StepAttemptState activeAttempt))
                 AddFrameworkLogEntry(stepState, activeAttempt, DateTimeOffset.UtcNow, DebugLogLevel.Information, "Breakpoint", $"Breakpoint Hit: {GetStepDisplayName(stepState)}");
+
+            mainState.HasPendingBreakpoint = true;
         });
     }
 
-    public Task ApplyTimelineRunFinishedAsync(TimelineRunFinishedSignal signal)
+    internal Task ApplyBreakpointReleasedAsync(string sessionId, string stageName, int stepId)
+    {
+        return StateServiceDispatcher.DispatchAsync(() =>
+        {
+            mainState.HasPendingBreakpoint = false;
+
+            if (!TryGetRun(sessionId, out RunState runState))
+                return;
+
+            if (!TryGetStep(runState, stageName, stepId, out _, out StepNodeState stepState))
+                return;
+
+            stepState.IsWaitingAtBreakpoint = false;
+        });
+    }
+
+    internal Task ApplyTimelineRunFinishedAsync(TimelineRunFinishedSignal signal)
     {
         return StateServiceDispatcher.DispatchAsync(() =>
         {
@@ -318,6 +341,22 @@ public sealed class DebugRunStateReducer(MainState mainState)
 
             runState.IsFinished = true;
             runState.FinishedAtUtc = DateTimeOffset.UtcNow;
+            mainState.HasPendingBreakpoint = false;
+        });
+    }
+
+    public Task ApplyReplayRecoveredAsync(string? lastSessionId)
+    {
+        return StateServiceDispatcher.DispatchAsync(() =>
+        {
+            PipeConnectionState connectionState = mainState.PipeConnection;
+            connectionState.IsConnected = false;
+            connectionState.ConnectedSessionId = string.Empty;
+            if (!string.IsNullOrWhiteSpace(lastSessionId))
+                connectionState.LastSessionId = lastSessionId;
+            connectionState.LastDisconnectReason = string.Empty;
+            connectionState.LastFailureReason = string.Empty;
+            mainState.HasPendingBreakpoint = false;
         });
     }
 
@@ -344,8 +383,22 @@ public sealed class DebugRunStateReducer(MainState mainState)
 
     private bool TryGetRun(string sessionId, out RunState runState)
     {
-        runState = mainState.ActiveRun!;
-        return mainState.ActiveRun is not null && StringComparer.Ordinal.Equals(mainState.ActiveRun.SessionId, sessionId);
+        if (mainState.ActiveRun is not null && StringComparer.Ordinal.Equals(mainState.ActiveRun.SessionId, sessionId))
+        {
+            runState = mainState.ActiveRun;
+            return true;
+        }
+
+        return mainState.CompletedRuns.TryGetValue(sessionId, out runState!);
+    }
+
+    private void ArchiveCompletedActiveRun()
+    {
+        RunState? activeRun = mainState.ActiveRun;
+        if (activeRun is null || !activeRun.IsFinished || string.IsNullOrWhiteSpace(activeRun.SessionId))
+            return;
+
+        mainState.CompletedRuns[activeRun.SessionId] = activeRun;
     }
 
     private static bool TryGetStage(RunState runState, string? stageName, out StageNodeState stageState)

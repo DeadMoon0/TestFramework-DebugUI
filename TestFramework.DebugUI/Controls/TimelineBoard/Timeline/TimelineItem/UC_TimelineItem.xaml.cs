@@ -43,6 +43,7 @@ namespace TestFrameworkDebugUI.Controls.TimelineBoard.Timeline.TimelineItem
 
             var stepNodeStatePath = StatePath.For(MainWindow.State).Property(MainState.ActiveRunProperty).Property(RunState.StagesProperty).PropertyKey<StageNodeState>(stageName).Property(StageNodeState.StepsProperty).PropertyKey<StepNodeState>(id + "");
             stepNodeStatePath.Property(StepNodeState.StateProperty).CallbackAsync(OnStateChange, CallbackFlags.OnNotNull);
+            stepNodeStatePath.Property(StepNodeState.LifecycleStateProperty).CallbackAsync(OnLifecycleStateChange, CallbackFlags.OnNotNull);
             stepNodeStatePath.Property(StepNodeState.AttemptCountProperty).CallbackAsync(OnAttemptCountChange, CallbackFlags.OnNotNull);
             stepNodeStatePath.Property(StepNodeState.OutputsProperty).CallbackAsync(OnOutputsChange, CallbackFlags.OnNotNull | CallbackFlags.OnChildChange);
         }
@@ -73,6 +74,14 @@ namespace TestFrameworkDebugUI.Controls.TimelineBoard.Timeline.TimelineItem
 
         private async Task OnStateChange(StepState state, StepState old)
         {
+            if (DebugRunStateQueries.TryGetStep(MainWindow.State.ActiveRun, _stageName, _id, out StepNodeState currentStep)
+                && currentStep.LifecycleState == DebugLifecycleState.Running)
+            {
+                gStatusHost.Children.Clear();
+                gStatusHost.Children.Add(new UC_SI_InProgress());
+                return;
+            }
+
             gStatusHost.Children.Clear();
             switch (state)
             {
@@ -93,6 +102,21 @@ namespace TestFrameworkDebugUI.Controls.TimelineBoard.Timeline.TimelineItem
                     break;
                 default: throw new ArgumentOutOfRangeException(nameof(state), state, null);
             }
+        }
+
+        private async Task OnLifecycleStateChange(DebugLifecycleState state, DebugLifecycleState old)
+        {
+            if (state == DebugLifecycleState.Running)
+            {
+                gStatusHost.Children.Clear();
+                gStatusHost.Children.Add(new UC_SI_InProgress());
+                return;
+            }
+
+            if (!DebugRunStateQueries.TryGetStep(MainWindow.State.ActiveRun, _stageName, _id, out StepNodeState stepState))
+                return;
+
+            await OnStateChange(stepState.State, stepState.State);
         }
 
         private async Task OnOutputsChange(StateDictionary<IOConnectionState> outputs, StateDictionary<IOConnectionState> old)

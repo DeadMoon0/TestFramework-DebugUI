@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -6,7 +7,7 @@ using TestFramework.DebugUI.PipeAdapter.ProtocolModels;
 
 namespace TestFramework.DebugUI.PipeAdapter;
 
-public abstract class RunDebuggerHostPiped : IDisposable
+internal abstract class RunDebuggerHostPiped : IDisposable
 {
     PipeHost pipeHost = null!;
     private int started;
@@ -17,7 +18,7 @@ public abstract class RunDebuggerHostPiped : IDisposable
 
     protected string PipeName => PipeStreamController.GetPipeName();
 
-    public void Begin()
+    internal void Begin()
     {
         if (System.Threading.Interlocked.Exchange(ref started, 1) == 1)
             return;
@@ -43,7 +44,7 @@ public abstract class RunDebuggerHostPiped : IDisposable
                         bool initialized = false;
                         while (!shutdown.IsCancellationRequested)
                         {
-                            ISignal? signal = await pipeHost.WaitForSignalAsync();
+                            ISignal? signal = await pipeHost.WaitForSignalAsync(shutdown.Token);
                             if (signal is null)
                             {
                                 if (!shutdown.IsCancellationRequested)
@@ -128,12 +129,12 @@ public abstract class RunDebuggerHostPiped : IDisposable
         });
     }
 
-    public Task SendSignalAsync(ISignal signal)
+    internal Task SendSignalAsync(ISignal signal)
     {
         return pipeHost.SendSignalAsync(signal);
     }
 
-    public Task WaitUntilReadyAsync()
+    internal Task WaitUntilReadyAsync()
     {
         return ready.Task;
     }
@@ -169,7 +170,7 @@ public abstract class RunDebuggerHostPiped : IDisposable
         {
             runLoop.Wait(TimeSpan.FromSeconds(5));
         }
-        catch (AggregateException ex) when (ex.InnerExceptions.All(inner => inner is OperationCanceledException or ObjectDisposedException))
+        catch (AggregateException ex) when (ex.InnerExceptions.All(inner => inner is OperationCanceledException or ObjectDisposedException or IOException))
         {
         }
         finally
@@ -178,11 +179,11 @@ public abstract class RunDebuggerHostPiped : IDisposable
         }
     }
 
-    public abstract Task OnEntityTransitionAsync(EntityTransitionSignal signal);
-    public abstract Task OnInitTimelineRunAsync(InitTimelineRunSignal signal);
-    public abstract Task OnTimelineRunFinishedAsync(TimelineRunFinishedSignal signal);
-    public abstract Task OnValueUpdateAsync(ValueUpdateSignal signal);
-    public abstract Task OnLogEntryAsync(LogEntrySignal signal);
-    public abstract Task OnAssertionAsync(AssertionSignal signal);
-    public abstract Task OnBreakpointHitRequestAsync(BreakpointHitRequestSignal signal);
+    internal abstract Task OnEntityTransitionAsync(EntityTransitionSignal signal);
+    internal abstract Task OnInitTimelineRunAsync(InitTimelineRunSignal signal);
+    internal abstract Task OnTimelineRunFinishedAsync(TimelineRunFinishedSignal signal);
+    internal abstract Task OnValueUpdateAsync(ValueUpdateSignal signal);
+    internal abstract Task OnLogEntryAsync(LogEntrySignal signal);
+    internal abstract Task OnAssertionAsync(AssertionSignal signal);
+    internal abstract Task OnBreakpointHitRequestAsync(BreakpointHitRequestSignal signal);
 }

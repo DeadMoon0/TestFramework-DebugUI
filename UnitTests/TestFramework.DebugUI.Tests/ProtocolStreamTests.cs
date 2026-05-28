@@ -1,7 +1,6 @@
 using System.IO.Pipes;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.PipeAdapter;
-using TestFramework.DebugUI.PipeAdapter.ProtocolModels;
 using TestFramework.DebugUI.Tests.Support;
 
 namespace TestFramework.DebugUI.Tests;

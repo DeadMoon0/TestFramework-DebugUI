@@ -24,15 +24,14 @@ internal class ProtocolStream(PipeStream stream)
         if (PipeIsDead)
             return;
 
-        CancellationTokenSource cts = new CancellationTokenSource();
-        cts.CancelAfter(TimeSpan.FromSeconds(2));
-
+        bool lockAcquired = false;
         try
         {
-            await sendLock.WaitAsync(cts.Token);
+            await sendLock.WaitAsync();
+            lockAcquired = true;
             string json = JsonConvert.SerializeObject(signal);
             byte[] buffer = [.. BitConverter.GetBytes(Encoding.GetByteCount(json)), .. Encoding.GetBytes(json)];
-            await stream.WriteAsync(buffer, 0, buffer.Length, cts.Token);
+            await stream.WriteAsync(buffer, 0, buffer.Length, CancellationToken.None);
         }
         catch (Exception e)
         {
@@ -41,27 +40,28 @@ internal class ProtocolStream(PipeStream stream)
         }
         finally
         {
-            if (sendLock.CurrentCount == 0)
+            if (lockAcquired)
                 sendLock.Release();
         }
     }
 
-    internal async Task<ISignal?> WaitSignalAsync()
+    internal async Task<ISignal?> WaitSignalAsync(CancellationToken cancellationToken = default)
     {
-        using CancellationTokenSource cts = new();
-        cts.CancelAfter(TimeSpan.FromSeconds(2));
-
         try
         {
             byte[] lenBuf = new byte[sizeof(Int32)];
-            await stream.ReadExactlyAsync(lenBuf, 0, lenBuf.Length, cts.Token);
+            await stream.ReadExactlyAsync(lenBuf, 0, lenBuf.Length, cancellationToken);
             int messageLength = BitConverter.ToInt32(lenBuf);
             if (messageLength <= 0 || messageLength > MAX_MESSAGE_BYTES)
                 throw new InvalidDataException($"Invalid pipe frame length: {messageLength}");
 
             byte[] jsonBuf = new byte[messageLength];
-            await stream.ReadExactlyAsync(jsonBuf, 0, jsonBuf.Length, cts.Token);
+            await stream.ReadExactlyAsync(jsonBuf, 0, jsonBuf.Length, cancellationToken);
             return SignalFactory.DeserializeSignal(Encoding.GetString(jsonBuf));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception e)
         {
@@ -76,13 +76,12 @@ internal class ProtocolStream(PipeStream stream)
         if (PipeIsDead)
             return;
 
-        CancellationTokenSource cts = new CancellationTokenSource();
-        cts.CancelAfter(TimeSpan.FromSeconds(2));
-
+        bool lockAcquired = false;
         try
         {
-            await sendLock.WaitAsync(cts.Token);
-            await stream.FlushAsync(cts.Token);
+            await sendLock.WaitAsync();
+            lockAcquired = true;
+            await stream.FlushAsync(CancellationToken.None);
         }
         catch (Exception e)
         {
@@ -91,7 +90,7 @@ internal class ProtocolStream(PipeStream stream)
         }
         finally
         {
-            if (sendLock.CurrentCount == 0)
+            if (lockAcquired)
                 sendLock.Release();
         }
     }

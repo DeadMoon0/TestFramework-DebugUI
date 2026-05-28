@@ -16,7 +16,7 @@ namespace TestFrameworkDebugUI
         public static MainWindow Instance;
 
         public static MainState State = new MainState();
-        private readonly DebugPipeTranslator debugPipeTranslator = new();
+        private readonly DebugSessionService debugSessionService;
 
         public MainWindow()
         {
@@ -24,8 +24,7 @@ namespace TestFrameworkDebugUI
 
             Instance = this;
             InitializeComponent();
-
-            debugPipeTranslator.Begin();
+            debugSessionService = DebugSessionService.EnsureStarted(State);
         }
 
         private void Window_SourceInitialized(object sender, EventArgs e)
@@ -127,9 +126,14 @@ namespace TestFrameworkDebugUI
 
         private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            debugPipeTranslator.Dispose();
+            DebugSessionService.StopCurrent();
             //e.Cancel = true;
             //Hide();
+        }
+
+        internal Task WaitUntilPipeReadyAsync()
+        {
+            return debugSessionService.WaitUntilReadyAsync();
         }
     }
 }

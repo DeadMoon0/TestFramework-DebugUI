@@ -23,6 +23,7 @@
     <ProjectReference Include="..\..\WpfStateService\WpfStateService.csproj" />
     <ProjectReference Include="..\..\..\TestFramework-Core\TestFramework.Core\TestFramework.Core.csproj" />
     <ProjectReference Include="..\..\..\TestFramework-Core\TestFramework.Simple\TestFramework.Simple.csproj" />
+    <ProjectReference Include="..\..\..\TestFramework-LocalIO\TestFramework.LocalIO\TestFramework.LocalIO.csproj" />
   </ItemGroup>
 
   <ItemGroup>

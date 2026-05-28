@@ -22,9 +22,9 @@ internal sealed class PipeHost(NamedPipeServerStream pipeServer) : IDisposable
         LastDisconnectReason = "Connected.";
     }
 
-    internal async Task<ISignal?> WaitForSignalAsync()
+    internal async Task<ISignal?> WaitForSignalAsync(CancellationToken cancellationToken = default)
     {
-        ISignal? signal = await stream.WaitSignalAsync();
+        ISignal? signal = await stream.WaitSignalAsync(cancellationToken);
         if (signal is null)
             Disconnect(stream.LastFailureReason);
         return signal;

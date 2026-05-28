@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.IO.Pipes;
 
 namespace TestFramework.DebugUI.PipeAdapter;
@@ -16,21 +17,14 @@ internal static class PipeStreamController
 
     internal static PipeHost CreateHost()
     {
-        NamedPipeServerStream pipeServer = new NamedPipeServerStream(PipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
-        return new PipeHost(pipeServer);
-    }
-
-    internal static PipeClient CreateClient()
-    {
         try
         {
-            NamedPipeClientStream pipeClient = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
-            pipeClient.Connect(TimeSpan.FromSeconds(1));
-            return new PipeClient(pipeClient);
+            NamedPipeServerStream pipeServer = new NamedPipeServerStream(PipeName, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
+            return new PipeHost(pipeServer);
         }
-        catch
+        catch (IOException ex)
         {
-            return new PipeClient(null);
+            throw new IOException($"Failed to create pipe host '{PipeName}': {ex.Message}", ex);
         }
     }
 }

@@ -4,7 +4,7 @@ This document describes how the DebugUI side receives RunDebugger signals from C
 
 ## Main pieces
 
-- `RunDebuggerPiped` is the Core-side `IRunDebugger` implementation that writes protocol messages to the pipe.
+- `PipeRunDebugger` is the Core-side `IRunDebugger` implementation that writes protocol messages to the pipe.
 - `RunDebuggerHostPiped` is the DebugUI-side host loop that accepts connections and dispatches signals by kind.
 - `DebugPipeTranslator` is the DebugUI adapter that translates pipe signals into state updates.
 - `DebugRunStateReducer` is the data-processing layer. It applies protocol messages to `MainState`, `RunState`, `StageNodeState`, and `StepNodeState`.
@@ -14,13 +14,13 @@ This document describes how the DebugUI side receives RunDebugger signals from C
 
 ### Core side
 
-`RunDebuggerPiped` implements `IRunDebugger` and sends these signals:
+`PipeRunDebugger` implements `IRunDebugger` and sends these signals:
 
 - `InitTimelineRunSignal`
 - `EntityTransitionSignal`
 - `ValueUpdateSignal`
 - `LogEntrySignal`
-- `DiagnosticSignal`
+- `AssertionSignal`
 - `TimelineRunFinishedSignal`
 - `BreakpointHitRequestSignal`
 
@@ -44,7 +44,7 @@ The host currently supports:
 - `TimelineRunFinished`
 - `ValueUpdate`
 - `LogEntry`
-- `Diagnostic`
+- `Assertion`
 - `BreakpointHitRequest`
 
 ## Translation layer
@@ -57,7 +57,7 @@ It routes signals as follows:
 - `OnEntityTransitionAsync(...) -> reducer.ApplyEntityTransitionAsync(...)`
 - `OnValueUpdateAsync(...) -> reducer.ApplyValueUpdateAsync(...)`
 - `OnLogEntryAsync(...) -> reducer.ApplyLogEntryAsync(...)`
-- `OnDiagnosticAsync(...) -> reducer.ApplyDiagnosticAsync(...)`
+- `OnAssertionAsync(...) -> reducer.ApplyAssertionAsync(...)`
 - `OnTimelineRunFinishedAsync(...) -> reducer.ApplyTimelineRunFinishedAsync(...)`
 - `OnBreakpointHitRequestAsync(...) -> reducer.ApplyBreakpointHitRequestAsync(...)`, then sends `BreakpointHitContinueSignal`
 
@@ -139,15 +139,15 @@ This gives the UI both:
 - a rich object model owned by a specific attempt
 - a step node with the full ordered attempt collection
 
-### 4a. Diagnostic
+### 4a. Assertion
 
-`ApplyDiagnosticAsync(...)` stores non-step messages separately at run scope.
+`ApplyAssertionAsync(...)` stores structured assertion entries at run scope.
 
 Projection rules:
 
-- diagnostics are stored in `RunState.Diagnostics`
-- diagnostics are not copied into stage, step, or attempt log collections
-- diagnostics are not part of `DebugOut`
+- assertions are stored in `RunState.Assertions`
+- assertions remain separate from stage, step, and attempt log collections
+- assertion payload fields stay available for UI inspection without log parsing
 
 ### 5. Derived framework logs
 

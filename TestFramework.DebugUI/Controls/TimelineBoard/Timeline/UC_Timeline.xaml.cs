@@ -32,7 +32,7 @@ namespace TestFrameworkDebugUI.Controls.TimelineBoard.Timeline
             StatePath.For(MainWindow.State).Property(MainState.ActiveRunProperty).Property(RunState.StagesProperty).CallbackAsync(LoadStages, CallbackFlags.OnNotNull);
         }
 
-        private async Task LoadStages(StateDictionary<StageNodeState> stages, StateDictionary<StageNodeState> old)
+        private Task LoadStages(StateDictionary<StageNodeState> stages, StateDictionary<StageNodeState> old)
         {
             spContent.Children.Clear();
             foreach (StageNodeState stage in DebugRunStateQueries.GetOrderedStages(stages))
@@ -43,6 +43,8 @@ namespace TestFrameworkDebugUI.Controls.TimelineBoard.Timeline
                     spContent.Children.Add(new UC_TimelineItem(stage.Name, step.StepId, step.Name, step.Description));
                 }
             }
+
+            return Task.CompletedTask;
         }
     }
 }

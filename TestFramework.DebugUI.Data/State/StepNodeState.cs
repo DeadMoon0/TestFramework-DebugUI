@@ -8,7 +8,7 @@ namespace TestFramework.DebugUI.State;
 
 /// <summary>
 /// Bindable state for one logical step definition inside a stage.
-/// It describes the step across the whole run: lifecycle, retries, breakpoint state, declared and observed IO, and the collection of execution attempts.
+/// It describes the step across the whole run: lifecycle, retries, configured and active breakpoint state, declared and observed IO, and the collection of execution attempts.
 /// This object models the logical step node, not a single execution attempt.
 /// </summary>
 public class StepNodeState : StateObject
@@ -54,6 +54,7 @@ public class StepNodeState : StateObject
 
     public int BreakpointHitCount { get => GetValue(BreakpointHitCountProperty); set => SetValue(BreakpointHitCountProperty, value); }
     public static StateProperty<int> BreakpointHitCountProperty { get; } = Property(nameof(BreakpointHitCount), 0);
+
 
     public bool IsWaitingAtBreakpoint { get => GetValue(IsWaitingAtBreakpointProperty); set => SetValue(IsWaitingAtBreakpointProperty, value); }
     public static StateProperty<bool> IsWaitingAtBreakpointProperty { get; } = Property(nameof(IsWaitingAtBreakpoint), false);

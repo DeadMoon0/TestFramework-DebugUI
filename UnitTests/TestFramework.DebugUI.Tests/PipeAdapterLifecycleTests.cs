@@ -3,7 +3,6 @@ using TestFramework.Core.Artifacts;
 using TestFramework.Core.Debugger;
 using TestFramework.Core.Variables;
 using TestFramework.DebugUI.PipeAdapter;
-using TestFramework.DebugUI.PipeAdapter.ProtocolModels;
 using TestFramework.DebugUI.Tests.Support;
 
 namespace TestFramework.DebugUI.Tests;
@@ -42,6 +41,22 @@ public sealed class PipeAdapterLifecycleTests
         StateTestHelpers.Eventually(
             () => host.DetachReasons.Any(reason => reason.Contains("Run completed.", StringComparison.Ordinal)),
             "Expected host to detach after timeline completion.");
+    }
+
+    [Fact]
+    public async Task Debugger_CreatedBeforeHostReady_CanStillAttach_WhenFirstSignalIsSent()
+    {
+        using PipeTestScope scope = PipeTestScope.Create();
+        using RunDebuggerPiped debugger = new RunDebuggerPiped();
+        using RecordingPipeHost host = StartHost();
+
+        await host.WaitUntilReadyAsync().WaitAsync(TimeSpan.FromSeconds(5));
+
+        string sessionId = Guid.NewGuid().ToString("N");
+        await debugger.SignalInitTimelineRunAsync(sessionId, "Run", "project.csproj", CreateRunStructure());
+        await debugger.SignalTimelineRunFinishedAsync(sessionId);
+
+        StateTestHelpers.Eventually(() => host.InitializedSessionIds.Contains(sessionId), "Expected deferred connection to attach after the host became ready.");
     }
 
     private static RecordingPipeHost StartHost()
@@ -86,38 +101,38 @@ public sealed class PipeAdapterLifecycleTests
             return Task.CompletedTask;
         }
 
-        public override Task OnEntityTransitionAsync(EntityTransitionSignal signal)
+        internal override Task OnEntityTransitionAsync(EntityTransitionSignal signal)
         {
             return Task.CompletedTask;
         }
 
-        public override Task OnInitTimelineRunAsync(InitTimelineRunSignal signal)
+        internal override Task OnInitTimelineRunAsync(InitTimelineRunSignal signal)
         {
             InitializedSessionIds.Enqueue(signal.SessionId);
             return Task.CompletedTask;
         }
 
-        public override Task OnTimelineRunFinishedAsync(TimelineRunFinishedSignal signal)
+        internal override Task OnTimelineRunFinishedAsync(TimelineRunFinishedSignal signal)
         {
             return Task.CompletedTask;
         }
 
-        public override Task OnValueUpdateAsync(ValueUpdateSignal signal)
+        internal override Task OnValueUpdateAsync(ValueUpdateSignal signal)
         {
             return Task.CompletedTask;
         }
 
-        public override Task OnLogEntryAsync(LogEntrySignal signal)
+        internal override Task OnLogEntryAsync(LogEntrySignal signal)
         {
             return Task.CompletedTask;
         }
 
-        public override Task OnAssertionAsync(AssertionSignal signal)
+        internal override Task OnAssertionAsync(AssertionSignal signal)
         {
             return Task.CompletedTask;
         }
 
-        public override Task OnBreakpointHitRequestAsync(BreakpointHitRequestSignal signal)
+        internal override Task OnBreakpointHitRequestAsync(BreakpointHitRequestSignal signal)
         {
             return Task.CompletedTask;
         }

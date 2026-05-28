@@ -95,15 +95,14 @@ internal static class GraphStore
 
     internal static void SignalChange(Guid guid, string propertyName, object? value, object? oldValue)
     {
-        //TODO: Fix. It is so Bad and Slow and Stupid ...
-        static List<StateObjectPath> GetParentsPaths(Guid guid)
+        static List<StateObjectPath> GetParentPaths(Guid guid)
         {
             List<GuidWithProperty> parents = FindParents(guid);
             if (parents.Count == 0) return [new StateObjectPath(guid)];
             List<StateObjectPath> parentPaths = [];
             foreach (GuidWithProperty parent in parents)
             {
-                List<StateObjectPath> paths = GetParentsPaths(parent.Guid);
+                List<StateObjectPath> paths = GetParentPaths(parent.Guid);
                 foreach (StateObjectPath path in paths)
                 {
                     path.PropertySteps.Add(parent.PropertyToChild);
@@ -113,23 +112,30 @@ internal static class GraphStore
             return parentPaths;
         }
 
-        List<StateObjectPath> paths = GetParentsPaths(guid);
-        foreach (StateObjectPath path in paths)
+        List<StateObjectPath> parentPaths = GetParentPaths(guid);
+        foreach (StateObjectPath parentPath in parentPaths)
         {
-            path.PropertySteps.Add(propertyName);
-            if(_callbacks.TryGetValue(path, out var callback)) callback.Invoke(value, oldValue, CallbackCallingFlags.None);
+            StateObjectPath changedPath = parentPath.Clone();
+            changedPath.PropertySteps.Add(propertyName);
+            if (_callbacks.TryGetValue(changedPath, out var callback))
+                callback.Invoke(value, oldValue, CallbackCallingFlags.None);
 
-            foreach (var childCallback in _callbacks.Where(x => x.Key.IsAChildOf(guid)))
+            foreach (var childCallback in _callbacks)
             {
-                object? val = childCallback.Key.GetValue();
-                childCallback.Value.Invoke(val, val, CallbackCallingFlags.CalledForParent);
+                if (!TryGetRelativeSteps(childCallback.Key, changedPath, out string[] relativeSteps) || relativeSteps.Length == 0)
+                    continue;
+
+                object? childValue = EvaluateRelativeValue(value, relativeSteps);
+                object? oldChildValue = EvaluateRelativeValue(oldValue, relativeSteps);
+                childCallback.Value.Invoke(childValue, oldChildValue, CallbackCallingFlags.CalledForParent);
             }
 
-            StateObjectPath parentPath = path;
-            while ((parentPath = parentPath.GetForParent()) is not null)
+            StateObjectPath ancestorPath = changedPath;
+            while ((ancestorPath = ancestorPath.GetForParent()) is not null)
             {
-                object? val = parentPath.GetValue();
-                if (_callbacks.TryGetValue(parentPath, out var parentCallback)) parentCallback.Invoke(val, val, CallbackCallingFlags.CalledForChild);
+                object? ancestorValue = ancestorPath.GetValue();
+                if (_callbacks.TryGetValue(ancestorPath, out var parentCallback))
+                    parentCallback.Invoke(ancestorValue, ancestorValue, CallbackCallingFlags.CalledForChild);
             }
         }
     }
@@ -151,6 +157,48 @@ internal static class GraphStore
     private static void DegradeReference(Guid guid)
     {
         _nodes[guid].ReferenceCount--;
+    }
+
+    private static bool TryGetRelativeSteps(StateObjectPath descendantPath, StateObjectPath ancestorPath, out string[] relativeSteps)
+    {
+        relativeSteps = [];
+
+        if (descendantPath.RootId != ancestorPath.RootId)
+            return false;
+
+        if (descendantPath.PropertySteps.Count < ancestorPath.PropertySteps.Count)
+            return false;
+
+        for (int index = 0; index < ancestorPath.PropertySteps.Count; index++)
+        {
+            if (!StringComparer.Ordinal.Equals(descendantPath.PropertySteps[index], ancestorPath.PropertySteps[index]))
+                return false;
+        }
+
+        relativeSteps = [.. descendantPath.PropertySteps.Skip(ancestorPath.PropertySteps.Count)];
+        return true;
+    }
+
+    private static object? EvaluateRelativeValue(object? rootValue, IEnumerable<string> relativeSteps)
+    {
+        object? current = rootValue;
+
+        foreach (string step in relativeSteps)
+        {
+            if (current is not StateObject stateObject)
+                return null;
+
+            try
+            {
+                current = stateObject.GetValue<object>(step);
+            }
+            catch (KeyNotFoundException)
+            {
+                return null;
+            }
+        }
+
+        return current;
     }
 
     private static List<GuidWithProperty> FindParents(Guid guid)

@@ -1,6 +1,5 @@
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.State;
-using TestFramework.DebugUI.PipeAdapter.ProtocolModels;
 using TestFramework.DebugUI.Tests.Support;
 
 namespace TestFramework.DebugUI.Tests;

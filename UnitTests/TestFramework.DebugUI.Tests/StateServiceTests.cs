@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using System.Collections.Concurrent;
 using TestFramework.DebugUI.Tests.Support;
 using WpfStateService;
 using WpfStateService.Callbacks;
@@ -96,6 +97,51 @@ public class StateServiceTests
 
         Assert.True(removed);
         StateTestHelpers.Eventually(() => StatePath.For(root).Property(TestRootState.ChildrenProperty).PropertyKey<TestChildState>("child").GetValue() is null, "Expected dictionary child path to be removed.");
+    }
+
+    [Fact]
+    public async Task Callback_OnNestedPath_RebindsWhenIntermediateStateIsReplaced()
+    {
+        TestRunHolderState root = new();
+        TestRunState first = new();
+        first.Stages["stage-1"] = new TestChildState { Name = "first" };
+        TestRunState second = new();
+        second.Stages["stage-2"] = new TestChildState { Name = "second" };
+        root.Run = first;
+
+        TaskCompletionSource<(string NewKey, string OldKey)> replacementObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource<string[]> childChangeObserved = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        ConcurrentQueue<string> snapshots = [];
+
+        StatePath.For(root)
+            .Property(TestRunHolderState.RunProperty)
+            .Property(TestRunState.StagesProperty)
+            .CallbackAsync((value, oldValue) =>
+            {
+                string newKeys = value is null ? "<null>" : string.Join(",", value.Keys.OrderBy(x => x, StringComparer.Ordinal));
+                string oldKeys = oldValue is null ? "<null>" : string.Join(",", oldValue.Keys.OrderBy(x => x, StringComparer.Ordinal));
+                snapshots.Enqueue($"new:{newKeys}|old:{oldKeys}");
+
+                if (value is not null && oldValue is not null && value.ContainsKey("stage-2") && oldValue.ContainsKey("stage-1"))
+                    replacementObserved.TrySetResult(("stage-2", "stage-1"));
+
+                if (value is not null && value.ContainsKey("stage-3"))
+                    childChangeObserved.TrySetResult([.. value.Keys.OrderBy(x => x, StringComparer.Ordinal)]);
+
+                return Task.CompletedTask;
+            }, CallbackFlags.OnChildChange | CallbackFlags.OnNotNull, triggerWithCurrent: false);
+
+        root.Run = second;
+
+        (string newKey, string oldKey) replacement = await replacementObserved.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal("stage-2", replacement.newKey);
+        Assert.Equal("stage-1", replacement.oldKey);
+
+        second.Stages["stage-3"] = new TestChildState { Name = "third" };
+
+        string[] childKeys = await childChangeObserved.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(["stage-2", "stage-3"], childKeys);
+        Assert.DoesNotContain(snapshots, snapshot => snapshot.Contains("stage-1,stage-3", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -200,5 +246,17 @@ public class StateServiceTests
     {
         public string Name { get => GetValue(NameProperty); set => SetValue(NameProperty, value); }
         public static StateProperty<string> NameProperty { get; } = Property(nameof(Name), "");
+    }
+
+    public sealed class TestRunHolderState : StateObject
+    {
+        public TestRunState Run { get => GetValue(RunProperty); set => SetValue(RunProperty, value); }
+        public static StateProperty<TestRunState> RunProperty { get; } = Property(nameof(Run), new TestRunState());
+    }
+
+    public sealed class TestRunState : StateObject
+    {
+        public StateDictionary<TestChildState> Stages { get => GetValue(StagesProperty); set => SetValue(StagesProperty, value); }
+        public static StateProperty<StateDictionary<TestChildState>> StagesProperty { get; } = Property(nameof(Stages), new StateDictionary<TestChildState>());
     }
 }

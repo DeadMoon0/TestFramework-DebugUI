@@ -1,0 +1,10 @@
+global using AssertionSignal = TestFramework.Core.Debugger.PipeAssertionSignal;
+global using BreakpointHitContinueSignal = TestFramework.Core.Debugger.PipeBreakpointHitContinueSignal;
+global using BreakpointHitRequestSignal = TestFramework.Core.Debugger.PipeBreakpointHitRequestSignal;
+global using EntityTransitionSignal = TestFramework.Core.Debugger.PipeEntityTransitionSignal;
+global using InitTimelineRunSignal = TestFramework.Core.Debugger.PipeInitTimelineRunSignal;
+global using ISignal = TestFramework.Core.Debugger.IPipeSignal;
+global using LogEntrySignal = TestFramework.Core.Debugger.PipeLogEntrySignal;
+global using SignalKind = TestFramework.Core.Debugger.PipeSignalKind;
+global using TimelineRunFinishedSignal = TestFramework.Core.Debugger.PipeTimelineRunFinishedSignal;
+global using ValueUpdateSignal = TestFramework.Core.Debugger.PipeValueUpdateSignal;

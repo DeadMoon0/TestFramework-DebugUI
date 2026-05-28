@@ -9,7 +9,6 @@
   <ItemGroup>
     <ProjectReference Include="..\TestFramework.DebugUI.PipeAdapter\TestFramework.DebugUI.PipeAdapter.csproj" />
     <ProjectReference Include="..\WpfStateService\WpfStateService.csproj" />
-    <ProjectReference Include="..\..\TestFramework-Core\TestFramework.Core\TestFramework.Core.csproj" />
   </ItemGroup>
 
 </Project>

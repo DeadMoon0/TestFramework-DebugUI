@@ -6,14 +6,25 @@
              xmlns:local="clr-namespace:TestFrameworkDebugUI.Controls.TimelineBoard.Timeline.TimelineItem"
              xmlns:statusIndicator="clr-namespace:TestFrameworkDebugUI.Controls.TimelineBoard.Timeline.StatusIndicator"
              mc:Ignorable="d" 
-             MinHeight="200" MaxHeight="400" Width="500" Margin="10">
+             MinHeight="200" MaxHeight="400" Width="500" Margin="10 30 10 60">
     <Border CornerRadius="2.5" Background="#FF323232">
         <Grid>
             <Grid.RowDefinitions>
+                <RowDefinition Height="20"/>
                 <RowDefinition Height="auto"/>
                 <RowDefinition Height="*"/>
+                <RowDefinition Height="20"/>
             </Grid.RowDefinitions>
-            <Grid>
+            <Border CornerRadius="0 0 10 10" Background="#FF242424" Margin="5 0 5 0" Padding="5 0 5 0">
+                <Canvas>
+                    <StackPanel Orientation="Horizontal" Margin="0 -10 0 0">
+                        <local:UC_TI_Connector IsSend="False"/>
+                        <local:UC_TI_Connector IsSend="False"/>
+                        <local:UC_TI_Connector IsSend="False"/>
+                    </StackPanel>
+                </Canvas>
+            </Border>
+            <Grid Grid.Row="1">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="auto"/>
                     <RowDefinition Height="auto"/>
@@ -28,29 +39,18 @@
                 <Label x:Name="lName" Grid.Column="1" Foreground="White" FontSize="16">STEP_NAME</Label>
                 <Label x:Name="lDescription" Grid.Row="1" Grid.Column="1" Foreground="White">STEP_DESCRIPTION</Label>
             </Grid>
-            <Border Grid.Row="1" Background="#32000000" Margin="5" CornerRadius="2.5">
+            <Border Grid.Row="2" Background="#32000000" Margin="5" CornerRadius="2.5">
                 <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-                    <Label Grid.Row="0" Grid.Column="0" Foreground="LightGray">Input</Label>
-                    <Label Grid.Row="0" Grid.Column="1" Foreground="LightGray">Output</Label>
-                    <ScrollViewer Grid.Column="0" Grid.Row="1">
-                        <StackPanel x:Name="spInput">
-
-                        </StackPanel>
-                    </ScrollViewer>
-                    <ScrollViewer Grid.Column="1" Grid.Row="1">
-                        <StackPanel x:Name="spOutput">
-
-                        </StackPanel>
-                    </ScrollViewer>
+                    <Label FontFamily="Consolas" Foreground="LightGray" Content="&gt; Log . .  .   .    ."/>
                 </Grid>
+            </Border>
+            <Border Grid.Row="3" CornerRadius="10 10 0 0" Background="#FF242424" Margin="5 0 5 0" Padding="5 0 5 0">
+                <Canvas>
+                    <StackPanel Orientation="Horizontal" Margin="0 10 0 0">
+                        <local:UC_TI_Connector IsSend="True"/>
+                        <local:UC_TI_Connector IsSend="True"/>
+                    </StackPanel>
+                </Canvas>
             </Border>
         </Grid>
     </Border>

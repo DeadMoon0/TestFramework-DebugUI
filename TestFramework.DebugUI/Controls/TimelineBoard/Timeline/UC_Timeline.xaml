@@ -8,7 +8,20 @@
              mc:Ignorable="d" 
              d:DesignHeight="450" d:DesignWidth="800">
     <ScrollViewer>
-        <StackPanel x:Name="spContent">
-        </StackPanel>
+        <Grid>
+            <Canvas Width="500" HorizontalAlignment="Center" SnapsToDevicePixels="True">
+                <timelineItem:UC_TI_PipeStraight Height="50" Canvas.Top="280" Canvas.Left="20"/>
+                <timelineItem:UC_TI_PipeCorner Canvas.Top="330" Canvas.Left="20"/>
+                <timelineItem:UC_TI_PipeStraightH Width="50" Canvas.Top="330" Canvas.Left="30"/>
+                <timelineItem:UC_TI_PipeCorner Canvas.Top="330" Canvas.Left="80" RenderTransformOrigin="0.5 0.5">
+                    <timelineItem:UC_TI_PipeCorner.RenderTransform>
+                        <RotateTransform Angle="180"/>
+                    </timelineItem:UC_TI_PipeCorner.RenderTransform>
+                </timelineItem:UC_TI_PipeCorner>
+                <timelineItem:UC_TI_PipeStraight Height="30" Canvas.Top="340" Canvas.Left="80"/>
+            </Canvas>
+            <StackPanel x:Name="spContent">
+            </StackPanel>
+        </Grid>
     </ScrollViewer>
 </UserControl>

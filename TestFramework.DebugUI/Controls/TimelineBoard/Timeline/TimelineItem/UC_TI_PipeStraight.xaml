@@ -1,0 +1,33 @@
+﻿<UserControl x:Class="TestFrameworkDebugUI.Controls.TimelineBoard.Timeline.TimelineItem.UC_TI_PipeStraight"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:TestFrameworkDebugUI.Controls.TimelineBoard.Timeline.TimelineItem"
+             mc:Ignorable="d" 
+             d:DesignHeight="10" Width="10">
+    <Grid SnapsToDevicePixels="False">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="3"/>
+            <ColumnDefinition Width="4"/>
+            <ColumnDefinition Width="3"/>
+        </Grid.ColumnDefinitions>
+        <Border Grid.Column="0">
+            <Border.Background>
+                <LinearGradientBrush EndPoint="0,0.5" StartPoint="1,0.5">
+                    <GradientStop Color="#32000000"/>
+                    <GradientStop Color="#00000000" Offset="0.75"/>
+                </LinearGradientBrush>
+            </Border.Background>
+        </Border>
+        <Border Grid.Column="1" Background="#2afc4d"/>
+        <Border Grid.Column="2">
+            <Border.Background>
+                <LinearGradientBrush EndPoint="1,0.5" StartPoint="0,0.5">
+                    <GradientStop Color="#32000000"/>
+                    <GradientStop Color="#00000000" Offset="0.75"/>
+                </LinearGradientBrush>
+            </Border.Background>
+        </Border>
+    </Grid>
+</UserControl>

@@ -7,14 +7,28 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<UseWPF>true</UseWPF>
 		<SupportedOSPlatformVersion>10.0.20348.0</SupportedOSPlatformVersion>
-		<ApplicationIcon>..\..\TestFramework-Common\Assets\Icon.ico</ApplicationIcon>
+		<ApplicationIcon>Icon.ico</ApplicationIcon>
 	</PropertyGroup>
+
+	<ItemGroup>
+	  <None Remove="Shaders\HLSL\BlurShader.ps" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Content Include="Icon.ico" />
+	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\TestFramework.DebugUI.Data\TestFramework.DebugUI.Data.csproj" />
 		<ProjectReference Include="..\TestFramework.DebugUI.PipeAdapter\TestFramework.DebugUI.PipeAdapter.csproj" />
 		<ProjectReference Include="..\WpfCommon\WpfCommon.csproj" />
 		<ProjectReference Include="..\WpfStateService\WpfStateService.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Resource Include="Shaders\HLSL\BlurShader.ps">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </Resource>
 	</ItemGroup>
 
 </Project>

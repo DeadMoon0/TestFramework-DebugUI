@@ -50,26 +50,26 @@ namespace TestFrameworkDebugUI.Controls.TimelineBoard.Timeline.TimelineItem
 
         private async Task OnAttemptCountChange(int attemptCount, int old)
         {
-            if (attemptCount <= 0 || old > 0) return;
-            gStatusHost.Children.Clear();
-            gStatusHost.Children.Add(new UC_SI_InProgress());
+            //if (attemptCount <= 0 || old > 0) return;
+            //gStatusHost.Children.Clear();
+            //gStatusHost.Children.Add(new UC_SI_InProgress());
 
-            if (!DebugRunStateQueries.TryGetStep(MainWindow.State.ActiveRun, _stageName, _id, out StepNodeState stepState))
-                return;
+            //if (!DebugRunStateQueries.TryGetStep(MainWindow.State.ActiveRun, _stageName, _id, out StepNodeState stepState))
+            //    return;
 
-            spInput.Children.Clear();
-            foreach (IOConnectionState connection in DebugRunStateQueries.GetPopulatedInputs(stepState))
-            {
-                switch (connection.Kind)
-                {
-                    case StepIOKind.Artifact:
-                        spInput.Children.Add(new UC_TI_Artifact(connection.Name));
-                        break;
-                    case StepIOKind.Variable:
-                        spInput.Children.Add(new UC_TI_Var(connection.Name));
-                        break;
-                }
-            }
+            //spInput.Children.Clear();
+            //foreach (IOConnectionState connection in DebugRunStateQueries.GetPopulatedInputs(stepState))
+            //{
+            //    switch (connection.Kind)
+            //    {
+            //        case StepIOKind.Artifact:
+            //            spInput.Children.Add(new UC_TI_Artifact(connection.Name));
+            //            break;
+            //        case StepIOKind.Variable:
+            //            spInput.Children.Add(new UC_TI_Var(connection.Name));
+            //            break;
+            //    }
+            //}
         }
 
         private async Task OnStateChange(StepState state, StepState old)
@@ -121,38 +121,38 @@ namespace TestFrameworkDebugUI.Controls.TimelineBoard.Timeline.TimelineItem
 
         private async Task OnOutputsChange(StateDictionary<IOConnectionState> outputs, StateDictionary<IOConnectionState> old)
         {
-            foreach (IOConnectionState connection in outputs.Values.Where(x => x.HasValue).ToList())
-            {
-                if (connection.Kind == StepIOKind.Variable)
-                {
-                    List<UC_TI_Var> removed = new List<UC_TI_Var>();
-                    foreach (var spItem in spOutput.Children)
-                    {
-                        if (spItem is UC_TI_Var varItem && varItem.name == connection.Name) removed.Add(varItem);
-                    }
-                    spOutput.Children.Add(new UC_TI_Var(connection.Name));
+            //foreach (IOConnectionState connection in outputs.Values.Where(x => x.HasValue).ToList())
+            //{
+            //    if (connection.Kind == StepIOKind.Variable)
+            //    {
+            //        List<UC_TI_Var> removed = new List<UC_TI_Var>();
+            //        foreach (var spItem in spOutput.Children)
+            //        {
+            //            if (spItem is UC_TI_Var varItem && varItem.name == connection.Name) removed.Add(varItem);
+            //        }
+            //        spOutput.Children.Add(new UC_TI_Var(connection.Name));
 
-                    foreach (var item in removed)
-                    {
-                        spOutput.Children.Remove(item);
-                    }
-                }
+            //        foreach (var item in removed)
+            //        {
+            //            spOutput.Children.Remove(item);
+            //        }
+            //    }
 
-                if (connection.Kind == StepIOKind.Artifact)
-                {
-                    List<UC_TI_Artifact> removed = new List<UC_TI_Artifact>();
-                    foreach (var spItem in spOutput.Children)
-                    {
-                        if (spItem is UC_TI_Artifact artItem && artItem.name == connection.Name) removed.Add(artItem);
-                    }
-                    spOutput.Children.Add(new UC_TI_Artifact(connection.Name));
+            //    if (connection.Kind == StepIOKind.Artifact)
+            //    {
+            //        List<UC_TI_Artifact> removed = new List<UC_TI_Artifact>();
+            //        foreach (var spItem in spOutput.Children)
+            //        {
+            //            if (spItem is UC_TI_Artifact artItem && artItem.name == connection.Name) removed.Add(artItem);
+            //        }
+            //        spOutput.Children.Add(new UC_TI_Artifact(connection.Name));
 
-                    foreach (var item in removed)
-                    {
-                        spOutput.Children.Remove(item);
-                    }
-                }
-            }
+            //        foreach (var item in removed)
+            //        {
+            //            spOutput.Children.Remove(item);
+            //        }
+            //    }
+            //}
         }
     }
 }

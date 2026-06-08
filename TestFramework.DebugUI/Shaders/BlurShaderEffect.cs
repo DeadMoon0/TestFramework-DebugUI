@@ -26,7 +26,7 @@ public class BlurShaderEffect : ShaderEffect
     public BlurShaderEffect()
     {
         PixelShader ps = new PixelShader();
-        ps.UriSource = new Uri("pack://application:,,,/Shaders/HLSL/BlurShader.ps");
+        ps.UriSource = new Uri("pack://application:,,,/TestFramework.DebugUI;component/Shaders/HLSL/BlurShader.ps", UriKind.Absolute);
         this.PixelShader = ps;
 
         UpdateShaderValue(InputProperty);

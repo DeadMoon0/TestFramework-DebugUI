@@ -147,7 +147,7 @@ public sealed class LiveUiPipeIntegrationTests
     }
 
     [Fact]
-    public async Task MainWindow_UpdatesTimelineItemVisuals_Across_SetupArtifact_Then_LocalIo_Run()
+    public async Task MainWindow_UpdatesTimelineState_Across_SetupArtifact_Then_LocalIo_Run()
     {
         await using WpfHostHandle host = await WpfHostHandle.StartAsync();
         DebugRunStateReducer reducer = new(MainWindow.State);
@@ -199,12 +199,12 @@ public sealed class LiveUiPipeIntegrationTests
             "Replacement run never rendered any timeline items.");
 
         await WaitUntilAsync(
-            () => host.InvokeAsync(window => GetTimelineItemOutputCount(window) > 0),
+            () => host.ReadStateAsync(state => GetPopulatedOutputCount(state) > 0),
             TimeSpan.FromSeconds(10),
-            "Replacement run never rendered any timeline item output visuals.");
+            "Replacement run never published any populated timeline outputs.");
 
         int timelineItemCount = await host.InvokeAsync(GetTimelineItemCount);
-        int outputCount = await host.InvokeAsync(GetTimelineItemOutputCount);
+        int outputCount = await host.ReadStateAsync(GetPopulatedOutputCount);
 
         Assert.True(timelineItemCount > 0);
         Assert.True(outputCount > 0);
@@ -451,7 +451,7 @@ public sealed class LiveUiPipeIntegrationTests
                 state.ActiveRun?.SessionId,
                 state.ActiveRun?.IsFinished ?? false));
             int actualTimelineItemCount = await host.InvokeAsync(GetTimelineItemCount);
-            int actualOutputCount = await host.InvokeAsync(GetTimelineItemOutputCount);
+            int actualOutputCount = await host.ReadStateAsync(GetPopulatedOutputCount);
 
             Assert.Fail(
                 $"DebugUI state never reflected a completed run for connection #{expectedConnectionCount}. "
@@ -475,7 +475,7 @@ public sealed class LiveUiPipeIntegrationTests
         if (minimumOutputCount > 0)
         {
             await WaitUntilAsync(
-                () => host.InvokeAsync(window => GetTimelineItemOutputCount(window) >= minimumOutputCount),
+                () => host.ReadStateAsync(state => GetPopulatedOutputCount(state) >= minimumOutputCount),
                 TimeSpan.FromSeconds(15),
                 $"Timeline outputs never reached {minimumOutputCount} for connection #{expectedConnectionCount}.");
         }
@@ -580,12 +580,17 @@ public sealed class LiveUiPipeIntegrationTests
         return FindDescendants<UC_TimelineItem>(window).Count();
     }
 
-    private static int GetTimelineItemOutputCount(MainWindow window)
+    private static int GetPopulatedOutputCount(MainState state)
     {
-        return FindDescendants<UC_TimelineItem>(window)
-            .Select(item => FindNamedDescendant<StackPanel>(item, "spOutput"))
-            .Where(panel => panel is not null)
-            .Sum(panel => panel!.Children.Count);
+        if (state.ActiveRun is null)
+        {
+            return 0;
+        }
+
+        return DebugRunStateQueries.GetOrderedStages(state.ActiveRun)
+            .SelectMany(DebugRunStateQueries.GetOrderedSteps)
+            .SelectMany(step => step.Outputs.Values)
+            .Count(output => output.HasValue);
     }
 
     private static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject

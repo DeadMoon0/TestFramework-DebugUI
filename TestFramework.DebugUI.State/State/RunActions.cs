@@ -33,4 +33,18 @@ public static class RunActions
     /// <summary>Records the transport's current status.</summary>
     public static readonly StateAction<TransportStatus> SetTransportStatus =
         new(nameof(RunActions), nameof(SetTransportStatus));
+
+    /// <summary>Shows one step's detail.</summary>
+    public static readonly StateAction<StepSelection> SelectStep = new(nameof(RunActions), nameof(SelectStep));
+
+    /// <summary>
+    /// Adds runs recorded on disk to the picker.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from ingesting: a listed run has been named but not opened, so it contributes a
+    /// summary without any of the events behind it. Merging rather than replacing, because a live
+    /// run and its own journal entry are the same run and must not appear twice.
+    /// </remarks>
+    public static readonly StateAction<ImmutableList<RunSummary>> AddRecordedRuns =
+        new(nameof(RunActions), nameof(AddRecordedRuns));
 }

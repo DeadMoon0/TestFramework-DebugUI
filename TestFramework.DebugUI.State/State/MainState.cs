@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.IO;
 
 namespace TestFramework.DebugUI.State;
 
@@ -49,8 +50,28 @@ public record struct MainState()
     /// </remarks>
     public RunGraph ActiveRun = RunGraph.Empty;
 
+    /// <summary>The step whose detail is shown, or null when none is.</summary>
+    public StepSelection? SelectedStep = null;
+
     /// <summary>Transport and feed state.</summary>
     public ShellState Shell = new();
+}
+
+/// <summary>
+/// Which step the detail panel is showing.
+/// </summary>
+/// <remarks>
+/// A stage name and an index rather than the step itself: the graph is replaced wholesale as events
+/// arrive, so holding the node would pin a stale copy and the panel would stop updating exactly when
+/// the step started doing something.
+/// </remarks>
+public sealed record StepSelection
+{
+    /// <summary>Gets the stage containing the step.</summary>
+    public required string StageName { get; init; }
+
+    /// <summary>Gets the step's index within its stage.</summary>
+    public required int StepId { get; init; }
 }
 
 /// <summary>
@@ -106,8 +127,123 @@ public sealed record RunSummary
     /// <summary>Gets the fully qualified test name, when the run could be identified.</summary>
     public string? FullyQualifiedName { get; init; }
 
+    /// <summary>Gets the assembly or host path the run came from.</summary>
+    public string? ProjectPath { get; init; }
+
+    /// <summary>
+    /// Gets the project a reader would name, taken from the end of the path.
+    /// </summary>
+    /// <remarks>
+    /// A full path is unreadable in a list and identical across every run of one suite up to its last
+    /// segment. What distinguishes them is the file name, which is what a person calls the project.
+    /// </remarks>
+    public string Project
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(ProjectPath))
+                return "Unknown project";
+
+            string file = ProjectPath[(ProjectPath.LastIndexOfAny(['/', '\\']) + 1)..];
+
+            if (string.IsNullOrWhiteSpace(file))
+                return ProjectPath;
+
+            // Only a real file extension is trimmed. A bare assembly name is dotted too, and
+            // trimming its last segment would turn "Acme.Billing.Tests" into "Acme.Billing" — a
+            // project that does not exist, sitting beside the one that does.
+            string suffix = Path.GetExtension(file);
+
+            return suffix is ".csproj" or ".dll" or ".exe"
+                ? file[..^suffix.Length]
+                : file;
+        }
+    }
+
+    /// <summary>
+    /// Gets the test this run is an execution of.
+    /// </summary>
+    /// <remarks>
+    /// The identity a run groups under: one test run five times is five runs of one test, and a list
+    /// that cannot say that is a list of twenty rows with four distinct names in it.
+    /// </remarks>
+    public string Test => string.IsNullOrWhiteSpace(FullyQualifiedName) ? Name : FullyQualifiedName;
+
     /// <summary>Gets a value indicating whether this run carries enough identity to be re-run.</summary>
     public bool CanRerun { get; init; }
+
+    /// <summary>Gets when the run stopped, when it is known to have stopped.</summary>
+    public DateTimeOffset? FinishedAtUtc { get; init; }
+
+    /// <summary>
+    /// Gets what the run has done so far, counted as its events arrive.
+    /// </summary>
+    /// <remarks>
+    /// Kept for every session, not only the selected one — it is what lets the home page show a
+    /// status per run without projecting a board for each. Null for a run that was found on disk and
+    /// never opened, which is honestly "not read yet" rather than a run in which nothing failed.
+    /// </remarks>
+    public RunProgress? Progress { get; init; }
+
+    /// <summary>
+    /// Gets how the run stands, in the one word a list needs.
+    /// </summary>
+    /// <remarks>
+    /// Derived rather than stored so it cannot fall out of step with the counts beside it.
+    /// </remarks>
+    public RunHealth Health
+    {
+        get
+        {
+            if (IsWaitingAtBreakpoint)
+                return RunHealth.Waiting;
+
+            if (Progress is { } progress && !progress.IsValid)
+                return RunHealth.Failed;
+
+            if (IsLive)
+                return RunHealth.Running;
+
+            // A run that stopped without saying so is a killed test host. Calling that "passed"
+            // because nothing reported a failure would be the most flattering reading, not the
+            // truthful one.
+            if (!IsFinished)
+                return Progress is null ? RunHealth.Unknown : RunHealth.Aborted;
+
+            if (Progress is not { } finished)
+                return RunHealth.Unknown;
+
+            return finished.HasAssertions ? RunHealth.Passed : RunHealth.Unproven;
+        }
+    }
+
+    /// <summary>Gets how long the run took, when both ends are known.</summary>
+    public TimeSpan? Duration => FinishedAtUtc is { } finished ? finished - StartedAtUtc : null;
+}
+
+/// <summary>How a run stands, in the one word a list of runs needs.</summary>
+public enum RunHealth
+{
+    /// <summary>The run is on disk but has not been read, so nothing is claimed about it.</summary>
+    Unknown,
+
+    /// <summary>The run is producing events.</summary>
+    Running,
+
+    /// <summary>A step is held at a breakpoint, waiting to be released.</summary>
+    Waiting,
+
+    /// <summary>The run stopped without reaching its finish, which is how a killed host looks.</summary>
+    Aborted,
+
+    /// <summary>Something failed: a step, an assertion, or both.</summary>
+    Failed,
+
+    /// <summary>Nothing failed, but the run asserted nothing, so it proved nothing.</summary>
+    Unproven,
+
+    /// <summary>Every step passed and every assertion held.</summary>
+    Passed
 }
 
 /// <summary>How serious a feed entry is.</summary>

@@ -54,8 +54,14 @@ public sealed record AvailableRun
     /// </remarks>
     public bool IsFinished { get; init; }
 
+    /// <summary>Gets when the run stopped, when the sidecar recorded it stopping.</summary>
+    public DateTimeOffset? FinishedAtUtc { get; init; }
+
     /// <summary>Gets the fully qualified test name, when the run could be identified.</summary>
     public string? FullyQualifiedName { get; init; }
+
+    /// <summary>Gets the assembly or host path the run came from.</summary>
+    public string? ProjectPath { get; init; }
 
     /// <summary>Gets the path of the journal holding the run's events.</summary>
     public required string JournalPath { get; init; }

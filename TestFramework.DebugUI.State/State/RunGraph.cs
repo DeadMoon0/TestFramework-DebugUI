@@ -97,23 +97,51 @@ public sealed record StepNode
     /// <summary>Gets the step description.</summary>
     public string Description { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Gets the execution layer the run's planner put this step in.
+    /// </summary>
+    /// <remarks>
+    /// Steps sharing a layer ran concurrently. Reported by Core rather than derived here, because
+    /// the plan depends on parallelization mode and shared artifact resources that never reach this
+    /// side — so a board drawn from a local guess could show steps side by side that in fact waited
+    /// for each other.
+    /// </remarks>
+    public int LayerIndex { get; init; }
+
     /// <summary>Gets the step's lifecycle state.</summary>
     public DebugLifecycleState Lifecycle { get; init; } = DebugLifecycleState.Initialized;
 
     /// <summary>Gets the outcome of the most recent finished attempt, when there is one.</summary>
     public DebugLifecycleState? Outcome { get; init; }
 
-    /// <summary>Gets the declared input keys, used to draw the graph's incoming edges.</summary>
-    public ImmutableList<string> Inputs { get; init; } = ImmutableList<string>.Empty;
+    /// <summary>Gets the declared inputs, used to draw the graph's incoming edges.</summary>
+    public ImmutableList<StepIO> Inputs { get; init; } = ImmutableList<StepIO>.Empty;
 
-    /// <summary>Gets the declared output keys, used to draw the graph's outgoing edges.</summary>
-    public ImmutableList<string> Outputs { get; init; } = ImmutableList<string>.Empty;
+    /// <summary>Gets the declared outputs, used to draw the graph's outgoing edges.</summary>
+    public ImmutableList<StepIO> Outputs { get; init; } = ImmutableList<StepIO>.Empty;
 
     /// <summary>Gets the attempts made, oldest first.</summary>
     public ImmutableList<AttemptNode> Attempts { get; init; } = ImmutableList<AttemptNode>.Empty;
 
     /// <summary>Gets a value indicating whether the step is currently paused at a breakpoint.</summary>
     public bool IsWaitingAtBreakpoint { get; init; }
+}
+
+/// <summary>
+/// One entry of a step's declared contract.
+/// </summary>
+/// <remarks>
+/// The kind travels with the key because a board draws a variable and an artifact differently — they
+/// behave differently, and a reader tracing a value needs to know which of the two they are looking
+/// at without opening anything.
+/// </remarks>
+public sealed record StepIO
+{
+    /// <summary>Gets the variable or artifact identifier.</summary>
+    public required string Key { get; init; }
+
+    /// <summary>Gets whether this is a variable or an artifact.</summary>
+    public DebugValueKind Kind { get; init; } = DebugValueKind.Variable;
 }
 
 /// <summary>One execution attempt of a step, owning the logs emitted during it.</summary>

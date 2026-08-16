@@ -58,8 +58,12 @@ public class RunProjectionTests
         RunGraph graph = RunProjection.ApplyInit(CreateInit());
 
         StepNode consumer = graph.Stages[0].Steps[1];
-        Assert.Equal(["orderId"], consumer.Inputs);
-        Assert.Equal(["receipt"], consumer.Outputs);
+        Assert.Equal(["orderId"], consumer.Inputs.Select(input => input.Key));
+        Assert.Equal(["receipt"], consumer.Outputs.Select(output => output.Key));
+
+        // The kind travels with the key, because a board draws a variable and an artifact
+        // differently and the contract is the only place that distinction is stated.
+        Assert.All(consumer.Inputs, input => Assert.Equal(DebugValueKind.Variable, input.Kind));
     }
 
     [Fact]

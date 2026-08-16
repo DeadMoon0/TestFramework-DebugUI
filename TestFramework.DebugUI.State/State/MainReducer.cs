@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Immutable;
+using System.Linq;
 using Axiom.State.Reducers;
 using TestFramework.Core.Debugger;
 
@@ -28,6 +29,38 @@ public sealed class MainReducer : Reducer<MainState>
         On(RunActions.AppendFeedEntry, (state, entry) => AppendFeed(state, entry));
         On(RunActions.ClearUnreadFeed, state => state with { Shell = state.Shell with { UnreadFeedCount = 0 } });
         On(RunActions.SetTransportStatus, (state, status) => state with { Shell = state.Shell with { Transport = status } });
+        On(RunActions.SelectStep, (state, selection) => state with { SelectedStep = selection });
+        On(RunActions.AddRecordedRuns, (state, runs) => AddRecorded(state, runs));
+    }
+
+    /// <summary>
+    /// Merges runs found on disk into the picker.
+    /// </summary>
+    /// <remarks>
+    /// A live run records itself as it goes, so the same session is both attached and on disk. The
+    /// live copy wins: it is the one receiving events, and replacing it with the recorded summary
+    /// would make a running test look finished.
+    /// </remarks>
+    private static MainState AddRecorded(MainState state, ImmutableList<RunSummary> runs)
+    {
+        if (runs is null || runs.Count == 0)
+            return state;
+
+        ImmutableList<RunSummary> merged = state.Runs;
+
+        foreach (RunSummary run in runs)
+        {
+            if (merged.Exists(known => string.Equals(known.SessionId, run.SessionId, StringComparison.Ordinal)))
+                continue;
+
+            merged = merged.Add(run);
+        }
+
+        if (ReferenceEquals(merged, state.Runs))
+            return state;
+
+        // Newest first, so a picker showing them in order needs no sorting of its own.
+        return state with { Runs = [.. merged.OrderByDescending(run => run.StartedAtUtc)] };
     }
 
     private static MainState Ingest(MainState state, ImmutableList<DebugEnvelope> envelopes)
@@ -93,7 +126,12 @@ public sealed class MainReducer : Reducer<MainState>
                 StartedAtUtc = envelope.AtUtc,
                 IsLive = true,
                 FullyQualifiedName = init.Identity?.FullyQualifiedName,
-                CanRerun = init.Identity?.CanRerun ?? false
+                ProjectPath = ProjectOf(init),
+                CanRerun = init.Identity?.CanRerun ?? false,
+
+                // The run says how big it is up front, so the home page can show "3 of 14" from the
+                // first step rather than a count that grows as it goes.
+                Progress = RunProgress.Empty with { Steps = DeclaredSteps(init) }
             };
 
             // Newest first, so the picker's default order needs no sorting.
@@ -109,18 +147,92 @@ public sealed class MainReducer : Reducer<MainState>
         RunSummary existing = state.Runs[index];
         RunSummary updated = signal switch
         {
-            PipeTimelineRunFinishedSignal => existing with { IsFinished = true, IsLive = false, IsWaitingAtBreakpoint = false },
+            PipeTimelineRunFinishedSignal => existing with
+            {
+                IsFinished = true,
+                IsLive = false,
+                IsWaitingAtBreakpoint = false,
+                FinishedAtUtc = envelope.AtUtc
+            },
             PipeBreakpointHitRequestSignal => existing with { IsWaitingAtBreakpoint = true },
+
+            // A run listed from disk gets its structure only when someone opens it and the journal
+            // is replayed. Counting restarts here rather than adding to whatever a previous replay
+            // left behind.
+            PipeInitTimelineRunSignal replayed => existing with
+            {
+                Progress = RunProgress.Empty with { Steps = DeclaredSteps(replayed) },
+                ProjectPath = existing.ProjectPath ?? ProjectOf(replayed)
+            },
 
             // Any step transition means the run moved on, so it is no longer parked. Tracked on the
             // summary so the picker can badge which of several parallel runs wants attention.
-            PipeEntityTransitionSignal { EntityKind: DebugEntityKind.Step } => existing with { IsWaitingAtBreakpoint = false },
+            PipeEntityTransitionSignal { EntityKind: DebugEntityKind.Step } transition => existing with
+            {
+                IsWaitingAtBreakpoint = false,
+                Progress = Advance(existing.Progress, transition)
+            },
+            PipeAssertionSignal assertion => existing with
+            {
+                Progress = (existing.Progress ?? RunProgress.Empty).WithAssertion(assertion.Entry.Succeeded)
+            },
             _ => existing
         };
 
         return ReferenceEquals(existing, updated)
             ? state
             : state with { Runs = state.Runs.SetItem(index, updated) };
+    }
+
+    /// <summary>
+    /// Folds one step transition into a run's running count.
+    /// </summary>
+    /// <remarks>
+    /// Only settled states are recorded. A step on its way through <c>Running</c> or
+    /// <c>WaitingForRetry</c> has not decided anything yet, and writing those down would make a
+    /// retrying step look failed for as long as it took to succeed.
+    /// </remarks>
+    private static RunProgress Advance(RunProgress? progress, PipeEntityTransitionSignal transition)
+    {
+        RunProgress current = progress ?? RunProgress.Empty;
+
+        if (transition.State is not (DebugLifecycleState.Complete
+            or DebugLifecycleState.Error
+            or DebugLifecycleState.Timeout
+            or DebugLifecycleState.Skipped))
+        {
+            return current;
+        }
+
+        return current.WithStep(transition.Stage ?? string.Empty, transition.StepId ?? -1, transition.State);
+    }
+
+    /// <summary>
+    /// Which project a run should be filed under.
+    /// </summary>
+    /// <remarks>
+    /// The test's own project or assembly first, and the announced path only as a fallback: under a
+    /// test runner that path is the host process, so every run in a suite would file under
+    /// "testhost" and the grouping would say nothing at all.
+    /// </remarks>
+    private static string? ProjectOf(PipeInitTimelineRunSignal init)
+        => init.Identity?.ProjectFilePath
+           ?? init.Identity?.AssemblyName
+           ?? init.Identity?.AssemblyPath
+           ?? init.ProjectPath;
+
+    /// <summary>
+    /// Counts the steps a run announced.
+    /// </summary>
+    /// <remarks>
+    /// Defensive about the structure being incomplete: an older producer, or one that could not
+    /// describe itself, still gets listed with the steps it reports as it goes.
+    /// </remarks>
+    private static int DeclaredSteps(PipeInitTimelineRunSignal init)
+    {
+        DebugStageState[]? stages = init.RunStructure?.Stages;
+
+        return stages is null ? 0 : stages.Sum(stage => stage.Steps?.Length ?? 0);
     }
 
     private static MainState Select(MainState state, string sessionId)
@@ -131,7 +243,9 @@ public sealed class MainReducer : Reducer<MainState>
         // The newly selected run's graph is not held anywhere, so it is rebuilt by whoever owns the
         // source — replayed from its journal, or re-requested from the transport. Clearing here
         // keeps the board from briefly showing the previous run's contents under the new run's name.
-        return state with { SelectedSessionId = sessionId, ActiveRun = RunGraph.Empty };
+        // The step selection goes with it: a stage and index mean nothing in a different run, and
+        // keeping them would open the detail panel on whatever happened to sit at that index.
+        return state with { SelectedSessionId = sessionId, ActiveRun = RunGraph.Empty, SelectedStep = null };
     }
 
     private static MainState AppendFeed(MainState state, FeedEntry entry)

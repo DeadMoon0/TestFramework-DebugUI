@@ -1,0 +1,66 @@
+<UserControl x:Class="TestFramework.DebugUI.Controls.Home.UC_HomeCard"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d" Cursor="Hand" Width="330" Margin="0 0 10 10">
+    <!--
+        One run, said in the four things you want before deciding whether to open it: what it was,
+        how it ended, how far it got, and when. The colour edge carries the verdict on its own, so a
+        wall of these reads at a glance without anyone parsing a word.
+    -->
+    <Border x:Name="bRoot" CornerRadius="2.5" Background="{StaticResource SurfaceRaised}"
+            MouseLeftButtonUp="Root_MouseLeftButtonUp" MouseEnter="Root_MouseEnter" MouseLeave="Root_MouseLeave">
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="4"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border x:Name="bEdge" CornerRadius="2.5 0 0 2.5" Background="{StaticResource StateNotRun}"/>
+
+            <StackPanel Grid.Column="1" Margin="12 10 12 10">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock x:Name="tbName" Style="{StaticResource BodyText}" FontWeight="Bold"
+                               TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" VerticalAlignment="Center"/>
+
+                    <Border x:Name="bHealth" Grid.Column="1" CornerRadius="2" Padding="5 1" Margin="6 0 0 0"
+                            VerticalAlignment="Center" Background="{StaticResource SurfaceCard}">
+                        <TextBlock x:Name="tbHealth" FontSize="8" FontWeight="Bold" Foreground="White"/>
+                    </Border>
+                </Grid>
+
+                <TextBlock x:Name="tbWhere" Style="{StaticResource MutedText}" FontSize="10" Margin="0 1 0 0"
+                           TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+
+                <!-- The run drawn as a bar: passed, failed and not-yet in proportion. A number tells
+                     you what happened; this tells you how much of it there was. -->
+                <Border CornerRadius="1.5" Background="{StaticResource SurfaceSunken}" Height="3" Margin="0 9 0 0">
+                    <Grid x:Name="gBar">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition x:Name="cdComplete" Width="0*"/>
+                            <ColumnDefinition x:Name="cdFailed" Width="0*"/>
+                            <ColumnDefinition x:Name="cdSkipped" Width="0*"/>
+                            <ColumnDefinition x:Name="cdOutstanding" Width="1*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Border Background="{StaticResource StateComplete}"/>
+                        <Border Grid.Column="1" Background="{StaticResource StateError}"/>
+                        <Border Grid.Column="2" Background="{StaticResource StateSkipped}"/>
+                    </Grid>
+                </Border>
+
+                <TextBlock x:Name="tbCounts" Style="{StaticResource MutedText}" FontSize="10" Margin="0 6 0 0"
+                           TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+
+                <TextBlock x:Name="tbWhen" Style="{StaticResource MutedText}" FontSize="10" Margin="0 2 0 0"
+                           Foreground="{StaticResource TextFaint}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

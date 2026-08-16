@@ -119,7 +119,14 @@ public sealed class JournalRunEventSource : IRunEventSource
                 // A sidecar still reading Running means the producer never closed it, which is how a
                 // killed test host looks from here.
                 IsFinished = metadata.Outcome == DebugRunOutcome.Finished,
+                FinishedAtUtc = metadata.FinishedAtUtc,
                 FullyQualifiedName = metadata.Identity?.FullyQualifiedName,
+                // The test's own project or assembly first: under a test runner the announced path
+                // is the host process, and every run would file under "testhost".
+                ProjectPath = metadata.Identity?.ProjectFilePath
+                              ?? metadata.Identity?.AssemblyName
+                              ?? metadata.Identity?.AssemblyPath
+                              ?? metadata.ProjectPath,
                 JournalPath = Path.Combine(runsDirectory, metadata.JournalFileName)
             };
         }

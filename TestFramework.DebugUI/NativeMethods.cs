@@ -18,7 +18,7 @@ namespace TestFramework.DebugUI
 			for (int i = 0; i < argc; i++)
 			{
 				IntPtr currentArg = Marshal.ReadIntPtr(argv, i * IntPtr.Size);
-				argvStrings[i] = Marshal.PtrToStringUni(currentArg);
+				argvStrings[i] = Marshal.PtrToStringUni(currentArg) ?? string.Empty;
 			}
 			return argvStrings;
 		}

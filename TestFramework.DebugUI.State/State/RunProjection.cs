@@ -77,6 +77,10 @@ public static partial class RunProjection
             Label = step.LabelOptions?.Label,
             Description = step.Description,
 
+            // Taken from the run rather than worked out here: the planner's answer depends on things
+            // this side cannot see, and a layout drawn from a guess would misreport what ran at once.
+            LayerIndex = step.LayerIndex,
+
             // The declared contract, not observed values: this is what lets the board draw edges
             // before a run produces anything, and what answers "why did this run in this order".
             Inputs = ProjectContract(step.IOContract?.Inputs),
@@ -84,16 +88,26 @@ public static partial class RunProjection
         };
     }
 
-    private static ImmutableList<string> ProjectContract(IEnumerable<StepIOEntry>? entries)
+    private static ImmutableList<StepIO> ProjectContract(IEnumerable<StepIOEntry>? entries)
     {
         if (entries is null)
-            return ImmutableList<string>.Empty;
+            return ImmutableList<StepIO>.Empty;
 
-        ImmutableList<string>.Builder keys = ImmutableList.CreateBuilder<string>();
+        ImmutableList<StepIO>.Builder declared = ImmutableList.CreateBuilder<StepIO>();
+
         foreach (StepIOEntry entry in entries)
-            keys.Add(entry.Key);
+        {
+            declared.Add(new StepIO
+            {
+                Key = entry.Key,
 
-        return keys.ToImmutable();
+                // Carried rather than dropped: a board colours a variable and an artifact
+                // differently, and the contract is the only place that distinction is stated.
+                Kind = entry.Kind == StepIOKind.Artifact ? DebugValueKind.Artifact : DebugValueKind.Variable
+            });
+        }
+
+        return declared.ToImmutable();
     }
 
     private static ImmutableDictionary<string, ValueNode> ProjectVariables(IReadOnlyDictionary<VariableIdentifier, VariableState> variables)

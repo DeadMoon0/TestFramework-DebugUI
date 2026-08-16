@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using TestFramework.Core.Exceptions;
 using TestFramework.Core.Steps.Options;
 using TestFramework.Core.Timelines;
 using TestFramework.Core.Variables;
@@ -62,6 +63,27 @@ public sealed class TimelineSamplesTests(ITestOutputHelper outputHelper)
 
         run.EnsureRanToCompletion();
         Assert.Equal("Hello Ada", run.VariableStore.GetVariable<string>("greeting"));
+    }
+
+    /// <summary>
+    /// A run whose assertion does not hold, which is the case the debugger exists for.
+    /// </summary>
+    /// <remarks>
+    /// Every other sample passes, so without this one nothing here ever drives the UI's failure
+    /// path: no red verdict, no failed step, no failure detail in the panel. The test passes by the
+    /// run failing.
+    /// </remarks>
+    [Fact]
+    public async Task AssertionThatDoesNotHold_FailsTheRun()
+    {
+        Timeline timeline = Timeline.Create()
+            .SetVariable("name", Var.Const("Grace"))
+            .AssertVariable(Var.Ref<string>("name"), name => name == "Ada")
+            .Build();
+
+        TimelineRun run = await timeline.SetupRun(outputHelper).RunAsync();
+
+        Assert.Throws<TimelineRunFailedException>(run.EnsureRanToCompletion);
     }
 
     [Fact]

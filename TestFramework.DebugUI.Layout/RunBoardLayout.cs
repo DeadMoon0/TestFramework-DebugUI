@@ -1,0 +1,786 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Linq;
+using TestFramework.Core.Debugger;
+using TestFramework.DebugUI.State;
+
+namespace TestFramework.DebugUI.Layout;
+
+/// <summary>
+/// Turns a run into board geometry.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A pure function of the run and the measurements: the same graph always lays out the same way, and
+/// nothing here knows what a board is drawn with. That is what lets the whole layout be tested
+/// against its polylines rather than against a screenshot, and it is why no geometry is kept in
+/// application state — it is derived, so storing it would mean maintaining it.
+/// </para>
+/// <para>
+/// The shape is a vertical flow. Stages are bands down the board; within a stage each execution
+/// layer is a row of steps, the values those steps produce hang directly beneath them, and pipes run
+/// connector to connector.
+/// </para>
+/// <para>
+/// <b>Pipes never cross a box, and never run along one another.</b> That is the property the whole
+/// arrangement exists to guarantee, and it is bought in three parts: values sit directly under the
+/// connector that produced them, so a production pipe is a straight vertical drop; every horizontal
+/// run happens inside a channel between two rows, where no box ever sits; and within a channel each
+/// pipe gets a track of its own, so two horizontals can never share a line. A pipe travelling more
+/// than one row leaves for a lane to the right of everything, which is the only way to pass a row
+/// without going through it.
+/// </para>
+/// <para>
+/// Two pipes can still <em>cross</em> — one going down where another goes across. That is
+/// unavoidable for an arbitrary graph, and a crossing reads cleanly where an overlap does not: a
+/// crossing is visibly two pipes, while two pipes sharing a line look like one.
+/// </para>
+/// </remarks>
+public static class RunBoardLayout
+{
+    /// <summary>
+    /// Lays out a run.
+    /// </summary>
+    public static LayoutResult Compute(RunGraph graph, LayoutOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+
+        return new Arrangement(graph, options ?? LayoutOptions.Default).Build();
+    }
+
+    /// <summary>
+    /// One run being laid out.
+    /// </summary>
+    /// <remarks>
+    /// Built in three passes, because the passes genuinely depend on each other in that order:
+    /// horizontal positions are needed to work out which pipes can share a track, the number of
+    /// tracks decides how tall each channel has to be, and only then are the vertical positions
+    /// known. Trying to do it in one pass is what produces channels too thin for the pipes in them.
+    /// </remarks>
+    private sealed class Arrangement(RunGraph graph, LayoutOptions measurements)
+    {
+        private readonly List<Row> rows = [];
+        private readonly Dictionary<StepKey, StepBox> steps = [];
+        private readonly List<Wire> wires = [];
+        private readonly Dictionary<string, LayoutPort> ports = new(StringComparer.Ordinal);
+
+        /// <summary>How many horizontal tracks each channel has to hold.</summary>
+        private readonly Dictionary<int, int> channelTracks = [];
+
+        private double laneBase;
+        private int laneCount;
+
+        internal LayoutResult Build()
+        {
+            BuildRows();
+            if (rows.Count == 0)
+                return LayoutResult.Empty;
+
+            PlaceHorizontally();
+            PlanWires();
+            PlaceVertically();
+
+            return Materialise();
+        }
+
+        private void BuildRows()
+        {
+            int index = 0;
+
+            foreach (StageNode stage in graph.Stages)
+            {
+                if (stage.Steps.Count == 0)
+                    continue;
+
+                foreach (IGrouping<int, StepNode> layer in stage.Steps
+                             .GroupBy(step => step.LayerIndex)
+                             .OrderBy(group => group.Key))
+                {
+                    rows.Add(new Row(index++, stage.Name, [.. layer.OrderBy(step => step.StepId)]));
+                }
+            }
+
+            AddVerdictRow(index);
+        }
+
+        /// <summary>
+        /// Adds the verdict as a last row that every asserted value flows into.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Modelled as a row holding one box rather than as a case of its own, so it inherits the
+        /// routing wholesale: its pipes get tracks, lanes and corners from the same passes that draw
+        /// every other pipe. A verdict wired up by a parallel code path would be the one thing on the
+        /// board free to cross something.
+        /// </para>
+        /// <para>
+        /// Only values a step actually produced are wired in. An assertion against something the
+        /// board never drew has nothing to run a pipe from, and inventing a source for it would draw
+        /// a flow that did not happen.
+        /// </para>
+        /// </remarks>
+        private void AddVerdictRow(int index)
+        {
+            if (graph.Assertions.Count == 0)
+                return;
+
+            Dictionary<string, StepIO> produced = new(StringComparer.Ordinal);
+
+            foreach (StepIO output in graph.Stages.SelectMany(stage => stage.Steps).SelectMany(step => step.Outputs))
+                produced.TryAdd(output.Key, output);
+
+            ImmutableList<StepIO> asserted =
+            [
+                .. graph.Assertions
+                    .Select(assertion => assertion.Target)
+                    .Where(produced.ContainsKey)
+                    .Distinct(StringComparer.Ordinal)
+                    .Select(target => produced[target])
+            ];
+
+            if (asserted.Count == 0)
+                return;
+
+            StepNode verdict = new()
+            {
+                StepId = 0,
+                Name = "Verdict",
+                Inputs = asserted
+            };
+
+            rows.Add(new Row(index, VerdictStage, [verdict], isVerdict: true));
+        }
+
+        /// <summary>
+        /// Fixes every x coordinate: the steps, their connectors, and the values beneath them.
+        /// </summary>
+        /// <remarks>
+        /// A value is placed directly under the connector that produces it, and the connectors are
+        /// spread evenly along the step's bottom edge. That is what keeps a production pipe a
+        /// straight drop instead of a dogleg — and a straight drop cannot cross anything.
+        /// </remarks>
+        private void PlaceHorizontally()
+        {
+            double widest = rows.Max(row => RowWidth(row.Steps.Count, measurements.StepWidth, measurements.StepGap));
+            double centreX = measurements.Snap(measurements.LeftMargin + (widest / 2));
+
+            foreach (Row row in rows)
+            {
+                double rowWidth = RowWidth(row.Steps.Count, measurements.StepWidth, measurements.StepGap);
+                double x = measurements.Snap(centreX - (rowWidth / 2));
+
+                foreach (StepNode step in row.Steps)
+                {
+                    StepBox box = new(row, step, x);
+                    steps[new StepKey(row.StageName, step.StepId)] = box;
+
+                    PlaceConnectors(box);
+
+                    x = measurements.Snap(x + measurements.StepWidth + measurements.StepGap);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Places a step's connectors, left to right from a fixed inset.
+        /// </summary>
+        /// <remarks>
+        /// Inputs and outputs share one column pitch, so a connector on the top of a card lines up
+        /// with the one below it and a pipe between two cards runs straight down instead of jogging
+        /// for no reason. The pitch is the width of a value box, because each output has one hanging
+        /// directly beneath it.
+        /// </remarks>
+        private void PlaceConnectors(StepBox box)
+        {
+            ImmutableList<StepIO> inputs = Distinct(box.Step.Inputs);
+            ImmutableList<StepIO> outputs = Distinct(box.Step.Outputs);
+
+            // Inputs and outputs share one pitch from a fixed inset, so an output connector lines up
+            // with the input connector of the step below it and the pipe between them is a straight
+            // drop rather than a jog.
+            double first = measurements.Snap(box.X + measurements.ConnectorInset + (measurements.ConnectorPitch / 2));
+
+            for (int index = 0; index < inputs.Count; index++)
+                box.InputX[inputs[index].Key] = measurements.Snap(first + (index * measurements.ConnectorPitch));
+
+            for (int index = 0; index < outputs.Count; index++)
+                box.OutputX[outputs[index].Key] = measurements.Snap(first + (index * measurements.ConnectorPitch));
+        }
+
+        /// <summary>
+        /// Works out which pipe exists, and which channel each of its horizontal runs belongs in.
+        /// </summary>
+        private void PlanWires()
+        {
+            Dictionary<string, Origin> lastProducer = new(StringComparer.Ordinal);
+
+            foreach (Row row in rows)
+            {
+                foreach (StepNode step in row.Steps)
+                {
+                    StepBox consumer = steps[new StepKey(row.StageName, step.StepId)];
+
+                    foreach (StepIO input in Distinct(step.Inputs))
+                    {
+                        if (!lastProducer.TryGetValue(input.Key, out Origin origin))
+                            continue;
+
+                        // Steps sharing a layer run at the same time, so one cannot have consumed
+                        // the other's output; an edge between them would assert an ordering the run
+                        // never had.
+                        if (origin.Row == row.Index)
+                            continue;
+
+                        wires.Add(new Wire(origin.Producer, consumer, input, origin.Row, row.Index));
+                    }
+                }
+
+                foreach (StepNode step in row.Steps)
+                {
+                    StepBox producer = steps[new StepKey(row.StageName, step.StepId)];
+
+                    foreach (StepIO output in Distinct(step.Outputs))
+                        lastProducer[output.Key] = new Origin(producer, row.Index);
+                }
+            }
+
+            AssignTracks();
+        }
+
+        /// <summary>
+        /// Gives every horizontal run a track no other run in that channel uses.
+        /// </summary>
+        /// <remarks>
+        /// Greedy interval colouring over the horizontal spans, which is optimal for intervals: two
+        /// pipes share a track only when their runs cannot touch. This is the step that makes
+        /// overlapping impossible rather than merely unlikely.
+        /// </remarks>
+        private void AssignTracks()
+        {
+            laneBase = measurements.Snap(ContentRight() + measurements.LaneGap);
+
+            // A pipe crossing more than one row cannot go through the rows between, so it leaves for
+            // a lane of its own to the right of everything and comes back at the far end.
+            foreach (Wire wire in wires.Where(wire => wire.IsLong).OrderBy(wire => wire.FromRow))
+                wire.Lane = ++laneCount;
+
+            Dictionary<int, List<Run>> byChannel = [];
+
+            // Straight drops first: they claim no track, so settling them up front keeps them out of
+            // the way of everything else.
+            foreach (Wire wire in wires.Where(wire => !wire.IsLong))
+            {
+                if (Math.Abs(wire.SourceX - wire.Consumer.InputX[wire.Declared.Key]) < double.Epsilon)
+                    wire.IsStraight = true;
+            }
+
+            // Reserved in three passes, from the top of the channel downwards, because a track's
+            // position is its index and a pipe cannot be squeezed in above one already placed.
+            //
+            // A long pipe leaves sideways as soon as it clears its connector, so its drop is short
+            // and belongs at the top; a long pipe arriving does the reverse and belongs at the
+            // bottom, beside the connector it enters. Everything else sits between. Ordering this
+            // way is what lets a dropper find a track above the risers sharing its column, rather
+            // than discovering too late that there is no room above.
+            foreach (Wire wire in wires.Where(wire => wire.IsLong).OrderBy(wire => wire.SourceX))
+            {
+                wire.SourceTrack = Reserve(byChannel, wire.FromRow, wire.SourceX, LaneX(wire.Lane),
+                    dropX: wire.SourceX, riseX: double.NaN);
+            }
+
+            foreach (Wire wire in wires.Where(wire => !wire.IsLong && !wire.IsStraight))
+            {
+                wire.SourceTrack = Reserve(byChannel, wire.FromRow, wire.SourceX,
+                    wire.Consumer.InputX[wire.Declared.Key],
+                    dropX: wire.SourceX,
+                    riseX: wire.Consumer.InputX[wire.Declared.Key]);
+            }
+
+            foreach (Wire wire in wires.Where(wire => wire.IsLong))
+            {
+                wire.TargetTrack = Reserve(byChannel, wire.ToRow - 1, LaneX(wire.Lane),
+                    wire.Consumer.InputX[wire.Declared.Key],
+                    dropX: double.NaN,
+                    riseX: wire.Consumer.InputX[wire.Declared.Key]);
+            }
+
+            foreach ((int channel, List<Run> runs) in byChannel)
+                channelTracks[channel] = runs.Count;
+        }
+
+        /// <summary>
+        /// Finds a track whose horizontal run and vertical legs collide with nothing already there.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The horizontal test is ordinary interval colouring. The vertical test is the one that is
+        /// easy to miss and produces the worst-looking result: a pipe drops from its connector down
+        /// to its track, and rises from its track up into the target connector, so two pipes whose
+        /// connectors happen to share an x can end up running along each other even though their
+        /// horizontals are nowhere near. Connectors sharing an x is not a rare accident — boxes are
+        /// the same width and connectors are evenly spread, so it is the normal case.
+        /// </para>
+        /// <para>
+        /// A pipe dropping at some x occupies that column from the top of the channel down to its
+        /// track; one rising at the same x occupies it from its track to the bottom. They miss each
+        /// other only when the riser's track is below the dropper's, which is what the search here
+        /// enforces.
+        /// </para>
+        /// </remarks>
+        private int Reserve(Dictionary<int, List<Run>> byChannel, int channel, double from, double to, double dropX, double riseX)
+        {
+            double left = Math.Min(from, to);
+            double right = Math.Max(from, to);
+
+            if (!byChannel.TryGetValue(channel, out List<Run>? runs))
+                byChannel[channel] = runs = [];
+
+            for (int track = 0; track <= runs.Count; track++)
+            {
+                if (track < runs.Count && Touches(runs[track], left, right))
+                    continue;
+
+                if (VerticalsClash(runs, track, dropX, riseX))
+                    continue;
+
+                if (track == runs.Count)
+                    runs.Add(new Run(left, right, Columns(dropX), Columns(riseX)));
+                else
+                    runs[track] = runs[track].Extend(left, right, dropX, riseX);
+
+                return track;
+            }
+
+            // Nothing satisfied both tests, so the pipe gets a track below everything. Its rise is
+            // then clear by construction; only a drop can still share a column, which is reported by
+            // the routing tests rather than hidden.
+            runs.Add(new Run(left, right, Columns(dropX), Columns(riseX)));
+            return runs.Count - 1;
+        }
+
+        /// <summary>Whether two horizontal runs come close enough to read as one line.</summary>
+        private bool Touches(Run run, double left, double right)
+            => !(run.Right + measurements.Grid < left || right + measurements.Grid < run.Left);
+
+        /// <summary>
+        /// Whether putting a pipe on a track would leave one of its vertical legs running along
+        /// another pipe's.
+        /// </summary>
+        /// <remarks>
+        /// A pipe drops from its connector to its track, so it owns that column from the top of the
+        /// channel down; and it rises from its track to the target connector, owning that column from
+        /// the track down. Two pipes sharing a column therefore miss each other only when the one
+        /// rising sits below the one dropping.
+        /// </remarks>
+        private static bool VerticalsClash(List<Run> runs, int track, double dropX, double riseX)
+        {
+            if (!double.IsNaN(riseX))
+            {
+                for (int other = track; other < runs.Count; other++)
+                {
+                    if (runs[other].Drops.Contains(riseX))
+                        return true;
+                }
+            }
+
+            if (!double.IsNaN(dropX))
+            {
+                for (int other = 0; other < Math.Min(track + 1, runs.Count); other++)
+                {
+                    if (runs[other].Rises.Contains(dropX))
+                        return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static HashSet<double> Columns(double x) => double.IsNaN(x) ? [] : [x];
+
+        /// <summary>
+        /// Fixes every y coordinate, giving each channel exactly the depth its tracks need.
+        /// </summary>
+        private void PlaceVertically()
+        {
+            double y = measurements.Snap(measurements.TopMargin + measurements.StageHeaderHeight);
+            string? previousStage = null;
+
+            foreach (Row row in rows)
+            {
+                if (previousStage is not null && !string.Equals(previousStage, row.StageName, StringComparison.Ordinal))
+                    y = measurements.Snap(y + measurements.StageGap + measurements.StageHeaderHeight);
+
+                previousStage = row.StageName;
+
+                row.StepTop = y;
+                y = measurements.Snap(y + measurements.StepHeight);
+
+                row.ChannelTop = y;
+                y = measurements.Snap(y + ChannelHeight(row.Index));
+            }
+        }
+
+        /// <summary>
+        /// How deep a channel has to be to hold its tracks.
+        /// </summary>
+        /// <remarks>
+        /// Grows with the traffic through it rather than being fixed, so a busy junction opens up
+        /// instead of forcing its pipes together — which is where a board stops being readable.
+        /// </remarks>
+        private double ChannelHeight(int channel)
+        {
+            int tracks = channelTracks.TryGetValue(channel, out int count) ? count : 0;
+            return Math.Max(measurements.LayerGap, measurements.Snap(((tracks + 1) * measurements.TrackSpacing) + measurements.PipeLead));
+        }
+
+        private double TrackY(int channel, int track)
+        {
+            Row row = rows[channel];
+            return measurements.Snap(row.ChannelTop + measurements.PipeLead + (track * measurements.TrackSpacing));
+        }
+
+        private double LaneX(int lane) => measurements.Snap(laneBase + ((lane - 1) * measurements.LaneWidth));
+
+        private LayoutResult Materialise()
+        {
+            ImmutableList<LayoutNode>.Builder nodes = ImmutableList.CreateBuilder<LayoutNode>();
+            ImmutableList<LayoutEdge>.Builder edges = ImmutableList.CreateBuilder<LayoutEdge>();
+
+            nodes.AddRange(BuildStageBands());
+
+            // The verdict is the one box whose appearance depends on the run as a whole rather than
+            // on the thing it draws, so it is the one box the arrangement has to finish itself.
+            bool satisfied = graph.Assertions.All(assertion => assertion.Succeeded);
+
+            foreach (StepBox step in steps.Values)
+            {
+                LayoutNode node = step.ToNode(measurements);
+                nodes.Add(node.Kind == LayoutNodeKind.Verdict ? node with { IsSatisfied = satisfied } : node);
+            }
+
+            foreach (Wire wire in wires)
+                edges.Add(BuildConsumption(wire));
+
+            AddUnconnectedPorts();
+
+            double right = laneCount == 0 ? ContentRight() : LaneX(laneCount);
+
+            return new LayoutResult
+            {
+                Nodes = nodes.ToImmutable(),
+                Edges = edges.ToImmutable(),
+                Ports = [.. ports.Values],
+                Width = measurements.Snap(right + measurements.RightMargin),
+                // Measured from what is actually drawn, not from where the last channel began: the
+                // stage band wraps its rows and extends past them, so reporting the channel left the
+                // last stage hanging off the bottom of anything that fitted the board to a window.
+                Height = measurements.Snap(nodes.Max(node => node.Bottom) + measurements.BottomMargin)
+            };
+        }
+
+        /// <summary>
+        /// Draws the connectors for declarations no pipe reaches.
+        /// </summary>
+        /// <remarks>
+        /// An unconnected connector is information: the step asked for something no earlier step
+        /// supplies, or produced something nothing went on to read. Leaving either out would hide
+        /// exactly the case a reader is hunting — and with no box drawn on the pipe any more, the
+        /// connectors are the only place a declaration appears at all.
+        /// </remarks>
+        private void AddUnconnectedPorts()
+        {
+            foreach (StepBox step in steps.Values)
+            {
+                foreach (StepIO input in Distinct(step.Step.Inputs))
+                {
+                    Port(step.NodeId, input, isInput: true, connected: false,
+                        step.InputX[input.Key], step.Top);
+                }
+
+                foreach (StepIO output in Distinct(step.Step.Outputs))
+                {
+                    Port(step.NodeId, output, isInput: false, connected: false,
+                        step.OutputX[output.Key], step.Bottom(measurements));
+                }
+            }
+        }
+
+        private LayoutEdge BuildConsumption(Wire wire)
+        {
+            LayoutPort from = Port(wire.Producer.NodeId, wire.Declared, isInput: false, connected: true,
+                wire.SourceX, wire.Producer.Bottom(measurements));
+
+            LayoutPort to = Port(wire.Consumer.NodeId, wire.Declared, isInput: true, connected: true,
+                wire.Consumer.InputX[wire.Declared.Key], wire.Consumer.Top);
+
+            if (wire.IsStraight)
+            {
+                return new LayoutEdge
+                {
+                    Id = $"consumes:{wire.Producer.NodeId}/{wire.Declared.Key}->{wire.Consumer.NodeId}",
+                    Kind = KindOf(wire),
+                    ValueKind = wire.Declared.Kind,
+                    FromNodeId = wire.Producer.NodeId,
+                    ToNodeId = wire.Consumer.NodeId,
+                    FromPortId = from.Id,
+                    ToPortId = to.Id,
+                    Key = wire.Declared.Key,
+                    Points = Simplify([new LayoutPoint(from.X, from.Y), new LayoutPoint(to.X, to.Y)])
+                };
+            }
+
+            double sourceTrack = TrackY(wire.FromRow, wire.SourceTrack);
+
+            List<LayoutPoint> points =
+            [
+                new LayoutPoint(from.X, from.Y),
+                new LayoutPoint(from.X, sourceTrack)
+            ];
+
+            if (wire.IsLong)
+            {
+                double lane = LaneX(wire.Lane);
+                double targetTrack = TrackY(wire.ToRow - 1, wire.TargetTrack);
+
+                points.Add(new LayoutPoint(lane, sourceTrack));
+                points.Add(new LayoutPoint(lane, targetTrack));
+                points.Add(new LayoutPoint(to.X, targetTrack));
+            }
+            else
+            {
+                points.Add(new LayoutPoint(to.X, sourceTrack));
+            }
+
+            points.Add(new LayoutPoint(to.X, to.Y));
+
+            return new LayoutEdge
+            {
+                Id = $"consumes:{wire.Producer.NodeId}/{wire.Declared.Key}->{wire.Consumer.NodeId}",
+                Kind = KindOf(wire),
+                ValueKind = wire.Declared.Kind,
+                FromNodeId = wire.Producer.NodeId,
+                ToNodeId = wire.Consumer.NodeId,
+                FromPortId = from.Id,
+                ToPortId = to.Id,
+                Key = wire.Declared.Key,
+                Lane = wire.Lane,
+                Points = Simplify(points)
+            };
+        }
+
+        /// <summary>
+        /// What a pipe into a given consumer carries.
+        /// </summary>
+        /// <remarks>
+        /// A pipe into the verdict is an assertion rather than a consumption: nothing downstream uses
+        /// the value, it is being checked. The distinction is what lets the view colour those pipes by
+        /// whether the check held.
+        /// </remarks>
+        private static LayoutEdgeKind KindOf(Wire wire)
+            => wire.Consumer.Row.IsVerdict ? LayoutEdgeKind.Assertion : LayoutEdgeKind.Consumption;
+
+        private LayoutPort Port(string nodeId, StepIO declared, bool isInput, bool connected, double x, double y)
+        {
+            string id = $"port:{nodeId}:{(isInput ? "in" : "out")}:{declared.Key}";
+
+            if (ports.TryGetValue(id, out LayoutPort? existing))
+                return existing;
+
+            LayoutPort port = new()
+            {
+                Id = id,
+                NodeId = nodeId,
+                Key = declared.Key,
+                Kind = declared.Kind,
+                IsInput = isInput,
+                IsConnected = connected,
+                X = x,
+                Y = y
+            };
+
+            ports[id] = port;
+            return port;
+        }
+
+        private IEnumerable<LayoutNode> BuildStageBands()
+        {
+            // The verdict belongs to no stage: it is a statement about the run, and banding it would
+            // read as a stage the run executed.
+            foreach (IGrouping<string, Row> stage in rows
+                         .Where(row => !row.IsVerdict)
+                         .GroupBy(row => row.StageName, StringComparer.Ordinal))
+            {
+                List<LayoutNode> members = [];
+
+                foreach (Row row in stage)
+                {
+                    foreach (StepNode step in row.Steps)
+                        members.Add(steps[new StepKey(row.StageName, step.StepId)].ToNode(measurements));
+                }
+
+                if (members.Count == 0)
+                    continue;
+
+                double left = measurements.Snap(members.Min(node => node.X) - measurements.StagePadding);
+                double right = measurements.Snap(members.Max(node => node.Right) + measurements.StagePadding);
+                double top = measurements.Snap(members.Min(node => node.Y) - measurements.StageHeaderHeight);
+                double bottom = measurements.Snap(members.Max(node => node.Bottom) + measurements.StagePadding);
+
+                yield return new LayoutNode
+                {
+                    Id = "stage:" + stage.Key,
+                    Kind = LayoutNodeKind.Stage,
+                    StageName = stage.Key,
+                    X = left,
+                    Y = top,
+                    Width = right - left,
+                    Height = bottom - top
+                };
+            }
+        }
+
+        private double RowWidth(int count, double itemWidth, double gap)
+            => count <= 0 ? 0 : (count * itemWidth) + ((count - 1) * gap);
+
+        /// <summary>The right edge of the content the pipes have to route around.</summary>
+        private double ContentRight() => steps.Values.Max(step => step.Right(measurements));
+
+        private const double MinimumValueWidth = 60;
+
+        /// <summary>
+        /// The stage the verdict row claims to belong to.
+        /// </summary>
+        /// <remarks>
+        /// A name no stage can have, because the verdict is not a stage: it keeps the row out of the
+        /// step lookup's way without the rest of the arrangement needing to know it is special.
+        /// </remarks>
+        private const string VerdictStage = "$verdict";
+
+        private readonly record struct StepKey(string StageName, int StepId);
+
+        /// <summary>What one track in a channel already carries.</summary>
+        private sealed record Run(double Left, double Right, HashSet<double> Drops, HashSet<double> Rises)
+        {
+            internal Run Extend(double left, double right, double dropX, double riseX)
+            {
+                if (!double.IsNaN(dropX))
+                    Drops.Add(dropX);
+
+                if (!double.IsNaN(riseX))
+                    Rises.Add(riseX);
+
+                return this with { Left = Math.Min(Left, left), Right = Math.Max(Right, right) };
+            }
+        }
+
+        private readonly record struct Origin(StepBox Producer, int Row);
+
+        private sealed class Row(int index, string stageName, ImmutableList<StepNode> steps, bool isVerdict = false)
+        {
+            internal int Index => index;
+
+            internal string StageName => stageName;
+
+            internal ImmutableList<StepNode> Steps => steps;
+
+            /// <summary>Whether this row holds the verdict rather than steps the run executed.</summary>
+            internal bool IsVerdict => isVerdict;
+
+            internal double StepTop { get; set; }
+
+
+            internal double ChannelTop { get; set; }
+        }
+
+        private sealed class StepBox(Row row, StepNode step, double x)
+        {
+            internal Row Row => row;
+
+            internal StepNode Step => step;
+
+            internal double X => x;
+
+            internal double Top => row.StepTop;
+
+            internal Dictionary<string, double> InputX { get; } = new(StringComparer.Ordinal);
+
+            internal Dictionary<string, double> OutputX { get; } = new(StringComparer.Ordinal);
+
+            internal string NodeId => row.IsVerdict ? "verdict" : $"step:{row.StageName}/{step.StepId}";
+
+            internal double Right(LayoutOptions measurements) => x + measurements.StepWidth;
+
+            internal double Bottom(LayoutOptions measurements) => row.StepTop + measurements.StepHeight;
+
+            internal LayoutNode ToNode(LayoutOptions measurements) => new()
+            {
+                Id = NodeId,
+                Kind = row.IsVerdict ? LayoutNodeKind.Verdict : LayoutNodeKind.Step,
+                StageName = row.StageName,
+                StepId = row.IsVerdict ? null : step.StepId,
+                X = x,
+                Y = row.StepTop,
+                Width = measurements.StepWidth,
+                Height = measurements.StepHeight
+            };
+        }
+
+        private sealed class Wire(StepBox producer, StepBox consumer, StepIO declared, int fromRow, int toRow)
+        {
+            internal StepBox Producer => producer;
+
+            internal StepBox Consumer => consumer;
+
+            /// <summary>Where the pipe leaves the producing step.</summary>
+            internal double SourceX => producer.OutputX[declared.Key];
+
+            internal StepIO Declared => declared;
+
+            internal int FromRow => fromRow;
+
+            internal int ToRow => toRow;
+
+            /// <summary>Whether the pipe has to pass a row, and so cannot simply drop into place.</summary>
+            internal bool IsLong => toRow > fromRow + 1;
+
+            /// <summary>Whether the two connectors line up, making the pipe a single vertical drop.</summary>
+            internal bool IsStraight { get; set; }
+
+            internal int Lane { get; set; }
+
+            internal int SourceTrack { get; set; }
+
+            internal int TargetTrack { get; set; }
+        }
+    }
+
+    /// <summary>Keeps declaration order while dropping a key declared more than once.</summary>
+    private static ImmutableList<StepIO> Distinct(ImmutableList<StepIO> declared)
+    {
+        HashSet<string> seen = new(StringComparer.Ordinal);
+        ImmutableList<StepIO>.Builder distinct = ImmutableList.CreateBuilder<StepIO>();
+
+        foreach (StepIO entry in declared)
+        {
+            if (!string.IsNullOrWhiteSpace(entry.Key) && seen.Add(entry.Key))
+                distinct.Add(entry);
+        }
+
+        return distinct.ToImmutable();
+    }
+
+    /// <summary>Drops points that repeat the one before them, which would be a zero-length segment.</summary>
+    private static ImmutableList<LayoutPoint> Simplify(IReadOnlyList<LayoutPoint> points)
+    {
+        ImmutableList<LayoutPoint>.Builder simplified = ImmutableList.CreateBuilder<LayoutPoint>();
+
+        foreach (LayoutPoint point in points)
+        {
+            if (simplified.Count == 0 || simplified[^1] != point)
+                simplified.Add(point);
+        }
+
+        return simplified.ToImmutable();
+    }
+}

@@ -1,1 +1,0 @@
-namespace TestFramework.DebugUI.PipeAdapter.ProtocolModels;

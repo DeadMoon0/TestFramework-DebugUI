@@ -1,13 +1,22 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
 		<TargetFramework>net8.0-windows10.0.20348.0</TargetFramework>
 		<Nullable>enable</Nullable>
-		<ImplicitUsings>enable</ImplicitUsings>
+		<ImplicitUsings>disable</ImplicitUsings>
 		<UseWPF>true</UseWPF>
 		<SupportedOSPlatformVersion>10.0.20348.0</SupportedOSPlatformVersion>
 		<ApplicationIcon>Icon.ico</ApplicationIcon>
+		<RootNamespace>TestFramework.DebugUI</RootNamespace>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+		<TreatWarningsAsErrors>True</TreatWarningsAsErrors>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+		<TreatWarningsAsErrors>True</TreatWarningsAsErrors>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -19,15 +28,13 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
-			<_Parameter1>TestFramework.ConsumerScenarios.DebugUI.Tests</_Parameter1>
-		</AssemblyAttribute>
+		<PackageReference Include="Axiom.State" Version="0.5.0" />
+		<PackageReference Include="Axiom.Wpf" Version="0.0.1" />
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\TestFramework.DebugUI.Data\TestFramework.DebugUI.Data.csproj" />
-		<ProjectReference Include="..\TestFramework.DebugUI.PipeAdapter\TestFramework.DebugUI.PipeAdapter.csproj" />
-		<ProjectReference Include="..\WpfStateService\WpfStateService.csproj" />
+		<ProjectReference Include="..\TestFramework.DebugUI.Layout\TestFramework.DebugUI.Layout.csproj" />
+		<ProjectReference Include="..\TestFramework.DebugUI.State\TestFramework.DebugUI.State.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

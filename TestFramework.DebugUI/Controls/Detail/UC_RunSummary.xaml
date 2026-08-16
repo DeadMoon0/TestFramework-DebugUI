@@ -1,0 +1,52 @@
+<UserControl x:Class="TestFramework.DebugUI.Controls.Detail.UC_RunSummary"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d">
+    <!--
+        The answer to "can I trust this run", before anyone starts hunting through steps. It leads
+        with the verdict, then the counts behind it, then the failures themselves — so the reader
+        either stops at the first line or has somewhere to click.
+    -->
+    <Border Style="{StaticResource PanelOverlay}" Width="420">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Style="{StaticResource PanelHeading}" Text="SUMMARY"/>
+                <Button x:Name="btClose" Grid.Column="1" Style="{StaticResource FlatButton}" Margin="0 5 8 5"
+                        Padding="7 2" Content="Close" Click="btClose_Click"/>
+            </Grid>
+
+            <StackPanel Grid.Row="1" Margin="12 4 12 0">
+                <Border x:Name="bVerdict" CornerRadius="2.5" Padding="12 10" Background="#2862C98F">
+                    <StackPanel>
+                        <TextBlock x:Name="tbVerdict" Style="{StaticResource BodyText}" FontSize="16" FontWeight="Bold"/>
+                        <TextBlock x:Name="tbVerdictWhy" Style="{StaticResource MutedText}" Margin="0 3 0 0"/>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock x:Name="tbCounts" Style="{StaticResource MutedText}" Margin="0 12 0 0"/>
+            </StackPanel>
+
+            <ScrollViewer Grid.Row="2" Margin="12 10 12 12" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
+                <StackPanel>
+                    <TextBlock x:Name="tbFailuresLabel" Style="{StaticResource PanelHeading}" Margin="0 0 0 4"
+                               Text="WHAT FAILED" Visibility="Collapsed"/>
+                    <StackPanel x:Name="spFailures"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</UserControl>

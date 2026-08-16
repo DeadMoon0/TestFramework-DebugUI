@@ -1,0 +1,80 @@
+<UserControl x:Class="TestFramework.DebugUI.Controls.Detail.UC_StepDetail"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d">
+    <Border Style="{StaticResource PanelOverlay}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Style="{StaticResource PanelHeading}" Text="STEP"/>
+
+            <TextBlock x:Name="tbEmpty" Grid.Row="1" Style="{StaticResource MutedText}" Margin="14 4 14 0"
+                       Text="Pick a step on the board. Its failure, inputs, outputs, attempts and log all appear here."/>
+
+            <ScrollViewer x:Name="svBody" Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+                <StackPanel Margin="10 0 10 10">
+                    <TextBlock x:Name="tbName" Style="{StaticResource BodyText}" FontSize="15"/>
+                    <TextBlock x:Name="tbKind" Style="{StaticResource MutedText}" Margin="0 1 0 0"/>
+                    <TextBlock x:Name="tbDescription" Style="{StaticResource MutedText}" Margin="0 6 0 0"/>
+
+                    <StackPanel Orientation="Horizontal" Margin="0 10 0 0">
+                        <Button x:Name="btBreakpoint" Style="{StaticResource FlatButton}" Padding="7 3"
+                                Content="Toggle breakpoint" Click="btBreakpoint_Click"
+                                ToolTip="Hold this step next time it runs, until you release it."/>
+                        <Button x:Name="btCopyFailure" Style="{StaticResource FlatButton}" Margin="4 0 0 0" Padding="7 3"
+                                Content="Copy failure" Click="btCopyFailure_Click" Visibility="Collapsed"
+                                ToolTip="Copy the message and the framework's recovery steps."/>
+                    </StackPanel>
+
+                    <!--
+                        Failure first, above everything else about the step. When a step has broken,
+                        that is the only reason anyone opened this panel.
+                    -->
+                    <Border x:Name="bFailure" CornerRadius="2.5" Background="#28FC4646" Margin="0 12 0 0"
+                            Padding="10" Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock x:Name="tbFailureType" Style="{StaticResource BodyText}" FontWeight="Bold"
+                                       Foreground="{StaticResource StateError}"/>
+                            <TextBlock x:Name="tbFailureMessage" Style="{StaticResource BodyText}" Margin="0 4 0 0"/>
+
+                            <TextBlock x:Name="tbFriendlyLabel" Style="{StaticResource PanelHeading}" Margin="0 10 0 3"
+                                       Text="WHAT THIS MEANS" Visibility="Collapsed"/>
+                            <TextBlock x:Name="tbFriendly" Style="{StaticResource MutedText}" Visibility="Collapsed"/>
+
+                            <TextBlock x:Name="tbRecoveryLabel" Style="{StaticResource PanelHeading}" Margin="0 10 0 3"
+                                       Text="WHAT TO DO" Visibility="Collapsed"/>
+                            <TextBlock x:Name="tbRecovery" Style="{StaticResource MutedText}" Visibility="Collapsed"/>
+
+                            <TextBlock x:Name="tbOptionsLabel" Style="{StaticResource PanelHeading}" Margin="0 10 0 3"
+                                       Text="OPTIONS" Visibility="Collapsed"/>
+                            <TextBlock x:Name="tbOptions" Style="{StaticResource MutedText}" Visibility="Collapsed"/>
+
+                            <Expander x:Name="exStack" Margin="0 10 0 0" Foreground="{StaticResource TextFaint}"
+                                      Header="Stack trace" Visibility="Collapsed">
+                                <TextBlock x:Name="tbStack" Style="{StaticResource CodeText}" Margin="0 6 0 0"/>
+                            </Expander>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Style="{StaticResource PanelHeading}" Margin="0 14 0 3" Text="INPUTS"/>
+                    <TextBlock x:Name="tbInputs" Style="{StaticResource MutedText}"/>
+
+                    <TextBlock Style="{StaticResource PanelHeading}" Margin="0 10 0 3" Text="OUTPUTS"/>
+                    <TextBlock x:Name="tbOutputs" Style="{StaticResource MutedText}"/>
+
+                    <TextBlock Style="{StaticResource PanelHeading}" Margin="0 10 0 3" Text="ATTEMPTS"/>
+                    <StackPanel x:Name="spAttempts"/>
+
+                    <TextBlock Style="{StaticResource PanelHeading}" Margin="0 10 0 3" Text="LOG"/>
+                    <TextBlock x:Name="tbLog" Style="{StaticResource CodeText}"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Border>
+</UserControl>

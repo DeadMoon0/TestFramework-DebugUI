@@ -8,14 +8,19 @@ using System.Threading;
 using System.Threading.Tasks;
 using TestFramework.DebugUI.PipeAdapter.ProtocolModels;
 
+using TestFramework.Core.Debugger;
+
 namespace TestFramework.DebugUI.PipeAdapter;
 
 internal class ProtocolStream(PipeStream stream)
 {
     internal bool PipeIsDead = false;
-    private static readonly Encoding Encoding = Encoding.Unicode;
-    private const int MAX_MESSAGE_BYTES = 4 * 1024 * 1024;
     private readonly SemaphoreSlim sendLock = new(1, 1);
+
+    /// <summary>
+    /// Per-connection, and therefore per session, since one connection carries one run.
+    /// </summary>
+    private long sequence;
 
     internal string LastFailureReason { get; private set; } = "Pipe closed.";
 
@@ -29,8 +34,12 @@ internal class ProtocolStream(PipeStream stream)
         {
             await sendLock.WaitAsync();
             lockAcquired = true;
-            string json = JsonConvert.SerializeObject(signal);
-            byte[] buffer = [.. BitConverter.GetBytes(Encoding.GetByteCount(json)), .. Encoding.GetBytes(json)];
+            // Core's codec rather than a second implementation here. Keeping a private copy of the
+            // framing is what let the two sides silently diverge: Core moved to UTF-8 envelopes
+            // while this still wrote UTF-16 bare signals, so every frame parsed as garbage and the
+            // UI simply never saw a run start.
+            byte[] buffer = DebugEnvelopeCodec.EncodeFrame(
+                DebugEnvelopeCodec.Wrap(signal, Interlocked.Increment(ref sequence)));
             await stream.WriteAsync(buffer, 0, buffer.Length, CancellationToken.None);
         }
         catch (Exception e)
@@ -52,12 +61,14 @@ internal class ProtocolStream(PipeStream stream)
             byte[] lenBuf = new byte[sizeof(Int32)];
             await stream.ReadExactlyAsync(lenBuf, 0, lenBuf.Length, cancellationToken);
             int messageLength = BitConverter.ToInt32(lenBuf);
-            if (messageLength <= 0 || messageLength > MAX_MESSAGE_BYTES)
+            if (messageLength <= 0 || messageLength > DebugEnvelopeCodec.MaxMessageBytes)
                 throw new InvalidDataException($"Invalid pipe frame length: {messageLength}");
 
             byte[] jsonBuf = new byte[messageLength];
             await stream.ReadExactlyAsync(jsonBuf, 0, jsonBuf.Length, cancellationToken);
-            return SignalFactory.DeserializeSignal(Encoding.GetString(jsonBuf));
+
+            DebugEnvelope envelope = DebugEnvelopeCodec.Deserialize(DebugEnvelopeCodec.WireEncoding.GetString(jsonBuf));
+            return DebugEnvelopeCodec.Unwrap(envelope);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

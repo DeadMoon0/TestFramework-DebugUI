@@ -1,12 +1,12 @@
 <Solution>
   <Folder Name="/UnitTests/">
-    <Project Path="UnitTests/TestFramework.DebugUI.Tests/TestFramework.DebugUI.Tests.csproj" />
+    <Project Path="UnitTests/TestFramework.DebugUI.State.Tests/TestFramework.DebugUI.State.Tests.csproj" />
+  <Project Path="UnitTests/TestFramework.DebugUI.Tests/TestFramework.DebugUI.Tests.csproj" />
     <Project Path="UnitTests/TestFramework.DebugUI.TimelineSamples.Tests/TestFramework.DebugUI.TimelineSamples.Tests.csproj" />
   </Folder>
-  <Project Path="FormsProxy/FormsProxy.csproj" />
   <Project Path="TestFramework.DebugUI.Data/TestFramework.DebugUI.Data.csproj" />
+  <Project Path="TestFramework.DebugUI.State/TestFramework.DebugUI.State.csproj" />
   <Project Path="TestFramework.DebugUI.PipeAdapter/TestFramework.DebugUI.PipeAdapter.csproj" />
   <Project Path="TestFramework.DebugUI/TestFramework.DebugUI.csproj" />
-  <Project Path="WpfCommon/WpfCommon.csproj" />
   <Project Path="WpfStateService/WpfStateService.csproj" />
 </Solution>

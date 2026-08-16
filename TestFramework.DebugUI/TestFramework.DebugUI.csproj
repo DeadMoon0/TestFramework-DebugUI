@@ -19,9 +19,14 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+			<_Parameter1>TestFramework.ConsumerScenarios.DebugUI.Tests</_Parameter1>
+		</AssemblyAttribute>
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\TestFramework.DebugUI.Data\TestFramework.DebugUI.Data.csproj" />
 		<ProjectReference Include="..\TestFramework.DebugUI.PipeAdapter\TestFramework.DebugUI.PipeAdapter.csproj" />
-		<ProjectReference Include="..\WpfCommon\WpfCommon.csproj" />
 		<ProjectReference Include="..\WpfStateService\WpfStateService.csproj" />
 	</ItemGroup>
 

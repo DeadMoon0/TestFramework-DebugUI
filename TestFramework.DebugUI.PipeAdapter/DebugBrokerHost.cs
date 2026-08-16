@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using TestFramework.Core.Exceptions;
 using TestFramework.DebugUI.PipeAdapter.ProtocolModels;
 
 namespace TestFramework.DebugUI.PipeAdapter;
@@ -89,7 +90,7 @@ internal sealed class DebugBrokerHost : RunDebuggerHostPiped
         lock (breakpointSync)
         {
             if (activeBreakpointContinue is not null)
-                throw new InvalidOperationException("Only one active breakpoint is supported at a time.");
+                throw new FrameworkStateException("Only one active breakpoint is supported at a time.");
 
             activeBreakpoint = new PendingBreakpoint(signal.SessionId, signal.Stage, signal.StepId);
             activeBreakpointContinue = continueSignal;

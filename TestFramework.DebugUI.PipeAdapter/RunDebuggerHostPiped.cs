@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using TestFramework.Core.Exceptions;
 using TestFramework.DebugUI.PipeAdapter.ProtocolModels;
 
 namespace TestFramework.DebugUI.PipeAdapter;
@@ -86,7 +87,7 @@ internal abstract class RunDebuggerHostPiped : IDisposable
                                     await OnBreakpointHitRequestAsync((BreakpointHitRequestSignal)signal);
                                     break;
                                 case SignalKind.BreakpointHitContinue:
-                                    throw new System.InvalidOperationException("Unexpected Signal Kind " + signal.Kind + " this is not Supported as the Host.");
+                                    throw new UnsupportedFrameworkValueException("Unexpected signal kind '" + signal.Kind + "' is not supported by the debugger host.");
                                 default:
                                     throw new System.ArgumentOutOfRangeException(nameof(signal.Kind), signal.Kind, null);
                             }

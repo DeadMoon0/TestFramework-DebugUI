@@ -1,0 +1,113 @@
+name: Release DebugUI
+
+# Publishes the DebugUI application as a GitHub release, which is where the launcher looks for it.
+#
+# Trigger: push a version tag, e.g.
+#     git tag v0.5.0 && git push origin v0.5.0
+#
+# The tag is the source of truth. It sets the version stamped into the build, and it is the version
+# the launcher compares against what is installed on a machine — so the tag is what decides whether
+# anyone is offered an update.
+#
+# The asset name is a contract, not a convention. The launcher asks for TestFramework.DebugUI.zip by
+# name; it falls back to a lone archive only when there is exactly one, and declines to choose when
+# there are several. Renaming the asset silently stops every existing launcher from updating.
+#
+# The archive contains the published application with TestFramework.DebugUI.exe at its root. The
+# launcher also follows a single wrapping folder down, so an archive built the other way still
+# installs — but flat is what this produces and what the tests cover.
+#
+# BEFORE THIS CAN WORK: TestFramework.Core must be on nuget.org. TestFramework.DebugUI.State
+# references it by PackageReference at a version that currently exists only in a local feed above
+# this repository, so `dotnet restore` here fails until that package is published. That is the same
+# unpublished-chain blocker recorded in AUDIT-FINDINGS.md (B5), and it is deliberately not worked
+# around by committing a NuGet.config pointing at a local path — a release built from a feed nobody
+# else has is not a release.
+#
+# Framework-dependent, not self-contained: whoever runs the launcher already needs the .NET desktop
+# runtime, so shipping a second copy of it inside every update would multiply the download for no
+# gain. Switch by adding --self-contained -r win-x64 to the publish step if that stops being true.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # Windows, because WPF cannot be built anywhere else.
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          # Both: the projects target net8.0-windows, but the solution is in the .slnx format, which
+          # only a newer SDK can open.
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Read the version from the tag
+        id: version
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+
+          # Refuse early rather than publishing an asset the launcher cannot read a version from.
+          if ($version -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') {
+            throw "Tag '${{ github.ref_name }}' is not a version the launcher can parse."
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Restore
+        run: dotnet restore TestFramework.DebugUI.slnx
+
+      - name: Build
+        run: dotnet build TestFramework.DebugUI.slnx -c Release --no-restore -p:Version=${{ steps.version.outputs.version }}
+
+      - name: Test
+        run: dotnet test TestFramework.DebugUI.slnx -c Release --no-build
+
+      - name: Publish the application
+        run: >
+          dotnet publish TestFramework.DebugUI/TestFramework.DebugUI.csproj
+          -c Release
+          -p:Version=${{ steps.version.outputs.version }}
+          -o publish/app
+
+      - name: Publish the launcher
+        run: >
+          dotnet publish TestFramework.DebugUI.Launcher/TestFramework.DebugUI.Launcher.csproj
+          -c Release
+          -p:Version=${{ steps.version.outputs.version }}
+          -o publish/launcher
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts | Out-Null
+
+          # The application must sit at the root of the archive under the name the launcher expects.
+          if (-not (Test-Path publish/app/TestFramework.DebugUI.exe)) {
+            throw "The published output has no TestFramework.DebugUI.exe; the launcher would install a version it cannot start."
+          }
+
+          Compress-Archive -Path publish/app/* -DestinationPath artifacts/TestFramework.DebugUI.zip -Force
+          Compress-Archive -Path publish/launcher/* -DestinationPath artifacts/TestFramework.DebugUI.Launcher.zip -Force
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: DebugUI ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            artifacts/TestFramework.DebugUI.zip
+            artifacts/TestFramework.DebugUI.Launcher.zip

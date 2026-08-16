@@ -1,9 +1,11 @@
 <Solution>
   <Folder Name="/UnitTests/">
+    <Project Path="UnitTests/TestFramework.DebugUI.Launcher.Tests/TestFramework.DebugUI.Launcher.Tests.csproj" />
     <Project Path="UnitTests/TestFramework.DebugUI.Layout.Tests/TestFramework.DebugUI.Layout.Tests.csproj" />
     <Project Path="UnitTests/TestFramework.DebugUI.State.Tests/TestFramework.DebugUI.State.Tests.csproj" />
     <Project Path="UnitTests/TestFramework.DebugUI.TimelineSamples.Tests/TestFramework.DebugUI.TimelineSamples.Tests.csproj" />
   </Folder>
+  <Project Path="TestFramework.DebugUI.Launcher/TestFramework.DebugUI.Launcher.csproj" />
   <Project Path="TestFramework.DebugUI.Layout/TestFramework.DebugUI.Layout.csproj" />
   <Project Path="TestFramework.DebugUI.State/TestFramework.DebugUI.State.csproj" />
   <Project Path="TestFramework.DebugUI/TestFramework.DebugUI.csproj" />

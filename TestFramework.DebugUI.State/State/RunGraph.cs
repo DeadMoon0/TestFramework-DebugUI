@@ -193,6 +193,16 @@ public sealed record ValueNode
 
     /// <summary>Gets the renderer contract key.</summary>
     public string SchemaKey { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets what the value is, stated as facts rather than as a formatted line.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="DisplayText"/> is the producer's one-line fallback. This is everything it had to
+    /// throw away to produce that line — the shape, the named facts, the content, and where the rest
+    /// of it was written when it did not fit.
+    /// </remarks>
+    public ValueDescription Description { get; init; } = ValueDescription.Empty;
 }
 
 /// <summary>An artifact and the versions captured of it.</summary>
@@ -215,6 +225,16 @@ public sealed record ArtifactNode
 
     /// <summary>Gets the artifact's lifecycle state, such as Setup or Cleaned.</summary>
     public string State { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets what the artifact is, as its own kind described it.
+    /// </summary>
+    /// <remarks>
+    /// An artifact kind that overrides <c>Describe</c> says what it actually is — a row's table and
+    /// key, a blob's container and content type. What arrived before was a single line reading
+    /// <c>ref=…; state=…; versions=…; latest=…</c>, shown verbatim, semicolons and all.
+    /// </remarks>
+    public ValueDescription Description { get; init; } = ValueDescription.Empty;
 
     /// <summary>
     /// Gets the captured version identifiers, oldest first.

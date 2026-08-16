@@ -145,8 +145,8 @@ public class RunIngestServiceTests : IDisposable
         RunStructure = new TimelineRunStructure
         {
             Stages = [new DebugStageState { Name = "Main", Description = "main", Steps = [Step()] }],
-            Variables = new Dictionary<VariableIdentifier, VariableState>(),
-            Artifacts = new Dictionary<ArtifactIdentifier, TestFramework.Core.Debugger.ArtifactState>()
+            Variables = new Dictionary<VariableIdentifier, DebugValue>(),
+            Artifacts = new Dictionary<ArtifactIdentifier, DebugValue>()
         }
     }, 1);
 

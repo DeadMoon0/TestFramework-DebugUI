@@ -171,8 +171,8 @@ public class RunProjectionTransitionTests
                 new DebugStageState { Name = "Main", Description = "main", Steps = [Step("A"), Step("B")] },
                 new DebugStageState { Name = "Cleanup", Description = "cleanup", Steps = [Step("C")] }
             ],
-            Variables = new Dictionary<VariableIdentifier, VariableState>(),
-            Artifacts = new Dictionary<ArtifactIdentifier, TestFramework.Core.Debugger.ArtifactState>()
+            Variables = new Dictionary<VariableIdentifier, DebugValue>(),
+            Artifacts = new Dictionary<ArtifactIdentifier, DebugValue>()
         }
     });
 

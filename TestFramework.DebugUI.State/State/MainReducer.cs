@@ -211,15 +211,12 @@ public sealed class MainReducer : Reducer<MainState>
     /// Which project a run should be filed under.
     /// </summary>
     /// <remarks>
-    /// The test's own project or assembly first, and the announced path only as a fallback: under a
-    /// test runner that path is the host process, so every run in a suite would file under
-    /// "testhost" and the grouping would say nothing at all.
+    /// The rule itself is Core's, so that grouping runs by project and naming the project in a log
+    /// line cannot drift apart. All that is left here is the fallback for a run whose identity was
+    /// never resolved.
     /// </remarks>
     private static string? ProjectOf(PipeInitTimelineRunSignal init)
-        => init.Identity?.ProjectFilePath
-           ?? init.Identity?.AssemblyName
-           ?? init.Identity?.AssemblyPath
-           ?? init.ProjectPath;
+        => init.Identity?.ProjectDisplayName ?? init.ProjectPath;
 
     /// <summary>
     /// Counts the steps a run announced.

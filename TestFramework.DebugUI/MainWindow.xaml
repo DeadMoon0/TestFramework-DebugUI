@@ -108,7 +108,8 @@
 
                 <runs:UC_RunList HorizontalAlignment="Left" VerticalAlignment="Top" Width="290" MaxHeight="300"/>
 
-                <detail:UC_ArtifactRail HorizontalAlignment="Left" VerticalAlignment="Bottom" Width="290" MaxHeight="320"/>
+                <detail:UC_ValueRail x:Name="ucValues" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                                     Width="290" MaxHeight="360"/>
 
                 <detail:UC_StepDetail HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="390"
                                       Margin="0 0 0 44"/>
@@ -117,6 +118,11 @@
                      it takes the foreground while it is open and gets out of the way when it is not. -->
                 <detail:UC_RunSummary x:Name="ucSummary" HorizontalAlignment="Center" VerticalAlignment="Center"
                                       MaxHeight="620" Visibility="Collapsed" Panel.ZIndex="2"/>
+
+                <!-- Same treatment as the summary: a question about one thing, answered in the
+                     foreground, out of the way once answered. -->
+                <detail:UC_ValueInspector x:Name="ucValueInspector" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                          MaxHeight="720" Visibility="Collapsed" Panel.ZIndex="2"/>
 
                 <!-- Tucked into the corner: it speaks for runs that are not on screen, so it should
                      be reachable without ever being in the way. -->

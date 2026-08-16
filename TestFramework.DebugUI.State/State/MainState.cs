@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.IO;
+using TestFramework.Core.Debugger;
 
 namespace TestFramework.DebugUI.State;
 
@@ -136,29 +136,11 @@ public sealed record RunSummary
     /// <remarks>
     /// A full path is unreadable in a list and identical across every run of one suite up to its last
     /// segment. What distinguishes them is the file name, which is what a person calls the project.
+    /// The shortening itself is Core's, so a run filed under a name here and named in a log line
+    /// cannot come out differently.
     /// </remarks>
     public string Project
-    {
-        get
-        {
-            if (string.IsNullOrWhiteSpace(ProjectPath))
-                return "Unknown project";
-
-            string file = ProjectPath[(ProjectPath.LastIndexOfAny(['/', '\\']) + 1)..];
-
-            if (string.IsNullOrWhiteSpace(file))
-                return ProjectPath;
-
-            // Only a real file extension is trimmed. A bare assembly name is dotted too, and
-            // trimming its last segment would turn "Acme.Billing.Tests" into "Acme.Billing" — a
-            // project that does not exist, sitting beside the one that does.
-            string suffix = Path.GetExtension(file);
-
-            return suffix is ".csproj" or ".dll" or ".exe"
-                ? file[..^suffix.Length]
-                : file;
-        }
-    }
+        => string.IsNullOrWhiteSpace(ProjectPath) ? "Unknown project" : TestIdentity.ShortNameOf(ProjectPath);
 
     /// <summary>
     /// Gets the test this run is an execution of.

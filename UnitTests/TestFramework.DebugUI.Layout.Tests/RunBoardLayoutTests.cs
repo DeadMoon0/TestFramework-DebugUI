@@ -124,11 +124,61 @@ public sealed class RunBoardLayoutTests
 
         Assert.True(consumption.Lane > 0, "A pipe that skips rows should be routed.");
 
-        double rightmostBox = board.Nodes.Where(node => node.Kind != LayoutNodeKind.Stage).Max(node => node.Right);
-        double laneX = consumption.Points.Max(point => point.X);
+        // Clear of the boxes, on whichever side it took. Which side is a separate question, and
+        // demanding the right one here is what made the layout send every pipe the long way round.
+        LayoutNode[] boxes = [.. board.Nodes.Where(node => node.Kind != LayoutNodeKind.Stage)];
+        double leftmostBox = boxes.Min(node => node.X);
+        double rightmostBox = boxes.Max(node => node.Right);
 
-        Assert.True(laneX > rightmostBox, "The routing lane must sit clear of the boxes.");
-        Assert.True(board.Width > laneX, "The board must be wide enough to contain its lanes.");
+        bool clearOfBoxes = consumption.Points.Max(point => point.X) > rightmostBox
+                            || consumption.Points.Min(point => point.X) < leftmostBox;
+
+        Assert.True(clearOfBoxes, "The routing lane must sit clear of the boxes.");
+        Assert.True(board.Width > consumption.Points.Max(point => point.X), "The board must be wide enough to contain its lanes.");
+        Assert.True(consumption.Points.Min(point => point.X) > 0, "Nothing may be drawn off the left of the board.");
+    }
+
+    [Fact]
+    public void APipeLeavesByTheSideItHasLessGroundToCover()
+    {
+        // A pipe that skips rows has to leave the block, and it used to always leave rightwards —
+        // so a value produced at the left edge crossed the entire board twice to reach a lane, and
+        // paid for a lane's width on the far side to do it.
+        LayoutResult board = RunBoardLayout.Compute(GraphBuilder.Run(GraphBuilder.Stage(
+            "Main",
+            GraphBuilder.Step(0, layer: 0, outputs: ["fromTheLeft"]),
+            GraphBuilder.Step(1, layer: 0),
+            GraphBuilder.Step(2, layer: 0),
+            GraphBuilder.Step(3, layer: 0, outputs: ["fromTheRight"]),
+            GraphBuilder.Step(4, layer: 1),
+            GraphBuilder.Step(5, layer: 2, inputs: ["fromTheLeft"]),
+            GraphBuilder.Step(6, layer: 2, inputs: ["fromTheRight"]))));
+
+        LayoutNode[] boxes = [.. board.Nodes.Where(node => node.Kind != LayoutNodeKind.Stage)];
+        double leftmostBox = boxes.Min(node => node.X);
+        double rightmostBox = boxes.Max(node => node.Right);
+
+        LayoutEdge fromLeft = board.Edges.Single(edge => edge.Key == "fromTheLeft");
+        LayoutEdge fromRight = board.Edges.Single(edge => edge.Key == "fromTheRight");
+
+        Assert.True(fromLeft.Points.Min(point => point.X) < leftmostBox, "A pipe at the left edge should leave leftwards.");
+        Assert.True(fromRight.Points.Max(point => point.X) > rightmostBox, "A pipe at the right edge should leave rightwards.");
+    }
+
+    [Fact]
+    public void RoomForALeftLaneIsMadeRatherThanBorrowedFromOffTheBoard()
+    {
+        // The left of the board is a hard edge: a lane placed beyond it is not drawn at all. The
+        // block moves right to make the room instead.
+        LayoutResult board = RunBoardLayout.Compute(GraphBuilder.Run(GraphBuilder.Stage(
+            "Main",
+            GraphBuilder.Step(0, layer: 0, outputs: ["first", "second"]),
+            GraphBuilder.Step(1, layer: 1),
+            GraphBuilder.Step(2, layer: 2, inputs: ["first"]),
+            GraphBuilder.Step(3, layer: 3, inputs: ["second"]))));
+
+        Assert.All(board.Edges, edge => Assert.All(edge.Points, point => Assert.True(point.X > 0, "No pipe may be drawn off the left of the board.")));
+        Assert.All(board.Nodes, node => Assert.True(node.X >= 0, "No box may be drawn off the left of the board."));
     }
 
     [Fact]

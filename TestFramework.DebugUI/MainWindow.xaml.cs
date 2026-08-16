@@ -60,6 +60,9 @@ public partial class MainWindow : Window
         ucBoard.SummaryRequested += () => ucSummary.Visibility = Visibility.Visible;
         ucSummary.Closed += () => ucSummary.Visibility = Visibility.Collapsed;
 
+        ucValues.ValueOpened += (key, isArtifact) => ucValueInspector.Show(key, isArtifact);
+        ucValueInspector.Closed += () => ucValueInspector.Visibility = Visibility.Collapsed;
+
         // The home page is shown on purpose and hidden on purpose. It is deliberately not tied to
         // whether a run is selected: the first live run selects itself, and having the page vanish
         // under the reader because a test started elsewhere would be the tool moving on its own.

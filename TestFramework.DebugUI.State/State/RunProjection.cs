@@ -110,35 +110,37 @@ public static partial class RunProjection
         return declared.ToImmutable();
     }
 
-    private static ImmutableDictionary<string, ValueNode> ProjectVariables(IReadOnlyDictionary<VariableIdentifier, VariableState> variables)
+    private static ImmutableDictionary<string, ValueNode> ProjectVariables(IReadOnlyDictionary<VariableIdentifier, DebugValue> variables)
     {
         ImmutableDictionary<string, ValueNode>.Builder projected = ImmutableDictionary.CreateBuilder<string, ValueNode>(StringComparer.Ordinal);
 
-        foreach (KeyValuePair<VariableIdentifier, VariableState> entry in variables)
+        foreach (KeyValuePair<VariableIdentifier, DebugValue> entry in variables)
         {
             projected[entry.Key.Identifier] = new ValueNode
             {
                 Key = entry.Key.Identifier,
                 DisplayText = entry.Value.Envelope.DisplayText,
                 TypeName = entry.Value.Envelope.TypeName,
-                SchemaKey = entry.Value.Envelope.SchemaKey
+                SchemaKey = entry.Value.Envelope.SchemaKey,
+                Description = ValueDescription.From(entry.Value.Envelope.Description)
             };
         }
 
         return projected.ToImmutable();
     }
 
-    private static ImmutableDictionary<string, ArtifactNode> ProjectArtifacts(IReadOnlyDictionary<ArtifactIdentifier, TestFramework.Core.Debugger.ArtifactState> artifacts)
+    private static ImmutableDictionary<string, ArtifactNode> ProjectArtifacts(IReadOnlyDictionary<ArtifactIdentifier, DebugValue> artifacts)
     {
         ImmutableDictionary<string, ArtifactNode>.Builder projected = ImmutableDictionary.CreateBuilder<string, ArtifactNode>(StringComparer.Ordinal);
 
-        foreach (KeyValuePair<ArtifactIdentifier, TestFramework.Core.Debugger.ArtifactState> entry in artifacts)
+        foreach (KeyValuePair<ArtifactIdentifier, DebugValue> entry in artifacts)
         {
             projected[entry.Key.Identifier] = new ArtifactNode
             {
                 Key = entry.Key.Identifier,
                 DisplayText = entry.Value.Envelope.DisplayText,
-                SchemaKey = entry.Value.Envelope.SchemaKey
+                SchemaKey = entry.Value.Envelope.SchemaKey,
+                Description = ValueDescription.From(entry.Value.Envelope.Description)
             };
         }
 

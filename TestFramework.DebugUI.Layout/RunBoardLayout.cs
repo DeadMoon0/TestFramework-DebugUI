@@ -68,8 +68,10 @@ public static class RunBoardLayout
         /// <summary>How many horizontal tracks each channel has to hold.</summary>
         private readonly Dictionary<int, int> channelTracks = [];
 
-        private double laneBase;
-        private int laneCount;
+        private double leftLaneBase;
+        private double rightLaneBase;
+        private int leftLaneCount;
+        private int rightLaneCount;
 
         internal LayoutResult Build()
         {
@@ -245,7 +247,57 @@ public static class RunBoardLayout
                 }
             }
 
+            AssignLanes();
             AssignTracks();
+        }
+
+        /// <summary>
+        /// Sends each long pipe out the side it has less distance to travel.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A pipe crossing more than one row cannot go through the rows between, so it leaves the
+        /// block entirely and comes back at the far end. Which side it leaves by was fixed to the
+        /// right, which is wrong whenever both ends sit near the left edge: the pipe crossed the whole
+        /// board twice to reach a lane, and every such pipe added another lane's width to a diagram
+        /// that did not need to be that wide.
+        /// </para>
+        /// <para>
+        /// The comparison is between the two detours a pipe would actually make — out to the lane and
+        /// back, at both ends. It survives the shift below because moving everything by the same
+        /// amount moves both edges and both endpoints together, which is what makes deciding the side
+        /// before making room for it sound.
+        /// </para>
+        /// </remarks>
+        private void AssignLanes()
+        {
+            foreach (Wire wire in wires.Where(wire => wire.IsLong).OrderBy(wire => wire.FromRow))
+            {
+                wire.OnLeft = GoesLeft(wire);
+                wire.Lane = wire.OnLeft ? ++leftLaneCount : ++rightLaneCount;
+            }
+
+            // Lanes on the left need room the board did not reserve, and a negative coordinate is not
+            // room. Everything moves right instead, once, by exactly what the left lanes take.
+            if (leftLaneCount > 0)
+                ShiftRight(measurements.LaneGap + ((leftLaneCount - 1) * measurements.LaneWidth));
+
+            leftLaneBase = measurements.Snap(ContentLeft() - measurements.LaneGap);
+            rightLaneBase = measurements.Snap(ContentRight() + measurements.LaneGap);
+        }
+
+        /// <summary>Whether leaving to the left is the shorter journey for this pipe.</summary>
+        private bool GoesLeft(Wire wire)
+        {
+            double reach = wire.SourceX + wire.Consumer.InputX[wire.Declared.Key];
+
+            return reach - (2 * ContentLeft()) < (2 * ContentRight()) - reach;
+        }
+
+        private void ShiftRight(double distance)
+        {
+            foreach (StepBox step in steps.Values)
+                step.ShiftRight(distance);
         }
 
         /// <summary>
@@ -258,13 +310,6 @@ public static class RunBoardLayout
         /// </remarks>
         private void AssignTracks()
         {
-            laneBase = measurements.Snap(ContentRight() + measurements.LaneGap);
-
-            // A pipe crossing more than one row cannot go through the rows between, so it leaves for
-            // a lane of its own to the right of everything and comes back at the far end.
-            foreach (Wire wire in wires.Where(wire => wire.IsLong).OrderBy(wire => wire.FromRow))
-                wire.Lane = ++laneCount;
-
             Dictionary<int, List<Run>> byChannel = [];
 
             // Straight drops first: they claim no track, so settling them up front keeps them out of
@@ -285,7 +330,7 @@ public static class RunBoardLayout
             // than discovering too late that there is no room above.
             foreach (Wire wire in wires.Where(wire => wire.IsLong).OrderBy(wire => wire.SourceX))
             {
-                wire.SourceTrack = Reserve(byChannel, wire.FromRow, wire.SourceX, LaneX(wire.Lane),
+                wire.SourceTrack = Reserve(byChannel, wire.FromRow, wire.SourceX, LaneX(wire),
                     dropX: wire.SourceX, riseX: double.NaN);
             }
 
@@ -299,7 +344,7 @@ public static class RunBoardLayout
 
             foreach (Wire wire in wires.Where(wire => wire.IsLong))
             {
-                wire.TargetTrack = Reserve(byChannel, wire.ToRow - 1, LaneX(wire.Lane),
+                wire.TargetTrack = Reserve(byChannel, wire.ToRow - 1, LaneX(wire),
                     wire.Consumer.InputX[wire.Declared.Key],
                     dropX: double.NaN,
                     riseX: wire.Consumer.InputX[wire.Declared.Key]);
@@ -440,7 +485,12 @@ public static class RunBoardLayout
             return measurements.Snap(row.ChannelTop + measurements.PipeLead + (track * measurements.TrackSpacing));
         }
 
-        private double LaneX(int lane) => measurements.Snap(laneBase + ((lane - 1) * measurements.LaneWidth));
+        private double LaneX(Wire wire) => LaneX(wire.OnLeft, wire.Lane);
+
+        /// <summary>Where a lane sits: lane one nearest the block, the rest stacked outwards.</summary>
+        private double LaneX(bool onLeft, int lane) => measurements.Snap(onLeft
+            ? leftLaneBase - ((lane - 1) * measurements.LaneWidth)
+            : rightLaneBase + ((lane - 1) * measurements.LaneWidth));
 
         private LayoutResult Materialise()
         {
@@ -464,7 +514,7 @@ public static class RunBoardLayout
 
             AddUnconnectedPorts();
 
-            double right = laneCount == 0 ? ContentRight() : LaneX(laneCount);
+            double right = rightLaneCount == 0 ? ContentRight() : LaneX(onLeft: false, rightLaneCount);
 
             return new LayoutResult
             {
@@ -540,7 +590,7 @@ public static class RunBoardLayout
 
             if (wire.IsLong)
             {
-                double lane = LaneX(wire.Lane);
+                double lane = LaneX(wire);
                 double targetTrack = TrackY(wire.ToRow - 1, wire.TargetTrack);
 
                 points.Add(new LayoutPoint(lane, sourceTrack));
@@ -646,6 +696,9 @@ public static class RunBoardLayout
         /// <summary>The right edge of the content the pipes have to route around.</summary>
         private double ContentRight() => steps.Values.Max(step => step.Right(measurements));
 
+        /// <summary>The left edge of the content the pipes have to route around.</summary>
+        private double ContentLeft() => steps.Values.Min(step => step.X);
+
         private const double MinimumValueWidth = 60;
 
         /// <summary>
@@ -711,6 +764,25 @@ public static class RunBoardLayout
 
             internal double Right(LayoutOptions measurements) => x + measurements.StepWidth;
 
+            /// <summary>
+            /// Moves the step and everything placed against it.
+            /// </summary>
+            /// <remarks>
+            /// The connectors move with the card because their positions were derived from it and are
+            /// then held as absolute numbers. Moving the card alone would leave every pipe attached to
+            /// where the card used to be.
+            /// </remarks>
+            internal void ShiftRight(double distance)
+            {
+                x += distance;
+
+                foreach (string key in InputX.Keys.ToArray())
+                    InputX[key] += distance;
+
+                foreach (string key in OutputX.Keys.ToArray())
+                    OutputX[key] += distance;
+            }
+
             internal double Bottom(LayoutOptions measurements) => row.StepTop + measurements.StepHeight;
 
             internal LayoutNode ToNode(LayoutOptions measurements) => new()
@@ -748,6 +820,9 @@ public static class RunBoardLayout
             internal bool IsStraight { get; set; }
 
             internal int Lane { get; set; }
+
+            /// <summary>Which side of the block the pipe leaves by, being the shorter way round.</summary>
+            internal bool OnLeft { get; set; }
 
             internal int SourceTrack { get; set; }
 

@@ -86,6 +86,55 @@ public sealed class TimelineSamplesTests(ITestOutputHelper outputHelper)
         Assert.Throws<TimelineRunFailedException>(run.EnsureRanToCompletion);
     }
 
+    /// <summary>
+    /// A run whose values are too large to send, which is the case the value files exist for.
+    /// </summary>
+    /// <remarks>
+    /// Every other sample assigns something that fits in a preview, so without this one nothing here
+    /// ever drives the path where a value is written to the run's output and the UI shows a
+    /// reference to it instead of the content.
+    /// </remarks>
+    [Fact]
+    public async Task LargeValues_AreWrittenToTheRunOutput()
+    {
+        Timeline timeline = Timeline.Create()
+            .SetVariable("orderIds", Var.Const(Enumerable.Range(1, 4000).ToArray()))
+            .Transform("report", Var.Ref<int[]>("orderIds"), ids => string.Join(Environment.NewLine, (ids ?? []).Select(id => $"order {id} accepted")))
+            .SetVariable("shortNote", Var.Const("small enough to send"))
+
+            // Bytes as well as text, so the binary path is exercised too: the preview arrives as hex
+            // and the whole value is written as a .bin someone can open with whatever reads it.
+            .SetVariable("screenshot", Var.Const(SampleBytes(9000)))
+            .Build();
+
+        TimelineRun run = await timeline.SetupRun(outputHelper).RunAsync();
+
+        run.EnsureRanToCompletion();
+        Assert.Equal(4000, run.VariableStore.GetVariable<int[]>("orderIds")!.Length);
+        Assert.Equal(9000, run.VariableStore.GetVariable<byte[]>("screenshot")!.Length);
+    }
+
+    /// <summary>
+    /// Bytes that begin with a PNG header and then carry readable text.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not random. A dump of random bytes shows nothing about whether the dump works;
+    /// these have a recognisable head, a run of unprintable bytes, and text in the middle, so all
+    /// three columns can be judged at a glance.
+    /// </remarks>
+    private static byte[] SampleBytes(int length)
+    {
+        byte[] header = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+        byte[] bytes = new byte[length];
+
+        header.CopyTo(bytes, 0);
+
+        for (int index = header.Length; index < length; index++)
+            bytes[index] = (byte)(index % 96 == 0 ? 0 : 'a' + (index % 26));
+
+        return bytes;
+    }
+
     [Fact]
     public async Task SetupArtifactInput_Completes()
     {

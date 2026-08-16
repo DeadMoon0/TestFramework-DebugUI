@@ -141,9 +141,9 @@ public class RunProjectionTests
                         Steps = [CreateStep("Tidy", new StepIOContract())]
                     }
                 ],
-                Variables = new Dictionary<VariableIdentifier, VariableState>
+                Variables = new Dictionary<VariableIdentifier, DebugValue>
                 {
-                    [new VariableIdentifier("orderId")] = new VariableState
+                    [new VariableIdentifier("orderId")] = new DebugValue
                     {
                         Key = "orderId",
                         Envelope = new DebugValueEnvelope
@@ -155,9 +155,9 @@ public class RunProjectionTests
                         }
                     }
                 },
-                Artifacts = new Dictionary<ArtifactIdentifier, TestFramework.Core.Debugger.ArtifactState>
+                Artifacts = new Dictionary<ArtifactIdentifier, DebugValue>
                 {
-                    [new ArtifactIdentifier("receipt")] = new TestFramework.Core.Debugger.ArtifactState
+                    [new ArtifactIdentifier("receipt")] = new DebugValue
                     {
                         Key = "receipt",
                         Envelope = new DebugValueEnvelope

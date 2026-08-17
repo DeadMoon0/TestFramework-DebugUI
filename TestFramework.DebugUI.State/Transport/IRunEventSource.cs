@@ -63,6 +63,20 @@ public sealed record AvailableRun
     /// <summary>Gets the assembly or host path the run came from.</summary>
     public string? ProjectPath { get; init; }
 
+    /// <summary>Gets the project file the test lives in, when the run recorded one.</summary>
+    /// <remarks>
+    /// Carried separately from <see cref="ProjectPath"/>, which is for reading and may be a bare
+    /// assembly name. Repeating a run needs something that can be built.
+    /// </remarks>
+    public string? ProjectFilePath { get; init; }
+
+    /// <summary>Gets whether the recorded identity is complete enough to run the test again.</summary>
+    /// <remarks>
+    /// Read from the sidecar rather than from the journal, which is the whole reason the sidecar
+    /// carries the identity: the picker can offer re-run for a run nobody has opened.
+    /// </remarks>
+    public bool CanRerun { get; init; }
+
     /// <summary>Gets the path of the journal holding the run's events.</summary>
     public required string JournalPath { get; init; }
 }

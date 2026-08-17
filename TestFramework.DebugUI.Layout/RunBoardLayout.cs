@@ -63,6 +63,8 @@ public static class RunBoardLayout
         private readonly List<Row> rows = [];
         private readonly Dictionary<StepKey, StepBox> steps = [];
         private readonly List<Wire> wires = [];
+        private readonly List<Trunk> trunks = [];
+        private readonly List<Column> columns = [];
         private readonly Dictionary<string, LayoutPort> ports = new(StringComparer.Ordinal);
 
         /// <summary>How many horizontal tracks each channel has to hold.</summary>
@@ -252,7 +254,8 @@ public static class RunBoardLayout
         }
 
         /// <summary>
-        /// Sends each long pipe out the side it has less distance to travel.
+        /// Sends each long pipe out the side it has less distance to travel, in the innermost lane
+        /// that is free for the rows it has to pass.
         /// </summary>
         /// <remarks>
         /// <para>
@@ -271,28 +274,205 @@ public static class RunBoardLayout
         /// </remarks>
         private void AssignLanes()
         {
-            foreach (Wire wire in wires.Where(wire => wire.IsLong).OrderBy(wire => wire.FromRow))
+            // One lane per value leaving a connector, not one per pipe. Every pipe in a group carries
+            // the same value out of the same connector to a different consumer, so they are one flow
+            // that forks — drawing them as one trunk is not a simplification, it is what is actually
+            // happening. Six pipes fanning a variable out to three steps used to take six lanes and
+            // cross the board twelve times; as trunks they take one each.
+            trunks.AddRange(wires
+                .Where(wire => wire.IsLong)
+                .GroupBy(wire => (Producer: wire.Producer.NodeId, wire.Declared.Key))
+                .Select(group => new Trunk(group.Key.Key, [.. group]))
+
+                // Shortest first, so the pipe with least to travel gets the lane nearest the block. By
+                // arrival order instead, a pipe skipping a single row could be handed the outermost
+                // lane while one skipping six sat inside it — the short hop then made the longer
+                // detour, which is precisely backwards.
+                .OrderBy(trunk => trunk.Span)
+                .ThenBy(trunk => trunk.FirstChannel)
+                .ThenBy(trunk => trunk.Key, StringComparer.Ordinal));
+
+            foreach (Trunk trunk in trunks)
             {
-                wire.OnLeft = GoesLeft(wire);
-                wire.Lane = wire.OnLeft ? ++leftLaneCount : ++rightLaneCount;
+                // Decided once for the whole trunk. Letting each pipe choose its own column would
+                // split the very thing being joined.
+                Column column = ChooseColumn(trunk);
+                column.Take(trunk);
+
+                trunk.Column = column;
+
+                foreach (Wire wire in trunk.Wires)
+                    wire.Column = column;
             }
 
             // Lanes on the left need room the board did not reserve, and a negative coordinate is not
-            // room. Everything moves right instead, once, by exactly what the left lanes take.
+            // room. Everything moves right instead, once, by exactly what the left lanes take. Columns
+            // inside the block move with it, having been chosen against where the boxes were.
             if (leftLaneCount > 0)
-                ShiftRight(measurements.LaneGap + ((leftLaneCount - 1) * measurements.LaneWidth));
+            {
+                double distance = measurements.LaneGap + ((leftLaneCount - 1) * measurements.LaneWidth);
+
+                ShiftRight(distance);
+
+                foreach (Column column in columns)
+                    column.ShiftRight(distance);
+            }
 
             leftLaneBase = measurements.Snap(ContentLeft() - measurements.LaneGap);
             rightLaneBase = measurements.Snap(ContentRight() + measurements.LaneGap);
         }
 
-        /// <summary>Whether leaving to the left is the shorter journey for this pipe.</summary>
-        private bool GoesLeft(Wire wire)
+        /// <summary>
+        /// Picks the column a trunk descends in: the cheapest of the ones already in use, a fresh one
+        /// inside the block, and a fresh lane outside either edge.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Every long pipe used to leave the block outright, on the grounds that a row might be in the
+        /// way. Only the rows it actually passes can be in the way, and a board whose rows are one
+        /// step wide leaves a corridor down each side of the stage that nothing occupies. Stepping
+        /// over all of that to reach a lane outside is what made the pipes long and the board wide.
+        /// </para>
+        /// <para>
+        /// Cheapest means least horizontal travel, counted over the whole trunk: out of the connector
+        /// and back in at every consumer. That is the quantity a reader sees as a detour, and
+        /// measuring it directly is what removes the need to guess a side up front.
+        /// </para>
+        /// </remarks>
+        private Column ChooseColumn(Trunk trunk)
         {
-            double reach = wire.SourceX + wire.Consumer.InputX[wire.Declared.Key];
+            Column? shared = null;
+            double sharedCost = double.PositiveInfinity;
 
-            return reach - (2 * ContentLeft()) < (2 * ContentRight()) - reach;
+            foreach (Column column in columns)
+            {
+                if (!column.Accepts(trunk) || !IsClearFor(trunk, ColumnCostX(column)))
+                    continue;
+
+                double cost = trunk.Travel(ColumnCostX(column));
+
+                if (cost < sharedCost)
+                {
+                    sharedCost = cost;
+                    shared = column;
+                }
+            }
+
+            double inside = double.NaN;
+            double insideCost = double.PositiveInfinity;
+
+            foreach (double candidate in InsideCandidates(trunk))
+            {
+                double cost = trunk.Travel(candidate);
+
+                if (cost < insideCost)
+                {
+                    insideCost = cost;
+                    inside = candidate;
+                }
+            }
+
+            double leftCost = trunk.Travel(PendingLaneX(onLeft: true, leftLaneCount + 1));
+            double rightCost = trunk.Travel(PendingLaneX(onLeft: false, rightLaneCount + 1));
+
+            // Reuse wins ties: a column already on the board is one fewer line to follow, and a tie
+            // means the reader pays nothing for it.
+            if (shared is not null && sharedCost <= insideCost && sharedCost <= leftCost && sharedCost <= rightCost)
+                return shared;
+
+            if (insideCost <= leftCost && insideCost <= rightCost)
+                return Claim(Column.Inside(columns.Count + 1, inside));
+
+            return leftCost <= rightCost
+                ? Claim(Column.Outside(columns.Count + 1, onLeft: true, ++leftLaneCount))
+                : Claim(Column.Outside(columns.Count + 1, onLeft: false, ++rightLaneCount));
         }
+
+        private Column Claim(Column column)
+        {
+            columns.Add(column);
+            return column;
+        }
+
+        /// <summary>
+        /// Every position inside the block a trunk could descend in without hitting anything.
+        /// </summary>
+        /// <remarks>
+        /// Kept a whole lane's width apart from the columns already in use, so two trunks descending
+        /// near one another still read as two pipes rather than as a thick one.
+        /// </remarks>
+        private IEnumerable<double> InsideCandidates(Trunk trunk)
+        {
+            double left = ContentLeft();
+            double right = ContentRight();
+
+            for (double x = left; x <= right; x += measurements.Grid)
+            {
+                double candidate = measurements.Snap(x);
+
+                if (!IsClearFor(trunk, candidate))
+                    continue;
+
+                if (columns.Any(column => Math.Abs(ColumnCostX(column) - candidate) < measurements.LaneWidth))
+                    continue;
+
+                yield return candidate;
+            }
+        }
+
+        /// <summary>
+        /// Whether a trunk could run down a given column without crossing a box or joining a pipe.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Two separate checks, over two different sets of rows. The run passes through the rows
+        /// strictly between its ends, so those boxes have to be clear of it by a margin. It passes
+        /// through the channels at both ends too, where pipes drop out of the row above and rise into
+        /// the row below at their connectors — so a column level with one of those connectors would
+        /// end up drawn along that pipe, which is the one thing the routing may never do.
+        /// </para>
+        /// <para>
+        /// The connector check reaches one row further at each end than the box check, and that is not
+        /// an oversight: the run starts below the row it leaves and stops above the row it enters, so
+        /// it may pass under a box it could not pass through.
+        /// </para>
+        /// </remarks>
+        private bool IsClearFor(Trunk trunk, double x)
+        {
+            for (int index = trunk.FirstChannel + 1; index <= trunk.LastChannel; index++)
+            {
+                foreach (StepBox box in BoxesIn(rows[index]))
+                {
+                    if (x > box.X - measurements.LaneWidth && x < box.Right(measurements) + measurements.LaneWidth)
+                        return false;
+                }
+            }
+
+            int last = Math.Min(trunk.LastChannel + 1, rows.Count - 1);
+
+            for (int index = trunk.FirstChannel; index <= last; index++)
+            {
+                foreach (StepBox box in BoxesIn(rows[index]))
+                {
+                    if (box.HasConnectorNear(x, measurements.ConnectorPitch / 2))
+                        return false;
+                }
+            }
+
+            return true;
+        }
+
+        private IEnumerable<StepBox> BoxesIn(Row row)
+            => row.Steps.Select(step => steps[new StepKey(row.StageName, step.StepId)]);
+
+        /// <summary>Where a column sits for the purpose of comparing detours, before any shift.</summary>
+        private double ColumnCostX(Column column)
+            => column.IsInside ? column.X : PendingLaneX(column.OnLeft, column.Lane);
+
+        /// <summary>Where a lane outside the block would land if one more were opened on that side.</summary>
+        private double PendingLaneX(bool onLeft, int lane) => onLeft
+            ? ContentLeft() - measurements.LaneGap - ((lane - 1) * measurements.LaneWidth)
+            : ContentRight() + measurements.LaneGap + ((lane - 1) * measurements.LaneWidth);
 
         private void ShiftRight(double distance)
         {
@@ -328,10 +508,16 @@ public static class RunBoardLayout
             // bottom, beside the connector it enters. Everything else sits between. Ordering this
             // way is what lets a dropper find a track above the risers sharing its column, rather
             // than discovering too late that there is no room above.
-            foreach (Wire wire in wires.Where(wire => wire.IsLong).OrderBy(wire => wire.SourceX))
+            // One track for the whole trunk, not one per pipe. All of them leave the same connector
+            // for the same lane, so separate tracks bought nothing and cost a rung: three pipes drew
+            // three horizontals stacked at the head of a trunk that is otherwise a single line.
+            foreach (Trunk trunk in trunks.OrderBy(trunk => trunk.SourceX).ThenBy(trunk => trunk.Key, StringComparer.Ordinal))
             {
-                wire.SourceTrack = Reserve(byChannel, wire.FromRow, wire.SourceX, LaneX(wire),
-                    dropX: wire.SourceX, riseX: double.NaN);
+                trunk.SourceTrack = Reserve(byChannel, trunk.FirstChannel, trunk.SourceX, ColumnX(trunk.Column),
+                    dropX: trunk.SourceX, riseX: double.NaN);
+
+                foreach (Wire wire in trunk.Wires)
+                    wire.SourceTrack = trunk.SourceTrack;
             }
 
             foreach (Wire wire in wires.Where(wire => !wire.IsLong && !wire.IsStraight))
@@ -344,10 +530,9 @@ public static class RunBoardLayout
 
             foreach (Wire wire in wires.Where(wire => wire.IsLong))
             {
-                wire.TargetTrack = Reserve(byChannel, wire.ToRow - 1, LaneX(wire),
-                    wire.Consumer.InputX[wire.Declared.Key],
+                wire.TargetTrack = Reserve(byChannel, wire.ToRow - 1, ColumnX(wire.Column!), wire.TargetX,
                     dropX: double.NaN,
-                    riseX: wire.Consumer.InputX[wire.Declared.Key]);
+                    riseX: wire.TargetX);
             }
 
             foreach ((int channel, List<Run> runs) in byChannel)
@@ -485,7 +670,9 @@ public static class RunBoardLayout
             return measurements.Snap(row.ChannelTop + measurements.PipeLead + (track * measurements.TrackSpacing));
         }
 
-        private double LaneX(Wire wire) => LaneX(wire.OnLeft, wire.Lane);
+        /// <summary>Where a column finally sits, once the board has been made room in.</summary>
+        private double ColumnX(Column column)
+            => column.IsInside ? column.X : LaneX(column.OnLeft, column.Lane);
 
         /// <summary>Where a lane sits: lane one nearest the block, the rest stacked outwards.</summary>
         private double LaneX(bool onLeft, int lane) => measurements.Snap(onLeft
@@ -590,11 +777,11 @@ public static class RunBoardLayout
 
             if (wire.IsLong)
             {
-                double lane = LaneX(wire);
+                double column = ColumnX(wire.Column!);
                 double targetTrack = TrackY(wire.ToRow - 1, wire.TargetTrack);
 
-                points.Add(new LayoutPoint(lane, sourceTrack));
-                points.Add(new LayoutPoint(lane, targetTrack));
+                points.Add(new LayoutPoint(column, sourceTrack));
+                points.Add(new LayoutPoint(column, targetTrack));
                 points.Add(new LayoutPoint(to.X, targetTrack));
             }
             else
@@ -614,7 +801,7 @@ public static class RunBoardLayout
                 FromPortId = from.Id,
                 ToPortId = to.Id,
                 Key = wire.Declared.Key,
-                Lane = wire.Lane,
+                Lane = wire.Column?.Index ?? 0,
                 Points = Simplify(points)
             };
         }
@@ -729,6 +916,110 @@ public static class RunBoardLayout
 
         private readonly record struct Origin(StepBox Producer, int Row);
 
+        /// <summary>
+        /// A vertical line down the board that trunks descend in.
+        /// </summary>
+        /// <remarks>
+        /// Either a position inside the block, in the space a narrow row leaves beside it, or a lane
+        /// outside one of its edges. The two are the same thing to everything downstream — a column is
+        /// only ever asked where it is and whether it is free — which is what lets the choice between
+        /// them be made by cost rather than by rule.
+        /// </remarks>
+        private sealed class Column
+        {
+            private readonly List<Trunk> occupants = [];
+
+            private Column(int index) => Index = index;
+
+            /// <summary>An identity for the view, so pipes sharing a column can be told they do.</summary>
+            internal int Index { get; }
+
+            internal bool IsInside { get; private init; }
+
+            /// <summary>Where the column sits, for an inside one.</summary>
+            internal double X { get; private set; }
+
+            internal bool OnLeft { get; private init; }
+
+            /// <summary>Which lane out from the edge, for an outside one.</summary>
+            internal int Lane { get; private init; }
+
+            internal static Column Inside(int index, double x) => new(index) { IsInside = true, X = x };
+
+            internal static Column Outside(int index, bool onLeft, int lane) => new(index) { OnLeft = onLeft, Lane = lane };
+
+            /// <summary>Whether a trunk could descend here without meeting one already doing so.</summary>
+            internal bool Accepts(Trunk trunk) => occupants.All(trunk.Clears);
+
+            internal void Take(Trunk trunk) => occupants.Add(trunk);
+
+            internal void ShiftRight(double distance) => X += distance;
+        }
+
+        /// <summary>
+        /// Every long pipe carrying one value out of one connector, routed as a single flow.
+        /// </summary>
+        /// <remarks>
+        /// These are not separate pipes that happen to look alike: it is one value leaving one port
+        /// and forking to reach several steps. Routing them together is what stops a fan-out taking a
+        /// lane per consumer, and it is the only reason the pipes may share a line — the routing tests
+        /// excuse an overlap between two runs out of the same port for exactly this case.
+        /// </remarks>
+        private sealed class Trunk(string key, List<Wire> members)
+        {
+            internal string Key => key;
+
+            internal List<Wire> Wires => members;
+
+            /// <summary>Where the flow leaves the producing step.</summary>
+            internal double SourceX => members[0].SourceX;
+
+            /// <summary>The channel the flow drops into, being the one below its producer.</summary>
+            internal int FirstChannel { get; } = members.Min(wire => wire.FromRow);
+
+            /// <summary>The channel the last consumer is reached from.</summary>
+            internal int LastChannel { get; } = members.Max(wire => wire.ToRow) - 1;
+
+            /// <summary>How many channels the flow occupies, being how far out of its way it goes.</summary>
+            internal int Span => LastChannel - FirstChannel;
+
+            /// <summary>The vertical line this flow descends in.</summary>
+            internal Column Column { get; set; } = null!;
+
+            internal int SourceTrack { get; set; }
+
+            /// <summary>
+            /// How far sideways the whole flow would travel to descend at a given position.
+            /// </summary>
+            /// <remarks>
+            /// Counted out of the connector and back in at every consumer, because that is the detour
+            /// a reader actually sees. A trunk feeding three steps pays the return trip three times,
+            /// so it is worth more to place well than one feeding a single step — which falls out of
+            /// measuring instead of ranking.
+            /// </remarks>
+            internal double Travel(double x)
+            {
+                double travel = Math.Abs(SourceX - x);
+
+                foreach (Wire wire in members)
+                    travel += Math.Abs(wire.TargetX - x);
+
+                return travel;
+            }
+
+            /// <summary>
+            /// Whether this flow and another never occupy the lane at the same height.
+            /// </summary>
+            /// <remarks>
+            /// Measured in channels rather than in pixels because a lane has to be picked before the
+            /// channels have been given their depths, and the vertical run is bounded by a track in
+            /// its first channel and one in its last. Two flows with no channel in common therefore
+            /// cannot touch, whatever those depths turn out to be.
+            /// </remarks>
+            internal bool Clears(Trunk other)
+                => LastChannel < other.FirstChannel || FirstChannel > other.LastChannel;
+        }
+
         private sealed class Row(int index, string stageName, ImmutableList<StepNode> steps, bool isVerdict = false)
         {
             internal int Index => index;
@@ -763,6 +1054,10 @@ public static class RunBoardLayout
             internal string NodeId => row.IsVerdict ? "verdict" : $"step:{row.StageName}/{step.StepId}";
 
             internal double Right(LayoutOptions measurements) => x + measurements.StepWidth;
+
+            /// <summary>Whether any connector on this box sits close enough to an x to be run along.</summary>
+            internal bool HasConnectorNear(double x, double clearance)
+                => InputX.Values.Concat(OutputX.Values).Any(connector => Math.Abs(connector - x) < clearance);
 
             /// <summary>
             /// Moves the step and everything placed against it.
@@ -807,6 +1102,9 @@ public static class RunBoardLayout
             /// <summary>Where the pipe leaves the producing step.</summary>
             internal double SourceX => producer.OutputX[declared.Key];
 
+            /// <summary>Where the pipe arrives at the consuming step.</summary>
+            internal double TargetX => consumer.InputX[declared.Key];
+
             internal StepIO Declared => declared;
 
             internal int FromRow => fromRow;
@@ -819,10 +1117,8 @@ public static class RunBoardLayout
             /// <summary>Whether the two connectors line up, making the pipe a single vertical drop.</summary>
             internal bool IsStraight { get; set; }
 
-            internal int Lane { get; set; }
-
-            /// <summary>Which side of the block the pipe leaves by, being the shorter way round.</summary>
-            internal bool OnLeft { get; set; }
+            /// <summary>The vertical line the pipe descends in, shared with the rest of its trunk.</summary>
+            internal Column? Column { get; set; }
 
             internal int SourceTrack { get; set; }
 

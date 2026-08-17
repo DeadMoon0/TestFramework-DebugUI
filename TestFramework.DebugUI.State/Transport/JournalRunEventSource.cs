@@ -71,6 +71,36 @@ public sealed class JournalRunEventSource : IRunEventSource
     }
 
     /// <summary>
+    /// Reads a recorded run's events without raising anything.
+    /// </summary>
+    /// <remarks>
+    /// For callers that want a run's contents rather than to replay it into the UI — comparing a run
+    /// against an earlier one, for instance. Deliberately silent: a damaged line is skipped, and
+    /// nothing reaches the feed, because this runs off the back of a selection the user did not
+    /// explicitly make and a warning about a file they did not open would be noise. Returns empty when
+    /// the journal is gone, which the caller reports in its own terms.
+    /// </remarks>
+    public static ImmutableList<DebugEnvelope> ReadEnvelopes(string journalPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(journalPath);
+
+        if (!File.Exists(journalPath))
+            return ImmutableList<DebugEnvelope>.Empty;
+
+        ImmutableList<DebugEnvelope>.Builder envelopes = ImmutableList.CreateBuilder<DebugEnvelope>();
+
+        foreach (string line in ReadLines(journalPath))
+        {
+            DebugEnvelope? envelope = TryParse(line);
+
+            if (envelope is not null)
+                envelopes.Add(envelope);
+        }
+
+        return envelopes.ToImmutable();
+    }
+
+    /// <summary>
     /// Lists the runs recorded under a journal root, newest first.
     /// </summary>
     /// <remarks>
@@ -127,6 +157,8 @@ public sealed class JournalRunEventSource : IRunEventSource
                               ?? metadata.Identity?.AssemblyName
                               ?? metadata.Identity?.AssemblyPath
                               ?? metadata.ProjectPath,
+                ProjectFilePath = metadata.Identity?.ProjectFilePath,
+                CanRerun = metadata.Identity?.CanRerun ?? false,
                 JournalPath = Path.Combine(runsDirectory, metadata.JournalFileName)
             };
         }

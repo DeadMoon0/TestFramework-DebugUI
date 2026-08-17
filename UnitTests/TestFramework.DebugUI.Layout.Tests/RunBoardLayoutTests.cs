@@ -155,14 +155,48 @@ public sealed class RunBoardLayoutTests
             GraphBuilder.Step(6, layer: 2, inputs: ["fromTheRight"]))));
 
         LayoutNode[] boxes = [.. board.Nodes.Where(node => node.Kind != LayoutNodeKind.Stage)];
-        double leftmostBox = boxes.Min(node => node.X);
-        double rightmostBox = boxes.Max(node => node.Right);
+        double centre = (boxes.Min(node => node.X) + boxes.Max(node => node.Right)) / 2;
 
         LayoutEdge fromLeft = board.Edges.Single(edge => edge.Key == "fromTheLeft");
         LayoutEdge fromRight = board.Edges.Single(edge => edge.Key == "fromTheRight");
 
-        Assert.True(fromLeft.Points.Min(point => point.X) < leftmostBox, "A pipe at the left edge should leave leftwards.");
-        Assert.True(fromRight.Points.Max(point => point.X) > rightmostBox, "A pipe at the right edge should leave rightwards.");
+        // Which side, not how far out: a pipe that can descend inside the block should, so the test
+        // is that each keeps to its own half rather than that both step over everything.
+        Assert.True(fromLeft.Points.Min(point => point.X) < centre, "A pipe at the left edge should descend on the left.");
+        Assert.True(fromRight.Points.Max(point => point.X) > centre, "A pipe at the right edge should descend on the right.");
+    }
+
+    [Fact]
+    public void APipePassingOnlyNarrowRowsDescendsInsideTheBlock()
+    {
+        // The rows it passes are one step wide and the widest row is three, so there is a corridor
+        // down each side of the stage that nothing occupies. Leaving the block to get past a row that
+        // was never in the way is what made pipes long and boards wide.
+        LayoutResult board = RunBoardLayout.Compute(GraphBuilder.Run(GraphBuilder.Stage(
+            "Main",
+            GraphBuilder.Step(0, layer: 0, outputs: ["carried"]),
+            GraphBuilder.Step(1, layer: 0),
+            GraphBuilder.Step(2, layer: 0),
+            GraphBuilder.Step(3, layer: 1),
+            GraphBuilder.Step(4, layer: 2, inputs: ["carried"]))));
+
+        LayoutNode[] boxes = [.. board.Nodes.Where(node => node.Kind != LayoutNodeKind.Stage)];
+        double left = boxes.Min(node => node.X);
+        double right = boxes.Max(node => node.Right);
+
+        LayoutEdge carried = board.Edges.Single(edge => edge.Key == "carried");
+
+        Assert.True(carried.Points.Min(point => point.X) >= left, "The pipe should not leave the block to the left.");
+        Assert.True(carried.Points.Max(point => point.X) <= right, "The pipe should not leave the block to the right.");
+
+        // The corridor is only usable while it clears the row it passes, which is the box in layer 1.
+        LayoutNode passed = boxes.Single(node => node.Y > boxes.Min(box => box.Y) && node.Y < boxes.Max(box => box.Y));
+
+        Assert.All(
+            carried.Points,
+            point => Assert.True(
+                point.X <= passed.X || point.X >= passed.Right || point.Y <= passed.Y || point.Y >= passed.Bottom,
+                "The pipe must not enter the box it passes."));
     }
 
     [Fact]
@@ -201,12 +235,12 @@ public sealed class RunBoardLayoutTests
     }
 
     [Fact]
-    public void EveryRoutedPipeGetsALaneOfItsOwn()
+    public void PipesThatCouldNotCollideShareOneLane()
     {
-        // Lanes are not shared, even by pipes whose heights do not overlap. A lane is a vertical
-        // line, and two pipes on one would be free to run along each other down it — the exact
-        // failure the routing rules exist to prevent. Sharing would save width; it would cost the
-        // property that makes the board readable, so it is not taken.
+        // One pipe finishes above where the next begins, so putting both in one lane cannot draw
+        // them on top of each other. Refusing to share cost real width for nothing: every long pipe
+        // took a lane, so a board whose pipes ran one after another down it grew as wide as if they
+        // had all been travelling at once.
         LayoutResult board = RunBoardLayout.Compute(GraphBuilder.Run(GraphBuilder.Stage(
             "Main",
             GraphBuilder.Step(0, layer: 0, outputs: ["first"]),
@@ -218,7 +252,32 @@ public sealed class RunBoardLayoutTests
         int[] lanes = [.. board.Edges.Where(edge => edge.Lane > 0).Select(edge => edge.Lane)];
 
         Assert.Equal(2, lanes.Length);
-        Assert.Equal(lanes.Length, lanes.Distinct().Count());
+        Assert.Single(lanes.Distinct());
+
+        // The concern that made lanes exclusive, asserted rather than avoided: sharing is only safe
+        // while the two never occupy the lane at the same height.
+        Assert.All(Overlaps(board), overlap => Assert.Fail($"Two pipes share a line: {overlap}."));
+    }
+
+    [Fact]
+    public void APipeSkippingOneRowStaysNearerTheBlockThanOneSkippingSeveral()
+    {
+        // Lanes are handed out shortest journey first. Ordered by where a pipe starts instead, the
+        // pipe with least to travel could be sent to the outermost lane and make the longest detour
+        // on the board to skip a single row.
+        LayoutResult board = RunBoardLayout.Compute(GraphBuilder.Run(GraphBuilder.Stage(
+            "Main",
+            GraphBuilder.Step(0, layer: 0, outputs: ["far"]),
+            GraphBuilder.Step(1, layer: 1, outputs: ["near"]),
+            GraphBuilder.Step(2, layer: 2),
+            GraphBuilder.Step(3, layer: 3, inputs: ["near"]),
+            GraphBuilder.Step(4, layer: 4),
+            GraphBuilder.Step(5, layer: 5, inputs: ["far"]))));
+
+        LayoutEdge near = board.Edges.Single(edge => edge.Key == "near");
+        LayoutEdge far = board.Edges.Single(edge => edge.Key == "far");
+
+        Assert.True(near.Lane < far.Lane, "The shorter journey must get the lane nearer the block.");
     }
 
     [Fact]
@@ -403,6 +462,51 @@ public sealed class RunBoardLayoutTests
 
     private static IEnumerable<LayoutNode> Steps(LayoutResult board)
         => board.Nodes.Where(node => node.Kind == LayoutNodeKind.Step);
+
+    /// <summary>
+    /// Every pair of segments from different pipes that lie on one line and share more than a point.
+    /// </summary>
+    /// <remarks>
+    /// Two pipes leaving the same connector are one value that forks: they are meant to share the run
+    /// out of the port, so they are not counted.
+    /// </remarks>
+    private static IEnumerable<string> Overlaps(LayoutResult board)
+    {
+        (string Port, LayoutPoint From, LayoutPoint To)[] segments =
+        [
+            .. board.Edges.SelectMany(edge => Enumerable
+                .Range(1, edge.Points.Count - 1)
+                .Select(index => (edge.FromPortId, edge.Points[index - 1], edge.Points[index])))
+        ];
+
+        for (int outer = 0; outer < segments.Length; outer++)
+        {
+            for (int inner = outer + 1; inner < segments.Length; inner++)
+            {
+                if (segments[outer].Port == segments[inner].Port)
+                    continue;
+
+                if (Collinear(segments[outer].From, segments[outer].To, segments[inner].From, segments[inner].To))
+                    yield return $"({segments[outer].From.X},{segments[outer].From.Y})-({segments[outer].To.X},{segments[outer].To.Y})";
+            }
+        }
+    }
+
+    private static bool Collinear(LayoutPoint firstFrom, LayoutPoint firstTo, LayoutPoint secondFrom, LayoutPoint secondTo)
+    {
+        bool firstVertical = Math.Abs(firstFrom.X - firstTo.X) < 1e-9;
+
+        if (firstVertical != (Math.Abs(secondFrom.X - secondTo.X) < 1e-9))
+            return false;
+
+        return firstVertical
+            ? Math.Abs(firstFrom.X - secondFrom.X) < 1e-9 && Shares(firstFrom.Y, firstTo.Y, secondFrom.Y, secondTo.Y)
+            : Math.Abs(firstFrom.Y - secondFrom.Y) < 1e-9 && Shares(firstFrom.X, firstTo.X, secondFrom.X, secondTo.X);
+    }
+
+    private static bool Shares(double firstA, double firstB, double secondA, double secondB)
+        => Math.Min(Math.Max(firstA, firstB), Math.Max(secondA, secondB))
+           - Math.Max(Math.Min(firstA, firstB), Math.Min(secondA, secondB)) > 1e-9;
 
     private static bool IsOnGrid(double value)
         => Math.Abs(value - (Math.Round(value / Options.Grid) * Options.Grid)) < 1e-9;

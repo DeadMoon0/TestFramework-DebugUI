@@ -9,7 +9,6 @@ Use this folder in two passes: user-facing guidance first, transport internals s
 
 ## Internal Design Documents
 
-- [PipeAdapterFlow.md](./PipeAdapterFlow.md): current signal routing and reducer projection model
-- [ReliableDebugTransportPlan.md](./ReliableDebugTransportPlan.md): future transport redesign plan
+- [TransportAndProjection.md](./TransportAndProjection.md): how a run reaches the board, and how the board is derived from it
 
 If you are debugging a test run, start with the user-facing documents. Read the internal design documents only when the issue is in the debugger infrastructure itself.

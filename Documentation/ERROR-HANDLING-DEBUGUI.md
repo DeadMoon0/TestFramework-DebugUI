@@ -1,6 +1,9 @@
 # DebugUI Extension Error Handling
 
-This document supplements the [Core Error Handling Guide](../../TestFramework-Core/Documentation/ERROR-HANDLING.md).
+This document supplements Core's own error-handling material. Core documents its exception design
+(`FriendlyMessage` / `RecoverySteps` / `AvailableOptions`) in its package README, and the producer
+side of the debugger in `Documentation/RunDebuggerFlow.md` in the TestFramework-Core repository.
+Deliberately named rather than linked: a relative path out of this repository 404s on GitHub.
 
 Use it when the timeline itself may be fine, but the debugging surface is not behaving as expected.
 
@@ -41,7 +44,7 @@ Recovery:
 
 - rerun once with the UI already open
 - confirm the run reaches debugger initialization at all
-- if the problem looks like infrastructure rather than user setup, inspect [PipeAdapterFlow.md](./PipeAdapterFlow.md) to see which signal kind should have created the missing state
+- if the problem looks like infrastructure rather than user setup, inspect [TransportAndProjection.md](./TransportAndProjection.md) to see which signal kind should have created the missing state
 
 ## Breakpoint Failures
 
@@ -86,7 +89,7 @@ Current behavior:
 Recovery:
 
 - inspect the run before closing the UI
-- if durable replay is the requirement, use [ReliableDebugTransportPlan.md](./ReliableDebugTransportPlan.md) as the future-state reference rather than expecting that behavior from the current implementation
+- durable replay is implemented: a journalled run reopens after its test host exits. If a run is missing from the list, the journal marker directory is the thing to check - see [TransportAndProjection.md](./TransportAndProjection.md)
 
 ### Symptom: Late attach misses the beginning of the run
 
@@ -104,17 +107,16 @@ When you are debugging the debugger itself, collect evidence from these layers i
 1. test-side evidence that the run really executed the expected steps
 2. whether the producer and UI agreed on the same pipe name
 3. whether the missing behavior is in connection, signal delivery, or state projection
-4. reducer/state behavior described in [PipeAdapterFlow.md](./PipeAdapterFlow.md)
+4. reducer/state behavior described in [TransportAndProjection.md](./TransportAndProjection.md)
 
 Do not jump straight to the transport redesign plan unless the current user-facing checks already failed.
 
 ## Known Limitation Reminder
 
-The current DebugUI is stable for active-session inspection, but the reliable broker-backed transport described in [ReliableDebugTransportPlan.md](./ReliableDebugTransportPlan.md) is still planned work.
+The DebugUI is stable for both active-session inspection and reopening recorded runs. The broker-backed transport once planned was retired: the journal provides the durability it was for. See [TransportAndProjection.md](./TransportAndProjection.md).
 
 ## See Also
 
-- [Core Error Handling Guide](../../TestFramework-Core/Documentation/ERROR-HANDLING.md)
+- `Documentation/RunDebuggerFlow.md` in the TestFramework-Core repository (producer side of this transport)
 - [Arc42.md](./Arc42.md)
-- [PipeAdapterFlow.md](./PipeAdapterFlow.md)
-- [ReliableDebugTransportPlan.md](./ReliableDebugTransportPlan.md)
+- [TransportAndProjection.md](./TransportAndProjection.md)

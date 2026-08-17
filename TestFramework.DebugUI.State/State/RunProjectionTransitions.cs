@@ -62,6 +62,17 @@ public static partial class RunProjection
         return graph with { Stages = graph.Stages.SetItem(stageIndex, updatedStage) };
     }
 
+    /// <summary>Whether a state is one a step stops at.</summary>
+    /// <remarks>
+    /// <c>WaitingForRetry</c> is deliberately not one of them: a step between attempts has not
+    /// finished, and treating it as finished would report a fraction of what it cost.
+    /// </remarks>
+    private static bool IsSettled(DebugLifecycleState state)
+        => state is DebugLifecycleState.Complete
+            or DebugLifecycleState.Error
+            or DebugLifecycleState.Timeout
+            or DebugLifecycleState.Skipped;
+
     private static StepNode ApplyStepState(StepNode step, PipeEntityTransitionSignal signal)
     {
         StepNode updated = step with
@@ -75,7 +86,17 @@ public static partial class RunProjection
 
             // Any transition away from a paused state clears the flag; only a breakpoint request
             // sets it.
-            IsWaitingAtBreakpoint = false
+            IsWaitingAtBreakpoint = false,
+
+            // The first start, not the latest: a retried step costs the run everything from its
+            // first attempt onwards, and reporting only the winning attempt would hide the waiting.
+            StartedAtUtc = signal.State == DebugLifecycleState.Running
+                ? step.StartedAtUtc ?? signal.OccurredAtUtc
+                : step.StartedAtUtc,
+
+            // Only a settled state ends the measurement. WaitingForRetry is not an ending — the
+            // step is still costing the run while it waits.
+            FinishedAtUtc = IsSettled(signal.State) ? signal.OccurredAtUtc : step.FinishedAtUtc
         };
 
         if (signal.State == DebugLifecycleState.Running)

@@ -20,7 +20,7 @@ Primary goals:
 - Runtime target is .NET 8 on Windows with WPF.
 - The application depends on the TestFramework debugger signal model emitted by Core.
 - The current transport path is named-pipe based.
-- The current transport is usable for active sessions, but the durable broker design is still future work.
+- Runs are durable: a completed run is journalled as NDJSON and can be reopened after the test host exits. The separate-broker design was retired rather than built - see [TransportAndProjection.md](./TransportAndProjection.md).
 - The UI must not require extra test-side setup beyond the built-in debugger path and optional pipe-name override.
 
 ## 3. System Scope and Context
@@ -55,8 +55,7 @@ Main building blocks:
 
 Important internal documents:
 
-- [PipeAdapterFlow.md](./PipeAdapterFlow.md): current signal flow and reducer behavior
-- [ReliableDebugTransportPlan.md](./ReliableDebugTransportPlan.md): future transport redesign plan
+- [TransportAndProjection.md](./TransportAndProjection.md): current signal flow, projection rules, and what the retired reliability plan turned into
 
 ## 6. Runtime View
 
@@ -68,7 +67,7 @@ Typical runtime flow:
 4. The WPF UI queries and renders that state.
 5. If a step pauses at a breakpoint, the UI issues a continue signal back through the adapter.
 
-Completed runs remain visible while the current UI process stays alive. Cross-process durable replay is planned but not yet the default runtime contract.
+Completed runs are journalled to disk and replayed from there, so they survive both the test host and the UI process exiting. Journalling is armed by its marker directory existing, which the launcher creates.
 
 ## 7. Deployment View
 

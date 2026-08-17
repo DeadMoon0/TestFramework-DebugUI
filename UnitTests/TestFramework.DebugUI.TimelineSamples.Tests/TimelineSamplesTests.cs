@@ -25,6 +25,16 @@ file static class TimelineSampleShell
     public static string AppendText(string fileName, string text)
         => $"echo {text} >> \"{fileName}\"";
 
+    /// <summary>A command that does nothing for a given number of seconds.</summary>
+    /// <remarks>
+    /// Ping rather than timeout: <c>timeout</c> refuses to run when its input is redirected, which is
+    /// exactly how a step runs it.
+    /// </remarks>
+    public static string Pause(int seconds)
+        => OperatingSystem.IsWindows()
+            ? $"ping 127.0.0.1 -n {seconds + 1}"
+            : $"sleep {seconds}";
+
     public static string DelayedWriteText(string fileName, string text)
         => OperatingSystem.IsWindows()
             ? $"ping 127.0.0.1 -n 2 > nul & {WriteText(fileName, text)}"
@@ -133,6 +143,36 @@ public sealed class TimelineSamplesTests(ITestOutputHelper outputHelper)
             bytes[index] = (byte)(index % 96 == 0 ? 0 : 'a' + (index % 26));
 
         return bytes;
+    }
+
+    /// <summary>
+    /// A run slow enough to be watched while it happens.
+    /// </summary>
+    /// <remarks>
+    /// Every other sample finishes in a couple of hundred milliseconds, so the board only ever shows
+    /// them already over. This one takes several seconds and moves through its steps one at a time,
+    /// which is the only way to see that a step reads as running while it runs, that the ones after
+    /// it read as not yet run, and that the board keeps up live rather than arriving complete.
+    /// </remarks>
+    [Fact]
+    public async Task SlowSequence_CanBeWatchedWhileItRuns()
+    {
+        Timeline timeline = Timeline.Create()
+            .SetVariable("started", Var.Const("yes"))
+            .SetVariable("pause", Var.Const(TimelineSampleShell.Pause(2)))
+            .SetVariable("cwd", Var.Const(TimelineSamplePaths.BuildOutput))
+            .Trigger(LocalIOExt.Trigger.Cmd(Var.Ref<string>("pause"), Var.Ref<string>("cwd")))
+            .Transform("firstDone", Var.Ref<string>("started"), started => $"{started}-first")
+            .Trigger(LocalIOExt.Trigger.Cmd(Var.Ref<string>("pause"), Var.Ref<string>("cwd")))
+            .Transform("secondDone", Var.Ref<string>("firstDone"), first => $"{first}-second")
+            .Trigger(LocalIOExt.Trigger.Cmd(Var.Ref<string>("pause"), Var.Ref<string>("cwd")))
+            .AssertVariable(Var.Ref<string>("secondDone"), value => value == "yes-first-second")
+            .Build();
+
+        TimelineRun run = await timeline.SetupRun(outputHelper).RunAsync();
+
+        run.EnsureRanToCompletion();
+        Assert.Equal("yes-first-second", run.VariableStore.GetVariable<string>("secondDone"));
     }
 
     [Fact]

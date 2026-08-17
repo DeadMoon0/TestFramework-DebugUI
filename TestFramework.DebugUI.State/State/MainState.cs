@@ -50,6 +50,17 @@ public record struct MainState()
     /// </remarks>
     public RunGraph ActiveRun = RunGraph.Empty;
 
+    /// <summary>
+    /// How the selected run's values stand against the last run of the same test that passed.
+    /// </summary>
+    /// <remarks>
+    /// Kept beside the graph rather than inside it: the graph is what the run reported, and this is a
+    /// statement about two runs. Computing it needs a journal read, so it arrives after the board
+    /// does and must be cleared whenever the selection changes — a diff left over from the previous
+    /// run would badge the wrong values.
+    /// </remarks>
+    public ValueDiff ActiveDiff = ValueDiff.None;
+
     /// <summary>The step whose detail is shown, or null when none is.</summary>
     public StepSelection? SelectedStep = null;
 
@@ -93,6 +104,17 @@ public record struct ShellState()
 
     /// <summary>Feed entries not yet seen by the user.</summary>
     public int UnreadFeedCount = 0;
+
+    /// <summary>
+    /// The test a re-run was asked for, until its run arrives.
+    /// </summary>
+    /// <remarks>
+    /// Someone who pressed "re-run" is waiting to watch that run, so the run that answers is shown
+    /// rather than filed silently behind the one already on screen. Held as the test's name because
+    /// that is the only thing known about a run before it exists — the session it will announce
+    /// itself under is decided by the test host, not here.
+    /// </remarks>
+    public string? AwaitedRerun = null;
 }
 
 /// <summary>
@@ -153,6 +175,15 @@ public sealed record RunSummary
 
     /// <summary>Gets a value indicating whether this run carries enough identity to be re-run.</summary>
     public bool CanRerun { get; init; }
+
+    /// <summary>
+    /// Gets the project file the test lives in, when the run reported one.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from <see cref="ProjectPath"/>, which is for reading and may be an assembly name.
+    /// Repeating a run needs something that can be built, and only a project file is that.
+    /// </remarks>
+    public string? ProjectFilePath { get; init; }
 
     /// <summary>Gets when the run stopped, when it is known to have stopped.</summary>
     public DateTimeOffset? FinishedAtUtc { get; init; }

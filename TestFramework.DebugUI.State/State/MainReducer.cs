@@ -31,6 +31,8 @@ public sealed class MainReducer : Reducer<MainState>
         On(RunActions.SetTransportStatus, (state, status) => state with { Shell = state.Shell with { Transport = status } });
         On(RunActions.SelectStep, (state, selection) => state with { SelectedStep = selection });
         On(RunActions.AddRecordedRuns, (state, runs) => AddRecorded(state, runs));
+        On(RunActions.AwaitRerun, (state, test) => state with { Shell = state.Shell with { AwaitedRerun = test } });
+        On(RunActions.SetValueDiff, (state, diff) => state with { ActiveDiff = diff });
     }
 
     /// <summary>
@@ -95,20 +97,8 @@ public sealed class MainReducer : Reducer<MainState>
         if (!string.Equals(state.SelectedSessionId, envelope.SessionId, StringComparison.Ordinal))
             return state;
 
-        return state with { ActiveRun = Project(state.ActiveRun, signal) };
+        return state with { ActiveRun = RunProjection.Apply(state.ActiveRun, signal) };
     }
-
-    private static RunGraph Project(RunGraph graph, IPipeSignal signal) => signal switch
-    {
-        PipeInitTimelineRunSignal init => RunProjection.ApplyInit(init),
-        PipeEntityTransitionSignal transition => RunProjection.ApplyTransition(graph, transition),
-        PipeValueUpdateSignal value => RunProjection.ApplyValueUpdate(graph, value),
-        PipeLogEntrySignal log => RunProjection.ApplyLogEntry(graph, log),
-        PipeAssertionSignal assertion => RunProjection.ApplyAssertion(graph, assertion),
-        PipeBreakpointHitRequestSignal breakpoint => RunProjection.ApplyBreakpointHit(graph, breakpoint),
-        PipeTimelineRunFinishedSignal finished => RunProjection.ApplyRunFinished(graph, finished),
-        _ => graph
-    };
 
     private static MainState TrackSession(MainState state, DebugEnvelope envelope, IPipeSignal signal)
     {
@@ -127,6 +117,7 @@ public sealed class MainReducer : Reducer<MainState>
                 IsLive = true,
                 FullyQualifiedName = init.Identity?.FullyQualifiedName,
                 ProjectPath = ProjectOf(init),
+                ProjectFilePath = init.Identity?.ProjectFilePath,
                 CanRerun = init.Identity?.CanRerun ?? false,
 
                 // The run says how big it is up front, so the home page can show "3 of 14" from the
@@ -139,9 +130,22 @@ public sealed class MainReducer : Reducer<MainState>
 
             // Nothing selected yet means this is the first run the UI has seen; showing it beats
             // showing an empty board and making the user pick.
-            return state.SelectedSessionId is null
-                ? state with { SelectedSessionId = envelope.SessionId }
-                : state;
+            if (state.SelectedSessionId is null)
+                return state with { SelectedSessionId = envelope.SessionId };
+
+            // The run someone asked for by pressing re-run. They are waiting to watch it, so it is
+            // shown rather than filed behind the run already on screen — which is the one they just
+            // decided was not enough.
+            if (state.Shell.AwaitedRerun is { } awaited && string.Equals(awaited, summary.Test, StringComparison.Ordinal))
+            {
+                return state with
+                {
+                    SelectedSessionId = envelope.SessionId,
+                    Shell = state.Shell with { AwaitedRerun = null }
+                };
+            }
+
+            return state;
         }
 
         RunSummary existing = state.Runs[index];
@@ -162,7 +166,9 @@ public sealed class MainReducer : Reducer<MainState>
             PipeInitTimelineRunSignal replayed => existing with
             {
                 Progress = RunProgress.Empty with { Steps = DeclaredSteps(replayed) },
-                ProjectPath = existing.ProjectPath ?? ProjectOf(replayed)
+                ProjectPath = existing.ProjectPath ?? ProjectOf(replayed),
+                ProjectFilePath = existing.ProjectFilePath ?? replayed.Identity?.ProjectFilePath,
+                CanRerun = existing.CanRerun || (replayed.Identity?.CanRerun ?? false)
             },
 
             // Any step transition means the run moved on, so it is no longer parked. Tracked on the
@@ -242,7 +248,15 @@ public sealed class MainReducer : Reducer<MainState>
         // keeps the board from briefly showing the previous run's contents under the new run's name.
         // The step selection goes with it: a stage and index mean nothing in a different run, and
         // keeping them would open the detail panel on whatever happened to sit at that index.
-        return state with { SelectedSessionId = sessionId, ActiveRun = RunGraph.Empty, SelectedStep = null };
+        // The diff goes too. It is a statement about two named runs, so carrying it across a
+        // selection change would badge the new run's values with the old run's comparison.
+        return state with
+        {
+            SelectedSessionId = sessionId,
+            ActiveRun = RunGraph.Empty,
+            ActiveDiff = ValueDiff.None,
+            SelectedStep = null
+        };
     }
 
     private static MainState AppendFeed(MainState state, FeedEntry entry)

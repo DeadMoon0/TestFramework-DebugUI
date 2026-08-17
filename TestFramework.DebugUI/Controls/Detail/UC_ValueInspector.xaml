@@ -34,8 +34,17 @@
                 <TextBlock x:Name="tbKey" Grid.Column="1" Style="{StaticResource PanelHeading}" Margin="8 5 0 5"
                            TextTrimming="CharacterEllipsis"/>
 
-                <Button x:Name="btClose" Grid.Column="2" Style="{StaticResource FlatButton}" Margin="0 5 8 5"
-                        Padding="7 2" Content="Close" Click="btClose_Click"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <!--
+                        Shown only when this value can actually be compared, so the button never
+                        offers a diff that would come back empty.
+                    -->
+                    <Button x:Name="btDiff" Style="{StaticResource FlatButton}" Margin="0 5 4 5"
+                            Padding="7 2" Content="Diff" Visibility="Collapsed" Click="btDiff_Click"/>
+
+                    <Button x:Name="btClose" Style="{StaticResource FlatButton}" Margin="0 5 8 5"
+                            Padding="7 2" Content="Close" Click="btClose_Click"/>
+                </StackPanel>
             </Grid>
 
             <StackPanel Grid.Row="1" Margin="12 4 12 0">
@@ -63,7 +72,7 @@
 
                     <TextBlock x:Name="tbPreviewLabel" Style="{StaticResource PanelHeading}" Margin="10 6 10 2"/>
 
-                    <ScrollViewer Grid.Row="1" Margin="10 0 4 8" MaxHeight="360"
+                    <ScrollViewer x:Name="svPreview" Grid.Row="1" Margin="10 0 4 8" MaxHeight="360"
                                   VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
                         <!--
                             A TextBox rather than a TextBlock, so the content can be selected and
@@ -71,11 +80,23 @@
                             wants to take it somewhere. CodeText targets TextBlock, so the same
                             settings are spelled out here.
                         -->
-                        <TextBox x:Name="tbPreview" IsReadOnly="True" BorderThickness="0"
-                                 Background="Transparent" Padding="0"
-                                 Foreground="{StaticResource TextSecondary}"
-                                 FontFamily="Cascadia Mono, Consolas, Courier New" FontSize="11"
-                                 TextWrapping="NoWrap"/>
+                        <Grid>
+                            <TextBox x:Name="tbPreview" IsReadOnly="True" BorderThickness="0"
+                                     Background="Transparent" Padding="0"
+                                     Foreground="{StaticResource TextSecondary}"
+                                     FontFamily="Cascadia Mono, Consolas, Courier New" FontSize="11"
+                                     TextWrapping="NoWrap"/>
+
+                            <!--
+                                A RichTextBox rather than a TextBox: a diff needs a colour per line,
+                                and a reader still has to be able to select and copy what they found.
+                            -->
+                            <RichTextBox x:Name="rtDiff" Visibility="Collapsed" IsReadOnly="True"
+                                         BorderThickness="0" Background="Transparent" Padding="0"
+                                         FontFamily="Cascadia Mono, Consolas, Courier New" FontSize="11"
+                                         HorizontalScrollBarVisibility="Disabled"
+                                         VerticalScrollBarVisibility="Disabled"/>
+                        </Grid>
                     </ScrollViewer>
                 </Grid>
             </Border>

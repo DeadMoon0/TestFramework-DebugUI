@@ -55,16 +55,16 @@ DebugUI is stable as an inspection surface for normal pipe-connected runs, but i
 - transport durability is not yet broker-backed across independent UI restarts
 - late-attach and replay behavior are more limited than the future broker plan describes
 - malformed or partial transport messages are diagnosable, but not every failure mode has a recovery path that stays entirely inside the UI
-- the redesign plan in [Documentation/ReliableDebugTransportPlan.md](./Documentation/ReliableDebugTransportPlan.md) is future architecture, not current guaranteed behavior
+- recorded runs are durable and reopen after the test host exits; the separate-broker redesign once planned was retired in favour of the journal
 
-Treat the current implementation as stable for active debugging sessions, with explicit transport improvement work still planned.
+Treat the current implementation as stable for both live debugging sessions and reopening recorded runs.
 
 ## Troubleshooting
 
 - If no run appears, verify the UI started before or during the test run and confirm both sides use the same `TESTFRAMEWORK_DEBUG_PIPE_NAME` value.
 - If a breakpoint never resumes, confirm the active step is actually marked as waiting and that only one breakpoint is paused at a time.
 - If a run tree appears incomplete, check the DebugUI error guide before assuming the timeline itself is at fault.
-- If you are diagnosing transport design limits rather than a usage error, read [Documentation/ReliableDebugTransportPlan.md](./Documentation/ReliableDebugTransportPlan.md) as an internal future-state plan.
+- If you are diagnosing transport behaviour rather than a usage error, read [Documentation/TransportAndProjection.md](./Documentation/TransportAndProjection.md).
 
 ## Documentation Map
 
@@ -76,8 +76,7 @@ User-facing docs:
 
 Internal transport and implementation docs:
 
-- [Documentation/PipeAdapterFlow.md](./Documentation/PipeAdapterFlow.md)
-- [Documentation/ReliableDebugTransportPlan.md](./Documentation/ReliableDebugTransportPlan.md)
+- [Documentation/TransportAndProjection.md](./Documentation/TransportAndProjection.md)
 
 ## Breakpoints
 

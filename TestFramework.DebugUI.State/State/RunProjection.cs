@@ -27,6 +27,34 @@ namespace TestFramework.DebugUI.State;
 public static partial class RunProjection
 {
     /// <summary>
+    /// Applies whichever rule the signal calls for.
+    /// </summary>
+    /// <remarks>
+    /// The one place the signal-to-rule mapping lives. The reducer used to hold its own copy, which
+    /// meant anything else wanting to fold a stream of signals — replaying a recorded run to compare
+    /// against, for instance — either duplicated the mapping or went through the store to get at it.
+    /// A signal kind with no rule leaves the graph alone rather than throwing: an older UI must stay
+    /// able to read a newer run's journal.
+    /// </remarks>
+    public static RunGraph Apply(RunGraph graph, IPipeSignal signal)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(signal);
+
+        return signal switch
+        {
+            PipeInitTimelineRunSignal init => ApplyInit(init),
+            PipeEntityTransitionSignal transition => ApplyTransition(graph, transition),
+            PipeValueUpdateSignal value => ApplyValueUpdate(graph, value),
+            PipeLogEntrySignal log => ApplyLogEntry(graph, log),
+            PipeAssertionSignal assertion => ApplyAssertion(graph, assertion),
+            PipeBreakpointHitRequestSignal breakpoint => ApplyBreakpointHit(graph, breakpoint),
+            PipeTimelineRunFinishedSignal finished => ApplyRunFinished(graph, finished),
+            _ => graph
+        };
+    }
+
+    /// <summary>
     /// Builds the initial graph from a run's structure snapshot.
     /// </summary>
     /// <remarks>

@@ -32,6 +32,21 @@
     <SolidColorBrush x:Key="AccentSelection" Color="#FF4680FC"/>
 
     <!--
+        Diff colours. The same red and green as the lifecycle states, split into a wash behind the line
+        and a lighter ink on top of it: StateError and StateComplete are sized to be read as a dot or a
+        stroke, and at text weight over a dark surface they are harsh and, in the red's case, hard to
+        read for long. The backgrounds are deliberately low alpha so a page of changes still reads as
+        text with bands behind it rather than as two blocks of colour.
+    -->
+    <SolidColorBrush x:Key="DiffAddedSurface" Color="#2662C98F"/>
+    <SolidColorBrush x:Key="DiffAddedText" Color="#FF9FE3BB"/>
+    <SolidColorBrush x:Key="DiffRemovedSurface" Color="#26FC4646"/>
+    <SolidColorBrush x:Key="DiffRemovedText" Color="#FFF4A0A0"/>
+
+    <!-- Unchanged lines are there for orientation, so they sit back from the changes. -->
+    <SolidColorBrush x:Key="DiffContextText" Color="#FF8A8A8A"/>
+
+    <!--
         Pipes and connectors are coloured by what flows through them, not by where they go. A
         variable is a value and an artifact is a thing with a lifecycle: they behave differently, and
         telling them apart at a glance is most of what makes a busy board readable.

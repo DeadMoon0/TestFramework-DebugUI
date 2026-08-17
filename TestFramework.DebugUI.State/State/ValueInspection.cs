@@ -355,6 +355,57 @@ public static class ValueInspection
     /// Hex spends two characters per byte, so counting its characters would claim twice as much
     /// arrived as did — and claim it against a total measured in real bytes.
     /// </remarks>
+    /// <summary>
+    /// Breaks prose into lines of at most <paramref name="columns"/> characters, on word boundaries.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For text shown in a monospaced pane whose document is deliberately far wider than the panel, so
+    /// that a line of code is never broken mid-statement. That setting also stops prose wrapping, which
+    /// leaves an explanation running off to the right where nobody scrolls to read it.
+    /// </para>
+    /// <para>
+    /// Wrapped by counting characters rather than by measuring, because the pane is monospaced — every
+    /// character is the same width, so a count is exact, and it needs no layout pass to have happened
+    /// first. Binding a width to the viewport instead produced a zero-width block that rendered
+    /// nothing at all until the panel was resized.
+    /// </para>
+    /// <para>
+    /// A single word longer than the budget is emitted on its own over-long line rather than cut: it is
+    /// usually a path or a hash, and half of one is worse than a line that overflows.
+    /// </para>
+    /// </remarks>
+    public static ImmutableList<string> WrapToWidth(string? text, int columns)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return [];
+
+        if (columns <= 0)
+            return [text];
+
+        ImmutableList<string>.Builder lines = ImmutableList.CreateBuilder<string>();
+        System.Text.StringBuilder line = new();
+
+        foreach (string word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (line.Length > 0 && line.Length + 1 + word.Length > columns)
+            {
+                lines.Add(line.ToString());
+                line.Clear();
+            }
+
+            if (line.Length > 0)
+                line.Append(' ');
+
+            line.Append(word);
+        }
+
+        if (line.Length > 0)
+            lines.Add(line.ToString());
+
+        return lines.ToImmutable();
+    }
+
     public static long ShownBy(ValuePreview preview)
     {
         ArgumentNullException.ThrowIfNull(preview);

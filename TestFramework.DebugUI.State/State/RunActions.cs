@@ -24,6 +24,15 @@ public static class RunActions
     /// <summary>Renders a different session.</summary>
     public static readonly StateAction<string> SelectRun = new(nameof(RunActions), nameof(SelectRun));
 
+    /// <summary>
+    /// Records that a re-run of one test was asked for, so its run is shown when it arrives.
+    /// </summary>
+    /// <remarks>
+    /// Carried as the test's name: the session the new run announces itself under is decided by the
+    /// test host, so there is nothing else to match it by until it exists.
+    /// </remarks>
+    public static readonly StateAction<string> AwaitRerun = new(nameof(RunActions), nameof(AwaitRerun));
+
     /// <summary>Appends an entry to the message feed.</summary>
     public static readonly StateAction<FeedEntry> AppendFeedEntry = new(nameof(RunActions), nameof(AppendFeedEntry));
 
@@ -47,4 +56,15 @@ public static class RunActions
     /// </remarks>
     public static readonly StateAction<ImmutableList<RunSummary>> AddRecordedRuns =
         new(nameof(RunActions), nameof(AddRecordedRuns));
+
+    /// <summary>
+    /// Records how the selected run's values compare with the last run of the same test that passed.
+    /// </summary>
+    /// <remarks>
+    /// Its own action because it arrives late and separately: the comparison needs an earlier run
+    /// replayed off disk, so the board is on screen before this can be known. Dispatched with an
+    /// unavailable reason rather than withheld when there is nothing to compare against, so the panel
+    /// can say why instead of looking broken.
+    /// </remarks>
+    public static readonly StateAction<ValueDiff> SetValueDiff = new(nameof(RunActions), nameof(SetValueDiff));
 }

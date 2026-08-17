@@ -48,6 +48,12 @@ public partial class UC_ValueItem : UserControl
                 .Bind(state => state.ActiveRun.Variables.TryGetValue(Key, out ValueNode? value) ? value : null)
                 .Subscribe(ShowVariable));
 
+        // Bound separately from the value itself: the comparison arrives after the board does,
+        // because it has to read an earlier run off disk.
+        subscriptions.Add(StateStore<MainState>.Default
+            .Bind(state => isArtifact ? state.ActiveDiff.ForArtifact(Key) : state.ActiveDiff.ForVariable(Key))
+            .Subscribe(ShowChange));
+
         Unloaded += (_, _) => subscriptions.Dispose();
     }
 
@@ -67,6 +73,39 @@ public partial class UC_ValueItem : UserControl
 
     private void bdRoot_MouseLeave(object sender, MouseEventArgs e)
         => bdRoot.Background = (Brush)FindResource("SurfaceRaised");
+
+    /// <summary>
+    /// Marks how this value stands against the last run of the same test that passed.
+    /// </summary>
+    /// <remarks>
+    /// Unchanged values carry no mark at all. A rail where every row is badged is a rail where the
+    /// badges stop being read, and "the same as last time" is the answer a reader can afford to skim.
+    /// </remarks>
+    private void ShowChange(ValueChangeKind? change)
+    {
+        if (change is null or ValueChangeKind.Unchanged)
+        {
+            bdChange.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        (string glyph, string brush, string meaning) = change switch
+        {
+            ValueChangeKind.Changed => ("~", "StateTimeout", "changed since the last passing run"),
+            ValueChangeKind.Added => ("+", "StateComplete", "this run produced it; the last passing run did not"),
+            ValueChangeKind.Removed => ("-", "StateError", "the last passing run produced it; this run did not"),
+            _ => ("?", "StatePaused", "cannot be compared with the last passing run")
+        };
+
+        Brush colour = (Brush)FindResource(brush);
+
+        tbChange.Text = glyph;
+        tbChange.Foreground = colour;
+        bdChange.BorderBrush = colour;
+        bdChange.BorderThickness = new Thickness(1);
+        bdChange.ToolTip = meaning;
+        bdChange.Visibility = Visibility.Visible;
+    }
 
     private void ShowVariable(ValueNode? value)
     {

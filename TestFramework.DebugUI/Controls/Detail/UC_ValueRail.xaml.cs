@@ -5,6 +5,7 @@ using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Axiom.State;
 using Axiom.Wpf.Extensions;
 using TestFramework.DebugUI.State;
@@ -49,6 +50,10 @@ public partial class UC_ValueRail : UserControl
             .Select(Counts)
             .BindToDependencyProperty(tbCounts, TextBlock.TextProperty));
 
+        subscriptions.Add(StateStore<MainState>.Default
+            .Bind(state => state.ActiveDiff)
+            .Subscribe(ShowBaseline));
+
         Unloaded += (_, _) => subscriptions.Dispose();
     }
 
@@ -62,6 +67,44 @@ public partial class UC_ValueRail : UserControl
         item.Opened += (key, isArtifact) => ValueOpened?.Invoke(key, isArtifact);
 
         return item;
+    }
+
+    /// <summary>
+    /// Says which run the badges are measured against, or why none could be.
+    /// </summary>
+    /// <remarks>
+    /// The baseline is named by its start time rather than its session id. A reader recognises the run
+    /// they watched five minutes ago by when it ran; a GUID identifies it to the tool and to nobody
+    /// else.
+    /// </remarks>
+    private void ShowBaseline(ValueDiff diff)
+    {
+        if (diff is null || (diff.Baseline is null && diff.Unavailable is null))
+        {
+            tbBaseline.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        tbBaseline.Visibility = Visibility.Visible;
+
+        if (diff.Baseline is not { } baseline)
+        {
+            tbBaseline.Text = "No comparison: " + diff.Unavailable;
+            tbBaseline.Foreground = (Brush)FindResource("TextFaint");
+            return;
+        }
+
+        string against = $"vs the last passing run, {baseline.StartedAtUtc.ToLocalTime():HH:mm:ss}";
+
+        int changed = diff.ChangedCount;
+
+        // The count is the point of the line. "Nothing changed" is a result worth stating outright,
+        // because the alternative reading of an unbadged rail is that the comparison never ran.
+        tbBaseline.Text = changed == 0
+            ? against + " - nothing changed"
+            : $"{against} - {changed} value{(changed == 1 ? "" : "s")} differ{(changed == 1 ? "s" : "")}";
+
+        tbBaseline.Foreground = (Brush)FindResource(changed == 0 ? "TextFaint" : "StateTimeout");
     }
 
     private static IEnumerable<ValueRow> Rows(RunGraph run)

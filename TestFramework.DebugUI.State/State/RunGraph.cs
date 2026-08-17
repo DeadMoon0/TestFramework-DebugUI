@@ -125,6 +125,30 @@ public sealed record StepNode
 
     /// <summary>Gets a value indicating whether the step is currently paused at a breakpoint.</summary>
     public bool IsWaitingAtBreakpoint { get; init; }
+
+    /// <summary>Gets when the step first started running.</summary>
+    public DateTimeOffset? StartedAtUtc { get; init; }
+
+    /// <summary>Gets when the step settled, whether it passed, failed or was skipped.</summary>
+    public DateTimeOffset? FinishedAtUtc { get; init; }
+
+    /// <summary>
+    /// Gets how long the step took, once it is over.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Measured across every attempt, from the first time it started to the moment it settled, so a
+    /// step that was retried reports the time it actually cost the run rather than the time of
+    /// whichever attempt happened to succeed.
+    /// </para>
+    /// <para>
+    /// Absent while the step is still going: a duration that grows as you look at it invites
+    /// comparing two numbers that were measured at different moments.
+    /// </para>
+    /// </remarks>
+    public TimeSpan? Duration => StartedAtUtc is { } started && FinishedAtUtc is { } finished && finished >= started
+        ? finished - started
+        : null;
 }
 
 /// <summary>

@@ -43,6 +43,8 @@ public sealed class ShellController : IDisposable
     private readonly PipeRunEventSource pipe;
     private readonly string? runsDirectory;
     private readonly ConcurrentDictionary<string, RunHistory> histories = new(StringComparer.Ordinal);
+    private readonly TestRerunner rerunner;
+    private readonly BaselineResolver baselines;
 
     private bool disposed;
 
@@ -64,6 +66,9 @@ public sealed class ShellController : IDisposable
         pipe.EnvelopeReceived += OnLiveEnvelope;
         pipe.Notice += Report;
         pipe.PauseAtBreakpoint = ShouldPause;
+
+        rerunner = new TestRerunner(Report);
+        baselines = new BaselineResolver(this.runsDirectory);
     }
 
     /// <summary>Gets the live transport, for the window to drive breakpoints and cancellation.</summary>
@@ -117,7 +122,13 @@ public sealed class ShellController : IDisposable
                     IsFinished = run.IsFinished,
                     FinishedAtUtc = run.FinishedAtUtc,
                     FullyQualifiedName = run.FullyQualifiedName,
-                    ProjectPath = run.ProjectPath
+                    ProjectPath = run.ProjectPath,
+
+                    // Carried through from the sidecar so a run can be repeated straight from the
+                    // list. Waiting for someone to open it first made the button's availability
+                    // depend on what they had happened to click.
+                    ProjectFilePath = run.ProjectFilePath,
+                    CanRerun = run.CanRerun
                 })
             ];
 
@@ -151,6 +162,8 @@ public sealed class ShellController : IDisposable
                 ingest.Accept(envelope);
 
             ingest.Flush();
+
+            RefreshDiff(sessionId);
 
             if (!history.Complete)
             {
@@ -223,6 +236,34 @@ public sealed class ShellController : IDisposable
         return asked;
     }
 
+    /// <summary>
+    /// Runs the selected run's test again.
+    /// </summary>
+    /// <remarks>
+    /// The new run arrives over the pipe like any other, so nothing here waits for it or tracks it.
+    /// This only starts the process and reports the cases the pipe cannot: that it could not be
+    /// started, or that the run never carried enough identity to be repeated.
+    /// </remarks>
+    public Task<bool> RerunSelectedAsync()
+    {
+        string? sessionId = store.GetValue(state => state.SelectedSessionId);
+
+        RunSummary? run = sessionId is null
+            ? null
+            : store.GetValue(state => state.Runs.Find(candidate => string.Equals(candidate.SessionId, sessionId, StringComparison.Ordinal)));
+
+        if (run is null)
+            return Task.FromResult(false);
+
+        // Said before the process starts, so the run cannot arrive before the UI knows to show it.
+        // A fast test finishes in a couple of hundred milliseconds; claiming the intent afterwards
+        // would be a race the user loses on exactly the runs that are quickest to read.
+        if (RerunCommand.IsAvailableFor(run))
+            store.Dispatch(RunActions.AwaitRerun, run.Test);
+
+        return rerunner.RerunAsync(run);
+    }
+
     /// <summary>Adds an entry to the message feed.</summary>
     public void Report(FeedEntry entry)
     {
@@ -259,6 +300,16 @@ public sealed class ShellController : IDisposable
             store.Dispatch(RunActions.SetTransportStatus, TransportStatus.Attached);
 
         ingest.Accept(envelope);
+
+        // A live run's values are still arriving, so comparing it mid-flight would badge values that
+        // have not been assigned yet as removed. Its finish is the moment they settle, and the moment
+        // the comparison is worth making.
+        if (envelope.Kind == PipeSignalKind.TimelineRunFinished
+            && string.Equals(store.GetValue(state => state.SelectedSessionId), envelope.SessionId, StringComparison.Ordinal))
+        {
+            ingest.Flush();
+            RefreshDiff(envelope.SessionId);
+        }
     }
 
     private void ReplayRecorded(string sessionId)
@@ -301,6 +352,63 @@ public sealed class ShellController : IDisposable
             source.Notice -= Report;
             ingest.Flush();
         }
+
+        RefreshDiff(sessionId);
+    }
+
+    /// <summary>
+    /// Works out how the selected run's values compare with the last run of the same test that passed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Off the calling thread, because it reads journals: a comparison is worth waiting for but never
+    /// worth freezing the window for. The board is already on screen by the time this starts, so the
+    /// diff arrives as a later state change and the rail badges itself when it does.
+    /// </para>
+    /// <para>
+    /// The result is only dispatched if the run is still the selected one. Someone clicking through
+    /// several runs quickly would otherwise have an earlier run's comparison land on a later run's
+    /// values, which is the one outcome worse than showing no comparison at all.
+    /// </para>
+    /// </remarks>
+    public void RefreshDiff(string sessionId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
+        if (disposed)
+            return;
+
+        RunSummary? run = store.GetValue(state =>
+            state.Runs.Find(candidate => string.Equals(candidate.SessionId, sessionId, StringComparison.Ordinal)));
+
+        if (run is null)
+            return;
+
+        RunGraph graph = store.GetValue(state => state.ActiveRun);
+        ImmutableList<RunSummary> runs = store.GetValue(state => state.Runs);
+
+        _ = Task.Run(() =>
+        {
+            ValueDiff diff;
+
+            try
+            {
+                diff = baselines.Resolve(run, graph, runs);
+            }
+            catch (Exception e)
+            {
+                Debug.WriteLine(e);
+                diff = RunBaselineSelector.Unavailable("The comparison against an earlier run could not be computed.");
+            }
+
+            if (disposed)
+                return;
+
+            if (!string.Equals(store.GetValue(state => state.SelectedSessionId), sessionId, StringComparison.Ordinal))
+                return;
+
+            store.Dispatch(RunActions.SetValueDiff, diff);
+        });
     }
 
     private bool ShouldPause(PipeBreakpointHitRequestSignal request)

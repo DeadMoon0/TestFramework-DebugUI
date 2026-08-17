@@ -29,6 +29,9 @@
                     <Button x:Name="btStop" Style="{StaticResource FlatButton}" Margin="0 0 4 0" Padding="7 2"
                             Content="Stop" Click="btStop_Click"
                             ToolTip="Ask the run to stop. It unwinds through its cleanup stage; nothing is killed."/>
+                    <Button x:Name="btRerun" Style="{StaticResource FlatButton}" Margin="0 0 4 0" Padding="7 2"
+                            Content="Re-run" Click="btRerun_Click"
+                            ToolTip="Run this test again. The new run appears here on its own."/>
                     <Button x:Name="btFirstFailure" Style="{StaticResource FlatButton}" Margin="0 0 4 0" Padding="7 2"
                             Content="First failure" Click="btFirstFailure_Click"
                             ToolTip="Select the first step that failed."/>

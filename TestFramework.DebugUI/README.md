@@ -35,7 +35,7 @@ The application connects to the built-in debugger transport and projects a run i
 
 - If no run appears, verify the test process and the app use the same pipe name.
 - If the UI connects but no useful state appears, check [../Documentation/ERROR-HANDLING-DEBUGUI.md](../Documentation/ERROR-HANDLING-DEBUGUI.md).
-- If the issue is a transport-design limitation rather than a usage error, read [../Documentation/ReliableDebugTransportPlan.md](../Documentation/ReliableDebugTransportPlan.md) as future architecture guidance.
+- If the issue is transport behaviour rather than a usage error, read [../Documentation/TransportAndProjection.md](../Documentation/TransportAndProjection.md).
 
 ## Read Next
 

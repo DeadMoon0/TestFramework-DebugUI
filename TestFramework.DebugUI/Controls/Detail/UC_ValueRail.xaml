@@ -8,6 +8,7 @@
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
@@ -24,11 +25,20 @@
                            VerticalAlignment="Center" Margin="0 0 12 0"/>
             </Grid>
 
-            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <!--
+                What this run is being compared against. Present whether or not a comparison could be
+                made: "no earlier passing run" is an answer, and leaving the line out would make the
+                absence of badges look like "nothing changed".
+            -->
+            <TextBlock x:Name="tbBaseline" Grid.Row="1" Margin="14 0 14 6" FontSize="9"
+                       TextWrapping="Wrap" Foreground="{StaticResource TextFaint}"
+                       Visibility="Collapsed"/>
+
+            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel x:Name="spValues" Margin="5 0 5 5"/>
             </ScrollViewer>
 
-            <TextBlock x:Name="tbEmpty" Grid.Row="1" Style="{StaticResource MutedText}" Margin="14 4 14 0"
+            <TextBlock x:Name="tbEmpty" Grid.Row="2" Style="{StaticResource MutedText}" Margin="14 4 14 0"
                        Text="This run produced no values."/>
         </Grid>
     </Border>

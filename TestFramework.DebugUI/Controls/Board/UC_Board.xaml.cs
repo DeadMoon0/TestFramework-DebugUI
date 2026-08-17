@@ -36,10 +36,25 @@ public partial class UC_Board : UserControl
 {
     private const double MinimumZoom = 0.2;
     private const double MaximumZoom = 3.0;
+
+    /// <summary>How far Fit is allowed to magnify a board smaller than the window.</summary>
+    /// <remarks>
+    /// Fit used to stop at 1.0, so a four-step run sat at its drawn size in the middle of a large
+    /// screen and used about a quarter of it. Letting it grow uses the space that is there. Capped
+    /// well below <see cref="MaximumZoom"/> because past roughly double, a short run stops looking
+    /// fitted and starts looking magnified.
+    /// </remarks>
+    private const double MaximumFitZoom = 2.0;
     private const double CornerRadius = 10;
+
+    /// <summary>How much clear space a fitted board keeps between itself and the window edge.</summary>
+    private const double FitMargin = 24;
 
     /// <summary>The diameter of a connector, matching the ring the pipes were always drawn with.</summary>
     private const double ConnectorSize = 20;
+
+    /// <summary>How far a press has to travel before it pans the board instead of selecting.</summary>
+    private const double DragThreshold = 4;
 
     /// <summary>How deep the recessed strip a connector sits on runs into the card.</summary>
     private const double StripHeight = 16;
@@ -47,11 +62,17 @@ public partial class UC_Board : UserControl
     private readonly CompositeDisposable subscriptions = [];
     private readonly Dictionary<string, StepVisual> stepVisuals = new(StringComparer.Ordinal);
 
+    /// <summary>The coloured stroke of each pipe, kept so it can dim or light as its value appears.</summary>
+    private readonly Dictionary<string, Path> pipeVisuals = new(StringComparer.Ordinal);
+
     private LayoutResult board = LayoutResult.Empty;
     private HashSet<string> brokenChecks = new(StringComparer.Ordinal);
     private VerdictVisual? verdictVisual;
     private Point panOrigin;
     private bool panning;
+
+    /// <summary>Set once a press has moved far enough to be a drag rather than a click.</summary>
+    private bool dragging;
 
     /// <summary>Set when a board is waiting for the surface to have a size it can be fitted to.</summary>
     private bool needsFit;
@@ -90,6 +111,13 @@ public partial class UC_Board : UserControl
         subscriptions.Add(StateStore<MainState>.Default
             .Bind(state => state.SelectedSessionId is not null && !state.ActiveRun.IsFinished)
             .BindToDependencyProperty(btStop, IsEnabledProperty));
+
+        // Offered only where it can actually be done. A button that explains itself only after being
+        // pressed is a button that wastes the press.
+        subscriptions.Add(StateStore<MainState>.Default
+            .Bind(state => RerunCommand.IsAvailableFor(
+                state.Runs.Find(run => string.Equals(run.SessionId, state.SelectedSessionId, StringComparison.Ordinal))))
+            .BindToDependencyProperty(btRerun, IsEnabledProperty));
 
         // The surface is measured after the run arrives, so this is what actually fits the first
         // board; the attempt in Render is just the case where a size already exists.
@@ -161,10 +189,12 @@ public partial class UC_Board : UserControl
 
         needsFit = false;
 
+        // Measured against the window less a margin, so a fitted board has room to breathe instead
+        // of touching all four edges.
         double scale = Math.Clamp(
-            Math.Min(viewWidth / board.Width, viewHeight / board.Height),
+            Math.Min((viewWidth - (FitMargin * 2)) / board.Width, (viewHeight - (FitMargin * 2)) / board.Height),
             MinimumZoom,
-            1.0);
+            MaximumFitZoom);
 
         stZoom.ScaleX = scale;
         stZoom.ScaleY = scale;
@@ -173,10 +203,43 @@ public partial class UC_Board : UserControl
         ttPan.Y = (viewHeight - (board.Height * scale)) / 2;
     }
 
+    /// <summary>How strongly something that has not happened yet is drawn.</summary>
+    /// <remarks>
+    /// Low enough to fall back behind the run, high enough to still be readable — the declared shape
+    /// of a timeline is worth seeing, it just should not compete with what is actually happening.
+    /// </remarks>
+    private const double DormantOpacity = 0.4;
+
+    /// <summary>Whether a step has started, which is what decides if it is drawn as live.</summary>
+    private static bool HasRun(StepNode step)
+        => step.Lifecycle != DebugLifecycleState.Initialized || step.Attempts.Count > 0;
+
+    /// <summary>Dims every pipe whose value has not been produced yet.</summary>
+    /// <remarks>
+    /// A pipe is lit by its value existing rather than by its producer's state: a value can be
+    /// written by a step that then fails, and the flow did happen. The verdict's pipes are left
+    /// alone — they are coloured by whether the check held, which is not a question of flow.
+    /// </remarks>
+    private void RefreshPipes(RunGraph graph)
+    {
+        foreach (LayoutEdge edge in board.Edges)
+        {
+            if (!pipeVisuals.TryGetValue(edge.Id, out Path? stroke))
+                continue;
+
+            bool carried = edge.ValueKind == DebugValueKind.Artifact
+                ? graph.Artifacts.ContainsKey(edge.Key)
+                : graph.Variables.ContainsKey(edge.Key);
+
+            stroke.Opacity = carried ? 1 : DormantOpacity;
+        }
+    }
+
     private void Rebuild()
     {
         cBoard.Children.Clear();
         stepVisuals.Clear();
+        pipeVisuals.Clear();
         verdictVisual = null;
 
         cBoard.Width = board.Width;
@@ -311,7 +374,34 @@ public partial class UC_Board : UserControl
         // biggest consumer of card height and the least likely thing to be read at board scale.
         TextBlock log = new();
 
-        StackPanel heading = new() { Orientation = Orientation.Horizontal, Children = { status, name } };
+        // The heading's right-hand end is the emptiest part of a card and the timing is what a reader
+        // scans down a column for, so it goes there rather than at the end of the status line where
+        // it competes with the state and the attempt count for the same eye.
+        TextBlock elapsed = new()
+        {
+            Foreground = (Brush)FindResource("TextFaint"),
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(8, 0, 0, 0)
+        };
+
+        Grid heading = new()
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = GridLength.Auto },
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                new ColumnDefinition { Width = GridLength.Auto }
+            }
+        };
+
+        Grid.SetColumn(name, 1);
+        Grid.SetColumn(elapsed, 2);
+
+        heading.Children.Add(status);
+        heading.Children.Add(name);
+        heading.Children.Add(elapsed);
 
         StackPanel body = new()
         {
@@ -349,7 +439,7 @@ public partial class UC_Board : UserControl
             Breakpoints.Toggle(stageName, stepId);
         };
 
-        stepVisuals[node.Id] = new StepVisual(box, status, name, note, outputs, log);
+        stepVisuals[node.Id] = new StepVisual(box, status, name, note, outputs, log, elapsed);
         return box;
     }
 
@@ -469,7 +559,7 @@ public partial class UC_Board : UserControl
             Data = geometry
         };
 
-        yield return new Path
+        Path stroke = new()
         {
             Stroke = flow,
             StrokeThickness = 4,
@@ -479,6 +569,13 @@ public partial class UC_Board : UserControl
             Data = geometry,
             ToolTip = $"{edge.Key} ({edge.ValueKind.ToString().ToLowerInvariant()})"
         };
+
+        // Kept so it can be dimmed until its value exists. A pipe drawn at full strength before
+        // anything has flowed through it claims a flow that has not happened, and on a board where
+        // most pipes are still waiting that is most of what the eye sees.
+        pipeVisuals[edge.Id] = stroke;
+
+        yield return stroke;
     }
 
     /// <summary>
@@ -501,6 +598,7 @@ public partial class UC_Board : UserControl
 
                 visual.Name.Text = step.DisplayName;
                 visual.Note.Text = Note(step);
+                visual.Elapsed.Text = step.Duration is { } duration ? Elapsed(duration) : string.Empty;
                 visual.Status.Background = BrushFor(step);
                 visual.Outputs.Text = Describe(step);
                 visual.Log.Text = LastLine(step);
@@ -508,6 +606,10 @@ public partial class UC_Board : UserControl
                 bool isSelected = selected is not null
                                   && selected.StepId == step.StepId
                                   && string.Equals(selected.StageName, stage.Name, StringComparison.Ordinal);
+
+                // A step that has not run yet is context, not content. Dimming it lets the eye find
+                // what is happening now without hunting through everything that is merely declared.
+                visual.Box.Opacity = HasRun(step) ? 1 : DormantOpacity;
 
                 visual.Box.BorderBrush = isSelected
                     ? (Brush)FindResource("AccentSelection")
@@ -518,6 +620,7 @@ public partial class UC_Board : UserControl
         }
 
         RefreshVerdict(graph);
+        RefreshPipes(graph);
     }
 
     /// <summary>
@@ -565,6 +668,23 @@ public partial class UC_Board : UserControl
 
         return state;
     }
+
+    /// <summary>
+    /// A duration at a scale a reader can compare at a glance.
+    /// </summary>
+    /// <remarks>
+    /// Whole units, and never more than three significant figures: the board is scanned for the step
+    /// that stands out, and 1.4 s against 12 ms says that immediately where 1402.318 ms does not.
+    /// </remarks>
+    private static string Elapsed(TimeSpan duration) => duration.TotalMilliseconds switch
+    {
+        // Rounding a sub-millisecond step to "0 ms" reads as a step that did not run. Saying it was
+        // under a millisecond says the true thing: too fast to have a number worth comparing.
+        < 1 => "<1 ms",
+        < 1000 => $"{duration.TotalMilliseconds:0} ms",
+        < 60_000 => $"{duration.TotalSeconds:0.#} s",
+        _ => $"{(int)duration.TotalMinutes}m {duration.Seconds:00}s"
+    };
 
     /// <summary>What the step declared it takes and gives, which is the shape of its connectors.</summary>
     private static string Describe(StepNode step)
@@ -649,6 +769,9 @@ public partial class UC_Board : UserControl
     private async void btStop_Click(object sender, RoutedEventArgs e)
         => await MainWindow.Shell.CancelSelectedRunAsync();
 
+    private async void btRerun_Click(object sender, RoutedEventArgs e)
+        => await MainWindow.Shell.RerunSelectedAsync();
+
     private void btFit_Click(object sender, RoutedEventArgs e) => Fit();
 
     private void Surface_MouseWheel(object sender, MouseWheelEventArgs e)
@@ -668,17 +791,30 @@ public partial class UC_Board : UserControl
         e.Handled = true;
     }
 
+    /// <summary>
+    /// Presses the button without taking the mouse, so a click still reaches what was clicked.
+    /// </summary>
+    /// <remarks>
+    /// Capturing here is what made a step impossible to select. The press bubbles up from the step to
+    /// the surface, and once the surface holds the mouse every later event is routed to it — so the
+    /// release never reached the step and nothing was ever picked. The capture is taken on the first
+    /// real movement instead, which is the moment it is actually needed.
+    /// </remarks>
     private void Surface_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         panOrigin = e.GetPosition(this);
         panning = true;
-        ((UIElement)sender).CaptureMouse();
     }
 
     private void Surface_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
         panning = false;
-        ((UIElement)sender).ReleaseMouseCapture();
+
+        if (dragging)
+        {
+            dragging = false;
+            ((UIElement)sender).ReleaseMouseCapture();
+        }
     }
 
     private void Surface_MouseMove(object sender, MouseEventArgs e)
@@ -688,13 +824,25 @@ public partial class UC_Board : UserControl
 
         Point now = e.GetPosition(this);
 
+        // Below the threshold this is a click that wobbled, not a drag. Panning from here would move
+        // the board a pixel and swallow the selection, which reads as the board ignoring the click.
+        if (!dragging)
+        {
+            if (Math.Abs(now.X - panOrigin.X) < DragThreshold && Math.Abs(now.Y - panOrigin.Y) < DragThreshold)
+                return;
+
+            dragging = true;
+            ((UIElement)sender).CaptureMouse();
+            panOrigin = now;
+        }
+
         ttPan.X += now.X - panOrigin.X;
         ttPan.Y += now.Y - panOrigin.Y;
 
         panOrigin = now;
     }
 
-    private sealed record StepVisual(Border Box, Border Status, TextBlock Name, TextBlock Note, TextBlock Outputs, TextBlock Log);
+    private sealed record StepVisual(Border Box, Border Status, TextBlock Name, TextBlock Note, TextBlock Outputs, TextBlock Log, TextBlock Elapsed);
 
     private sealed record VerdictVisual(Border Box, TextBlock Heading, TextBlock Why);
 }

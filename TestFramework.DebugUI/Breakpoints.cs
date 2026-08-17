@@ -1,6 +1,10 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Linq;
 using TestFramework.Core.Debugger;
+using TestFramework.DebugUI.State;
 
 namespace TestFramework.DebugUI;
 
@@ -58,6 +62,37 @@ public static class Breakpoints
     public static void Clear()
     {
         Set.Clear();
+        Changed?.Invoke();
+    }
+
+    /// <summary>The breakpoints currently set, in a form that can be written to disk.</summary>
+    public static ImmutableList<BreakpointMark> Snapshot()
+        => [.. Set.Keys
+            .OrderBy(key => key.StageName, StringComparer.Ordinal)
+            .ThenBy(key => key.StepId)
+            .Select(key => new BreakpointMark { Stage = key.StageName, StepId = key.StepId })];
+
+    /// <summary>
+    /// Replaces the set with what was saved.
+    /// </summary>
+    /// <remarks>
+    /// Raises <see cref="Changed"/> once at the end rather than per breakpoint: the board redraws on
+    /// that event, and a saved set of twenty would otherwise redraw it twenty times before the window
+    /// had even been shown.
+    /// </remarks>
+    public static void Restore(IEnumerable<BreakpointMark>? marks)
+    {
+        Set.Clear();
+
+        if (marks is not null)
+        {
+            foreach (BreakpointMark mark in marks)
+            {
+                if (!string.IsNullOrWhiteSpace(mark?.Stage))
+                    Set[new Key(mark.Stage, mark.StepId)] = true;
+            }
+        }
+
         Changed?.Invoke();
     }
 

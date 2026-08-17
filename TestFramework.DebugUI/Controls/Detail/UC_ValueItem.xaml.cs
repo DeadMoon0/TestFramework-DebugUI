@@ -159,7 +159,7 @@ public partial class UC_ValueItem : UserControl
         {
             spBadges.Children.Add(new Border
             {
-                CornerRadius = new CornerRadius(2),
+                CornerRadius = new CornerRadius(4),
                 Background = (Brush)FindResource("SurfaceCard"),
                 Padding = new Thickness(4, 1, 4, 1),
                 Margin = new Thickness(4, 0, 0, 0),
@@ -194,7 +194,7 @@ public partial class UC_ValueItem : UserControl
 
             wpVersions.Children.Add(new Border
             {
-                CornerRadius = new CornerRadius(2),
+                CornerRadius = new CornerRadius(4),
                 Background = (Brush)FindResource("SurfaceCard"),
                 Padding = new Thickness(4, 1, 4, 1),
                 Margin = new Thickness(0, 0, 0, 2),

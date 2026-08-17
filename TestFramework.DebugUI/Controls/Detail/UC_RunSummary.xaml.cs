@@ -124,7 +124,7 @@ public partial class UC_RunSummary : UserControl
 
             Border row = new()
             {
-                CornerRadius = new CornerRadius(2.5),
+                CornerRadius = new CornerRadius(4),
                 Background = (Brush)FindResource("SurfaceRaised"),
                 Padding = new Thickness(8, 6, 8, 6),
                 Margin = new Thickness(0, 0, 0, 4),

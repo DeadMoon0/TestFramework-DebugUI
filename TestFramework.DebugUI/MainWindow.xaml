@@ -8,6 +8,7 @@
         xmlns:runs="clr-namespace:TestFramework.DebugUI.Controls.Runs"
         xmlns:detail="clr-namespace:TestFramework.DebugUI.Controls.Detail"
         xmlns:home="clr-namespace:TestFramework.DebugUI.Controls.Home"
+        xmlns:settings="clr-namespace:TestFramework.DebugUI.Controls.Settings"
         xmlns:feed="clr-namespace:TestFramework.DebugUI.Controls.Feed"
         mc:Ignorable="d"
         Title="TestFrameworkDebugger" Height="800" Width="1400" WindowStyle="None" Background="#01000000"
@@ -28,18 +29,23 @@
             </Grid.RowDefinitions>
 
             <!--
-                The title bar carries the identity on the left, the transport's health in the middle
-                and the caption buttons on the right. What used to sit here - three unclickable
-                labels reading "Select Project", "Select Test", "Select Run" - is now the run list
-                down the left, where a list belongs.
+                Identity, then the run and what acts on it, then the application's own controls, then the
+                caption buttons. The forty pixels across the top were mostly empty while six run actions
+                sat on a plate over the middle of the canvas - the one surface in the window that actually
+                wants the room. They live here now.
+
+                Everything clickable in this strip sets IsHitTestVisibleInChrome. The whole forty pixels
+                is caption as far as WindowChrome is concerned, and without it the chrome swallows the
+                click and drags the window instead.
             -->
             <Grid Panel.ZIndex="1">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="140"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <Viewbox Margin="12 10" Grid.Column="0">
@@ -51,23 +57,65 @@
                 <TextBlock Grid.Column="1" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"
                            FontWeight="Bold" FontSize="13" Text="Test Framework Debugger"/>
 
+                <shell:UC_RunBar x:Name="ucRunBar" Grid.Column="2"/>
+
+                <!-- Column 3 is empty on purpose: it is what is left to grab the window by. -->
+
                 <!--
-                    Navigation, not action. Where you are in the application belongs beside the
-                    application's name; what you do to the run being watched belongs over the board,
-                    where its effect is visible.
+                    Watch mode is armed here rather than buried in a settings file, because it changes
+                    what closing the window does and what the notification area contains - and a mode
+                    that changes those without being visible is a mode that surprises people. Lit means
+                    armed.
                 -->
-                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="20 0 0 0">
-                    <Button x:Name="btNavRuns" Style="{StaticResource FlatButton}" Padding="9 3"
-                            Content="Runs" Click="btNavRuns_Click"
-                            WindowChrome.IsHitTestVisibleInChrome="True"
-                            ToolTip="Every run in one place, with what became of each."/>
+                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="8 0 0 0">
+                    <Button x:Name="btHome" Style="{StaticResource CaptionIconButton}" Click="btHome_Click"
+                            WindowChrome.IsHitTestVisibleInChrome="True">
+                        <Path Data="{StaticResource IconHome}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+                    </Button>
+
+                    <Button x:Name="btWatch" Style="{StaticResource CaptionIconButton}"
+                            Click="btWatch_Click" WindowChrome.IsHitTestVisibleInChrome="True">
+                        <Viewbox Width="17" Height="17">
+                            <Canvas Width="24" Height="24">
+                                <!-- An eye: the tool is looking, whether or not anyone is looking at it. Lit
+                                     means armed - the colour is the whole indicator now the label has gone. -->
+                                <Path x:Name="pathWatchOutline" StrokeThickness="1.9" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      Stroke="{StaticResource TextSecondary}"
+                                      Data="M1.6 12S5.3 5.4 12 5.4 22.4 12 22.4 12 18.7 18.6 12 18.6 1.6 12 1.6 12Z"/>
+                                <Ellipse x:Name="ellipseWatchPupil" Canvas.Left="8.6" Canvas.Top="8.6" Width="6.8" Height="6.8"
+                                         Fill="{StaticResource TextSecondary}"/>
+                            </Canvas>
+                        </Viewbox>
+                    </Button>
+
+                    <Button x:Name="btSettings" Style="{StaticResource CaptionIconButton}" Margin="1 0 8 0"
+                            Click="btSettings_Click" WindowChrome.IsHitTestVisibleInChrome="True"
+                            ToolTip="Settings">
+                        <Viewbox Width="17" Height="17">
+                            <Canvas Width="24" Height="24">
+                                <!-- A gear: six teeth is enough to read as one at this size. -->
+                                <Path Stroke="{StaticResource TextSecondary}" StrokeThickness="1.9"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      Data="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z"/>
+                                <Path Stroke="{StaticResource TextSecondary}" StrokeThickness="1.9"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      Data="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.07A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.07A1.7 1.7 0 0 0 4.6 8.9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.07A1.7 1.7 0 0 0 15.1 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9v.03a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.07a1.7 1.7 0 0 0-1.53 1.03Z"/>
+                            </Canvas>
+                        </Viewbox>
+                    </Button>
+
+                    <shell:UC_TransportStatus VerticalAlignment="Center" Margin="0 0 10 0"/>
                 </StackPanel>
 
-                <shell:UC_TransportStatus Grid.Column="3" VerticalAlignment="Center" Margin="0 0 10 0"/>
-
-                <UniformGrid Grid.Column="4" Columns="3">
+                <!--
+                    A StackPanel rather than a UniformGrid: minimise is hidden while watch mode is armed,
+                    and a uniform grid of three fixed cells would have left a hole on the right where the
+                    close button should be.
+                -->
+                <StackPanel Grid.Column="5" Orientation="Horizontal">
                     <Button x:Name="btMinimize" Style="{StaticResource WindowButton}" Click="btMinimize_Click"
-                            WindowChrome.IsHitTestVisibleInChrome="True">
+                            Width="46" WindowChrome.IsHitTestVisibleInChrome="True">
                         <Viewbox>
                             <Canvas Height="100" Width="100">
                                 <Line X1="37" Y1="49.5" X2="63" Y2="49.5" StrokeThickness="1.99"
@@ -76,7 +124,7 @@
                         </Viewbox>
                     </Button>
                     <Button x:Name="btMaximizer" Style="{StaticResource WindowButton}" Click="btMaximizer_Click"
-                            WindowChrome.IsHitTestVisibleInChrome="True">
+                            Width="46" WindowChrome.IsHitTestVisibleInChrome="True">
                         <Viewbox>
                             <Canvas Height="100" Width="100">
                                 <Rectangle Canvas.Left="38" Canvas.Top="38" Width="24" Height="24"
@@ -85,7 +133,7 @@
                         </Viewbox>
                     </Button>
                     <Button x:Name="btClose" Style="{StaticResource WindowButton}" Click="btClose_Click"
-                            WindowChrome.IsHitTestVisibleInChrome="True">
+                            Width="46" WindowChrome.IsHitTestVisibleInChrome="True">
                         <Viewbox>
                             <Canvas Height="100" Width="100">
                                 <Line X1="39" Y1="39" X2="61" Y2="61" StrokeThickness="1.99"
@@ -95,7 +143,7 @@
                             </Canvas>
                         </Viewbox>
                     </Button>
-                </UniformGrid>
+                </StackPanel>
             </Grid>
 
             <!--
@@ -130,6 +178,8 @@
 
                 <!-- Where the window opens. Which run to look at is the question you have before you
                      have any question about a run, so it is answered first and covers everything. -->
+                <settings:UC_Settings x:Name="ucSettings" Panel.ZIndex="4" Visibility="Collapsed"/>
+
                 <home:UC_Home x:Name="ucHome" Panel.ZIndex="3"/>
             </Grid>
         </Grid>

@@ -13,6 +13,16 @@
     <SolidColorBrush x:Key="SurfaceCard" Color="#FF323232"/>
     <SolidColorBrush x:Key="SurfaceDivider" Color="#FF151515"/>
 
+    <!--
+        Overlays are opaque. The window is translucent over an acrylic backdrop, which is right for
+        the window; a panel floating above dense content is not the same thing, and a wash of the
+        page behind it makes small text genuinely hard to read.
+    -->
+    <SolidColorBrush x:Key="SurfaceOverlay" Color="#FF1E1E1E"/>
+
+    <!-- Dimming behind an overlay, so it reads as the thing that has focus. -->
+    <SolidColorBrush x:Key="Scrim" Color="#A6000000"/>
+
     <SolidColorBrush x:Key="TextPrimary" Color="#FFEDEDED"/>
     <SolidColorBrush x:Key="TextSecondary" Color="#FF9A9A9A"/>
     <SolidColorBrush x:Key="TextFaint" Color="#FF6A6A6A"/>
@@ -65,7 +75,7 @@
     <!-- Panels -->
 
     <Style x:Key="Panel" TargetType="Border">
-        <Setter Property="CornerRadius" Value="2.5"/>
+        <Setter Property="CornerRadius" Value="4"/>
         <Setter Property="Background" Value="{StaticResource SurfacePanel}"/>
         <Setter Property="Margin" Value="5"/>
     </Style>
@@ -77,7 +87,7 @@
     -->
     <Style x:Key="PanelOverlay" TargetType="Border">
         <Setter Property="CornerRadius" Value="4"/>
-        <Setter Property="Background" Value="#E61E1E1E"/>
+        <Setter Property="Background" Value="{StaticResource SurfaceOverlay}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="BorderBrush" Value="#14FFFFFF"/>
         <Setter Property="Margin" Value="10"/>
@@ -111,7 +121,7 @@
 
     <!--
         The one button shape the application uses, at two weights. Flat, quiet until hovered, and
-        square-cornered to the same 2.5 as everything else.
+        rounded to the same 4 as everything else.
     -->
     <Style x:Key="FlatButton" TargetType="Button">
         <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
@@ -123,7 +133,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
-                    <Border x:Name="bRoot" CornerRadius="2.5" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                    <Border x:Name="bRoot" CornerRadius="4" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <ControlTemplate.Triggers>
@@ -139,6 +149,55 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!--
+        Geometries rather than a font: the app ships no icon font, and a Path is themeable by the same
+        brushes as everything else. Kept here so the same glyph cannot drift between two panels.
+    -->
+    <Geometry x:Key="IconClose">M 4,4 L 14,14 M 14,4 L 4,14</Geometry>
+    <Geometry x:Key="IconFolder">M 2,4.5 L 7,4.5 L 8.6,6.5 L 16,6.5 L 16,14 L 2,14 Z</Geometry>
+    <Geometry x:Key="IconTrash">M 3,5.5 L 15,5.5 M 7,5.5 L 7,3.5 L 11,3.5 L 11,5.5 M 4.5,5.5 L 5.4,15 L 12.6,15 L 13.5,5.5</Geometry>
+    <Geometry x:Key="IconRefresh">M 15,9 A 6,6 0 1 1 12.8,4.4 M 15,3.2 L 15,4.6 L 13.6,4.6</Geometry>
+
+    <!--
+        The title bar's own set, drawn in the same 18-unit box as the ones above so a row of them sits on
+        one baseline.
+
+        Continue is a bar and a triangle rather than a plain triangle, because a plain triangle is what
+        every application uses for "start" and this one resumes something already running. Re-run turns
+        the other way from Refresh above: one repeats a test, the other re-reads the disk, and they sit on
+        different surfaces, but they should not be the same picture.
+    -->
+    <Geometry x:Key="IconHome">M 2.6,8.6 L 9,3 L 15.4,8.6 M 4.6,7.4 L 4.6,15 L 13.4,15 L 13.4,7.4</Geometry>
+    <Geometry x:Key="IconContinue">M 4.4,4.2 L 4.4,13.8 M 8.2,4.6 L 14.6,9 L 8.2,13.4 Z</Geometry>
+    <Geometry x:Key="IconStop">M 5.2,5.2 L 12.8,5.2 L 12.8,12.8 L 5.2,12.8 Z</Geometry>
+    <Geometry x:Key="IconRerun">M 3,9 A 6,6 0 1 0 5.2,4.4 M 3,3.2 L 3,4.6 L 4.4,4.6</Geometry>
+    <Geometry x:Key="IconAlert">M 9,3.4 L 15.8,14.4 L 2.2,14.4 Z M 9,7.2 L 9,10.6 M 9,12.3 L 9,12.6</Geometry>
+    <Geometry x:Key="IconSummary">M 3.4,4.4 L 14.6,4.4 M 3.4,7.8 L 14.6,7.8 M 3.4,11.2 L 10.6,11.2 M 3.4,14.6 L 8.2,14.6</Geometry>
+    <Geometry x:Key="IconFit">M 3,7 L 3,3 L 7,3 M 11,3 L 15,3 L 15,7 M 15,11 L 15,15 L 11,15 M 7,15 L 3,15 L 3,11</Geometry>
+
+    <!--
+        An icon-only button. Square, so a row of them lines up, and the glyph is stroked rather than
+        filled so one geometry serves every size.
+    -->
+    <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource FlatButton}">
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Width" Value="24"/>
+        <Setter Property="Height" Value="22"/>
+    </Style>
+
+    <!--
+        The same button for the title bar, with no resting background. A row of filled pills in the chrome
+        reads as a toolbar bolted onto the caption; unfilled, the glyphs sit in the bar and only the one
+        under the pointer lights up.
+    -->
+    <Style x:Key="CaptionIconButton" TargetType="Button" BasedOn="{StaticResource FlatButton}">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Width" Value="30"/>
+        <Setter Property="Height" Value="26"/>
+        <Setter Property="Margin" Value="1 0"/>
     </Style>
 
     <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource FlatButton}">

@@ -175,7 +175,7 @@ public partial class UC_Home : UserControl
 
         Border row = new()
         {
-            CornerRadius = new CornerRadius(2.5),
+            CornerRadius = new CornerRadius(4),
             Background = selected ? (Brush)FindResource("SurfaceRaised") : Brushes.Transparent,
             Padding = new Thickness(6, 5, 8, 5),
             Margin = new Thickness(indent, 0, 0, 2),

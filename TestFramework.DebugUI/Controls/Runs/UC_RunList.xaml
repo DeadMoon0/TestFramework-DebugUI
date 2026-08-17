@@ -17,9 +17,11 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Style="{StaticResource PanelHeading}" Text="RUNS"/>
-                <Button x:Name="btRefresh" Grid.Column="1" Style="{StaticResource FlatButton}" Margin="0 5 8 5"
-                        Padding="6 2" Content="Refresh" Click="btRefresh_Click"
-                        ToolTip="Look again for runs recorded on disk."/>
+                <Button x:Name="btRefresh" Grid.Column="1" Style="{StaticResource IconButton}" Margin="0 4 6 4"
+                        Click="btRefresh_Click" ToolTip="Look again on disk">
+                    <Path Data="{StaticResource IconRefresh}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+                </Button>
             </Grid>
 
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">

@@ -95,30 +95,6 @@ public partial class UC_Board : UserControl
             .Select(empty => empty ? Visibility.Visible : Visibility.Collapsed)
             .BindToDependencyProperty(tbEmpty, VisibilityProperty));
 
-        subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.SelectedSessionId is null
-                ? "NO RUN SELECTED"
-                : state.Runs.FirstOrDefault(run => run.SessionId == state.SelectedSessionId)?.Name.ToUpperInvariant() ?? "RUN")
-            .BindToDependencyProperty(tbRunName, TextBlock.TextProperty));
-
-        // The Continue button appears only when there is something to continue. A button that is
-        // always there and almost always does nothing teaches people not to look at it.
-        subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.ActiveRun.Stages.Any(stage => stage.Steps.Any(step => step.IsWaitingAtBreakpoint)))
-            .Select(waiting => waiting ? Visibility.Visible : Visibility.Collapsed)
-            .BindToDependencyProperty(btContinue, VisibilityProperty));
-
-        subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.SelectedSessionId is not null && !state.ActiveRun.IsFinished)
-            .BindToDependencyProperty(btStop, IsEnabledProperty));
-
-        // Offered only where it can actually be done. A button that explains itself only after being
-        // pressed is a button that wastes the press.
-        subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => RerunCommand.IsAvailableFor(
-                state.Runs.Find(run => string.Equals(run.SessionId, state.SelectedSessionId, StringComparison.Ordinal))))
-            .BindToDependencyProperty(btRerun, IsEnabledProperty));
-
         // The surface is measured after the run arrives, so this is what actually fits the first
         // board; the attempt in Render is just the case where a size already exists.
         bSurface.SizeChanged += (_, _) =>
@@ -285,7 +261,7 @@ public partial class UC_Board : UserControl
     {
         Width = node.Width,
         Height = node.Height,
-        CornerRadius = new CornerRadius(6),
+        CornerRadius = new CornerRadius(4),
         Background = new SolidColorBrush(Color.FromArgb(8, 255, 255, 255)),
         BorderThickness = new Thickness(1),
         BorderBrush = new SolidColorBrush(Color.FromArgb(14, 255, 255, 255)),
@@ -331,7 +307,7 @@ public partial class UC_Board : UserControl
         {
             Width = node.Width,
             Height = node.Height,
-            CornerRadius = new CornerRadius(2.5),
+            CornerRadius = new CornerRadius(4),
             Background = (Brush)FindResource("SurfaceCard"),
             BorderThickness = new Thickness(2),
             BorderBrush = Brushes.Transparent,
@@ -414,7 +390,7 @@ public partial class UC_Board : UserControl
         {
             Width = node.Width,
             Height = node.Height,
-            CornerRadius = new CornerRadius(2.5),
+            CornerRadius = new CornerRadius(4),
             Background = (Brush)FindResource("SurfaceCard"),
             BorderThickness = new Thickness(2),
             BorderBrush = Brushes.Transparent,
@@ -482,7 +458,7 @@ public partial class UC_Board : UserControl
     private UIElement Strip(bool top) => new Border
     {
         Background = (Brush)FindResource("SurfaceSunken"),
-        CornerRadius = top ? new CornerRadius(2.5, 2.5, 0, 0) : new CornerRadius(0, 0, 2.5, 2.5)
+        CornerRadius = top ? new CornerRadius(4, 4, 0, 0) : new CornerRadius(0, 0, 4, 4)
     };
 
     /// <summary>
@@ -724,12 +700,23 @@ public partial class UC_Board : UserControl
         };
     }
 
-    /// <summary>Raised when the reader asks for the run's summary.</summary>
+    /// <summary>
+    /// Raised when the reader asks for the run's summary by clicking the verdict drawn on the board.
+    /// </summary>
     public event Action? SummaryRequested;
 
-    private void btSummary_Click(object sender, RoutedEventArgs e) => SummaryRequested?.Invoke();
+    /// <summary>Asks for the summary, as clicking the verdict does.</summary>
+    /// <remarks>
+    /// These three exist so the title bar and the keyboard shortcuts run the same code as each other
+    /// rather than their own copies of it. Two paths to one action is how the two stop agreeing.
+    /// </remarks>
+    public void RequestSummary() => SummaryRequested?.Invoke();
 
-    private void btFirstFailure_Click(object sender, RoutedEventArgs e)
+    /// <summary>Scales and centres the board so all of it is on screen.</summary>
+    public void FitToWindow() => Fit();
+
+    /// <summary>Selects the first failed step and pans to it.</summary>
+    public void GoToFirstFailure()
     {
         RunGraph graph = StateStore<MainState>.Default.GetValue(state => state.ActiveRun);
 
@@ -762,17 +749,6 @@ public partial class UC_Board : UserControl
         ttPan.X = (ActualWidth / 2) - (node.CentreX * stZoom.ScaleX);
         ttPan.Y = (ActualHeight / 2) - (node.CentreY * stZoom.ScaleY);
     }
-
-    private async void btContinue_Click(object sender, RoutedEventArgs e)
-        => await MainWindow.Shell.ContinueSelectedRunAsync();
-
-    private async void btStop_Click(object sender, RoutedEventArgs e)
-        => await MainWindow.Shell.CancelSelectedRunAsync();
-
-    private async void btRerun_Click(object sender, RoutedEventArgs e)
-        => await MainWindow.Shell.RerunSelectedAsync();
-
-    private void btFit_Click(object sender, RoutedEventArgs e) => Fit();
 
     private void Surface_MouseWheel(object sender, MouseWheelEventArgs e)
     {

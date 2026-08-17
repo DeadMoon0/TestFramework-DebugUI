@@ -5,10 +5,13 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d">
     <!--
-        Every run in one place. Opaque rather than floating over the board: this is a place you are
-        in, not a panel you glance past, and a wall of cards read through a live canvas is unreadable.
+        Every run in one place. An overlay rather than a full-bleed page: inset so the board is
+        visibly still there underneath, on a scrim so it is clearly the thing in front, and opaque
+        because a wall of cards read through a live canvas is unreadable.
     -->
-    <Border Background="#FF1A1A1A" BorderBrush="#14FFFFFF" BorderThickness="0 1 0 0">
+    <Grid Background="{StaticResource Scrim}">
+    <Border Margin="16" CornerRadius="4" Background="{StaticResource SurfaceOverlay}"
+            BorderBrush="#14FFFFFF" BorderThickness="1">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -31,12 +34,18 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button x:Name="btRefresh" Style="{StaticResource FlatButton}" Padding="9 3" Margin="0 0 6 0"
-                            Content="Refresh" Click="btRefresh_Click"
-                            ToolTip="Look again for runs recorded on disk."/>
-                    <Button x:Name="btClose" Style="{StaticResource FlatButton}" Padding="9 3"
-                            Content="Close" Click="btClose_Click"
-                            ToolTip="Back to the board."/>
+                    <Button x:Name="btRefresh" Style="{StaticResource IconButton}" Margin="0 0 6 0"
+                            Background="{StaticResource SurfaceCard}" Click="btRefresh_Click"
+                            ToolTip="Look again on disk">
+                        <Path Data="{StaticResource IconRefresh}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+                    </Button>
+                    <Button x:Name="btClose" Style="{StaticResource IconButton}"
+                            Background="{StaticResource SurfaceCard}" Click="btClose_Click"
+                            ToolTip="Back to the board">
+                        <Path Data="{StaticResource IconClose}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+                    </Button>
                 </StackPanel>
             </Grid>
 
@@ -45,7 +54,7 @@
                 to a test and a test belongs to a project, and that is how anyone looks for one. It
                 narrows what is on the right rather than opening anything, so browsing costs nothing.
             -->
-            <Border Grid.Row="1" Margin="20 0 0 20" CornerRadius="2.5" Background="{StaticResource SurfacePanel}">
+            <Border Grid.Row="1" Margin="20 0 0 20" CornerRadius="4" Background="{StaticResource SurfacePanel}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                               Padding="8 8 8 8">
                     <StackPanel x:Name="spTree"/>
@@ -64,4 +73,5 @@
             </ScrollViewer>
         </Grid>
     </Border>
+    </Grid>
 </UserControl>

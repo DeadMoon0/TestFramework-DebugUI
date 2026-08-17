@@ -4,7 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d">
-    <Border x:Name="bRoot" CornerRadius="2.5" Background="{StaticResource SurfaceRaised}" Margin="0 0 0 3"
+    <Border x:Name="bRoot" CornerRadius="4" Background="{StaticResource SurfaceRaised}" Margin="0 0 0 3"
             Padding="8 5" MouseLeftButtonUp="Root_MouseLeftButtonUp">
         <Grid>
             <Grid.ColumnDefinitions>
@@ -13,7 +13,7 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <Border x:Name="bSeverity" Width="4" Height="4" CornerRadius="2" VerticalAlignment="Center"
+            <Border x:Name="bSeverity" Width="4" Height="4" CornerRadius="4" VerticalAlignment="Center"
                     Margin="0 0 8 0" Background="{StaticResource TextFaint}"/>
 
             <TextBlock x:Name="tbWhen" Grid.Column="1" Style="{StaticResource MutedText}" FontSize="10"

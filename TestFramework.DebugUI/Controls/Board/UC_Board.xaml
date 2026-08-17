@@ -5,45 +5,13 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d" ClipToBounds="True">
     <Border Background="Transparent">
+        <!--
+            Nothing but the canvas. The run's name and the six things you can do to it used to sit on a
+            plate across the top of this control; they are in the title bar now, which had the room to
+            spare and does not have a run drawn underneath it.
+        -->
         <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-
-            <!--
-                What acts on the run being watched, and nothing else. Where you go in the
-                application is navigation and lives in the title bar; what you do to this run lives
-                here, over the board it changes. Collected into one plate so the group reads as
-                belonging to the run under it rather than as loose controls on the canvas.
-            -->
-            <Border HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0 8 0 0"
-                    CornerRadius="2.5" Background="{StaticResource SurfacePanel}" Padding="8 5">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock x:Name="tbRunName" Style="{StaticResource PanelHeading}"
-                               VerticalAlignment="Center" Margin="2 0 12 0" Text="NO RUN SELECTED"/>
-
-                    <Button x:Name="btContinue" Style="{StaticResource PrimaryButton}" Margin="0 0 4 0" Padding="7 2"
-                            Content="Continue" Click="btContinue_Click" Visibility="Collapsed"
-                            ToolTip="Release the step waiting at its breakpoint."/>
-                    <Button x:Name="btStop" Style="{StaticResource FlatButton}" Margin="0 0 4 0" Padding="7 2"
-                            Content="Stop" Click="btStop_Click"
-                            ToolTip="Ask the run to stop. It unwinds through its cleanup stage; nothing is killed."/>
-                    <Button x:Name="btRerun" Style="{StaticResource FlatButton}" Margin="0 0 4 0" Padding="7 2"
-                            Content="Re-run" Click="btRerun_Click"
-                            ToolTip="Run this test again. The new run appears here on its own."/>
-                    <Button x:Name="btFirstFailure" Style="{StaticResource FlatButton}" Margin="0 0 4 0" Padding="7 2"
-                            Content="First failure" Click="btFirstFailure_Click"
-                            ToolTip="Select the first step that failed."/>
-                    <Button x:Name="btSummary" Style="{StaticResource FlatButton}" Margin="0 0 4 0" Padding="7 2"
-                            Content="Summary" Click="btSummary_Click"
-                            ToolTip="Whether this run can be trusted, and what failed if not."/>
-                    <Button x:Name="btFit" Style="{StaticResource FlatButton}" Padding="7 2"
-                            Content="Fit" Click="btFit_Click" ToolTip="Scale the board so all of it is on screen."/>
-                </StackPanel>
-            </Border>
-
-            <Border x:Name="bSurface" Grid.Row="1" Background="Transparent" Margin="0"
+            <Border x:Name="bSurface" Background="Transparent" Margin="0"
                     ClipToBounds="True" MouseWheel="Surface_MouseWheel"
                     MouseLeftButtonDown="Surface_MouseLeftButtonDown" MouseLeftButtonUp="Surface_MouseLeftButtonUp"
                     MouseMove="Surface_MouseMove">
@@ -57,7 +25,7 @@
                 </Canvas>
             </Border>
 
-            <TextBlock x:Name="tbEmpty" Grid.Row="1" Style="{StaticResource MutedText}"
+            <TextBlock x:Name="tbEmpty" Style="{StaticResource MutedText}"
                        HorizontalAlignment="Center" VerticalAlignment="Center"
                        Text="Pick a run on the left."/>
         </Grid>

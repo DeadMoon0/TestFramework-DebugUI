@@ -9,7 +9,7 @@
         how it ended, how far it got, and when. The colour edge carries the verdict on its own, so a
         wall of these reads at a glance without anyone parsing a word.
     -->
-    <Border x:Name="bRoot" CornerRadius="2.5" Background="{StaticResource SurfaceRaised}"
+    <Border x:Name="bRoot" CornerRadius="4" Background="{StaticResource SurfaceRaised}"
             MouseLeftButtonUp="Root_MouseLeftButtonUp" MouseEnter="Root_MouseEnter" MouseLeave="Root_MouseLeave">
         <Grid>
             <Grid.ColumnDefinitions>
@@ -17,7 +17,7 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <Border x:Name="bEdge" CornerRadius="2.5 0 0 2.5" Background="{StaticResource StateNotRun}"/>
+            <Border x:Name="bEdge" CornerRadius="4 0 0 4" Background="{StaticResource StateNotRun}"/>
 
             <StackPanel Grid.Column="1" Margin="12 10 12 10">
                 <Grid>
@@ -29,7 +29,7 @@
                     <TextBlock x:Name="tbName" Style="{StaticResource BodyText}" FontWeight="Bold"
                                TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" VerticalAlignment="Center"/>
 
-                    <Border x:Name="bHealth" Grid.Column="1" CornerRadius="2" Padding="5 1" Margin="6 0 0 0"
+                    <Border x:Name="bHealth" Grid.Column="1" CornerRadius="4" Padding="5 1" Margin="6 0 0 0"
                             VerticalAlignment="Center" Background="{StaticResource SurfaceCard}">
                         <TextBlock x:Name="tbHealth" FontSize="8" FontWeight="Bold" Foreground="White"/>
                     </Border>

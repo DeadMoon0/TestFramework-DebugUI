@@ -36,7 +36,7 @@
                         Failure first, above everything else about the step. When a step has broken,
                         that is the only reason anyone opened this panel.
                     -->
-                    <Border x:Name="bFailure" CornerRadius="2.5" Background="#28FC4646" Margin="0 12 0 0"
+                    <Border x:Name="bFailure" CornerRadius="4" Background="#28FC4646" Margin="0 12 0 0"
                             Padding="10" Visibility="Collapsed">
                         <StackPanel>
                             <TextBlock x:Name="tbFailureType" Style="{StaticResource BodyText}" FontWeight="Bold"

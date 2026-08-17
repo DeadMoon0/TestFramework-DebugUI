@@ -1,0 +1,58 @@
+<UserControl x:Class="TestFramework.DebugUI.Controls.Shell.UC_RunBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+             mc:Ignorable="d">
+    <!--
+        The run being watched, and everything that acts on it. This used to be a plate floating over the
+        middle of the canvas, which put six buttons on top of the one surface in the window that wants
+        the room. The title bar already had the space.
+
+        The whole bar hides when nothing is selected rather than showing a disabled row under the words
+        "no run selected": an empty title bar says the same thing without spending a pixel on saying it.
+    -->
+    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="18 0 0 0">
+        <TextBlock x:Name="tbRunName" Style="{StaticResource BodyText}" FontWeight="Bold"
+                   MaxWidth="300" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
+                   VerticalAlignment="Center" Margin="0 0 10 0"/>
+
+        <!-- What the run does. -->
+        <Button x:Name="btContinue" Style="{StaticResource CaptionIconButton}" Click="btContinue_Click"
+                Visibility="Collapsed" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <Path Data="{StaticResource IconContinue}" Stroke="{StaticResource StateRunning}" StrokeThickness="1.5"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+        </Button>
+        <Button x:Name="btStop" Style="{StaticResource CaptionIconButton}" Click="btStop_Click"
+                shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <Path Data="{StaticResource IconStop}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+        </Button>
+        <Button x:Name="btRerun" Style="{StaticResource CaptionIconButton}" Click="btRerun_Click"
+                shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <Path Data="{StaticResource IconRerun}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+        </Button>
+
+        <!-- Acting on the run, then looking at it. The rule keeps a mis-aimed click from being a
+             consequence: nothing to the right of it changes the run. -->
+        <Border Width="1" Height="16" Margin="5 0" Background="#1FFFFFFF"/>
+
+        <Button x:Name="btFirstFailure" Style="{StaticResource CaptionIconButton}" Click="btFirstFailure_Click"
+                shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <Path Data="{StaticResource IconAlert}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+        </Button>
+        <Button x:Name="btSummary" Style="{StaticResource CaptionIconButton}" Click="btSummary_Click"
+                shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <Path Data="{StaticResource IconSummary}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+        </Button>
+        <Button x:Name="btFit" Style="{StaticResource CaptionIconButton}" Click="btFit_Click"
+                shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <Path Data="{StaticResource IconFit}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+        </Button>
+    </StackPanel>
+</UserControl>

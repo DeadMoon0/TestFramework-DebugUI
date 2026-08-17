@@ -4,7 +4,7 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d" Cursor="Hand">
-    <Border x:Name="bRoot" CornerRadius="2.5" Background="{StaticResource SurfaceRaised}" Margin="0 0 0 4"
+    <Border x:Name="bRoot" CornerRadius="4" Background="{StaticResource SurfaceRaised}" Margin="0 0 0 4"
             MouseLeftButtonUp="Root_MouseLeftButtonUp">
         <Grid Margin="8 6">
             <Grid.ColumnDefinitions>
@@ -25,7 +25,7 @@
 
             <!-- Badged rather than merely coloured: with several runs attached, the one waiting for
                  you has to be findable at a glance. -->
-            <Border x:Name="bPaused" Grid.Column="2" CornerRadius="2" Background="{StaticResource StatePaused}"
+            <Border x:Name="bPaused" Grid.Column="2" CornerRadius="4" Background="{StaticResource StatePaused}"
                     Padding="4 1" Visibility="Collapsed" VerticalAlignment="Center">
                 <TextBlock Text="PAUSED" FontSize="8" FontWeight="Bold" Foreground="White"/>
             </Border>

@@ -24,12 +24,15 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Style="{StaticResource PanelHeading}" Text="SUMMARY"/>
-                <Button x:Name="btClose" Grid.Column="1" Style="{StaticResource FlatButton}" Margin="0 5 8 5"
-                        Padding="7 2" Content="Close" Click="btClose_Click"/>
+                <Button x:Name="btClose" Grid.Column="1" Style="{StaticResource IconButton}" Margin="0 5 8 5"
+                        Click="btClose_Click" ToolTip="Close">
+                    <Path Data="{StaticResource IconClose}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+                </Button>
             </Grid>
 
             <StackPanel Grid.Row="1" Margin="12 4 12 0">
-                <Border x:Name="bVerdict" CornerRadius="2.5" Padding="12 10" Background="#2862C98F">
+                <Border x:Name="bVerdict" CornerRadius="4" Padding="12 10" Background="#2862C98F">
                     <StackPanel>
                         <TextBlock x:Name="tbVerdict" Style="{StaticResource BodyText}" FontSize="16" FontWeight="Bold"/>
                         <TextBlock x:Name="tbVerdictWhy" Style="{StaticResource MutedText}" Margin="0 3 0 0"/>

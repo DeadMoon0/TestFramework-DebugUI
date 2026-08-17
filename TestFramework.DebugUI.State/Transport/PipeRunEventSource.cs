@@ -92,6 +92,16 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
     public event Action<FeedEntry>? Notice;
 
     /// <summary>
+    /// Raised whenever a run attaches or detaches.
+    /// </summary>
+    /// <remarks>
+    /// Without this the transport could report becoming busy but never becoming quiet, so the status
+    /// said "Attached" for the rest of the session after the first run — long after everything had
+    /// disconnected. A consumer that shows a live count needs both edges.
+    /// </remarks>
+    public event Action? ConnectionsChanged;
+
+    /// <summary>
     /// Decides whether a step that reached a breakpoint should be held.
     /// </summary>
     /// <remarks>
@@ -403,6 +413,9 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
 
         // A session id repeating means the previous connection for it is gone; the newcomer owns it.
         sessions[sessionId] = session;
+
+        ConnectionsChanged?.Invoke();
+
         return session;
     }
 
@@ -416,6 +429,8 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
         }
 
         sessions.TryRemove(new KeyValuePair<string, PipeSession>(session.SessionId, session));
+
+        ConnectionsChanged?.Invoke();
 
         if (session.SawFinish)
             return;

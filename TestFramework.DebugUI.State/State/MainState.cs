@@ -173,6 +173,28 @@ public sealed record RunSummary
     /// </remarks>
     public string Test => string.IsNullOrWhiteSpace(FullyQualifiedName) ? Name : FullyQualifiedName;
 
+    /// <summary>
+    /// Gets the shortest label that still identifies the run to a reader.
+    /// </summary>
+    /// <remarks>
+    /// For somewhere with no room for a fully qualified name — a notification, a tooltip, a narrow
+    /// column. <see cref="Test"/> is the identity and is often eighty characters of namespace; put
+    /// that in a notification and the one word that matters wraps off the bottom.
+    /// </remarks>
+    public string ShortName
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(Name))
+                return Name;
+
+            string test = Test;
+            int lastDot = test.LastIndexOf('.');
+
+            return lastDot >= 0 && lastDot < test.Length - 1 ? test[(lastDot + 1)..] : test;
+        }
+    }
+
     /// <summary>Gets a value indicating whether this run carries enough identity to be re-run.</summary>
     public bool CanRerun { get; init; }
 

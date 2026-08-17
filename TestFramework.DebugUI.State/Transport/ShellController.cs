@@ -65,6 +65,7 @@ public sealed class ShellController : IDisposable
 
         pipe.EnvelopeReceived += OnLiveEnvelope;
         pipe.Notice += Report;
+        pipe.ConnectionsChanged += OnConnectionsChanged;
         pipe.PauseAtBreakpoint = ShouldPause;
 
         rerunner = new TestRerunner(Report);
@@ -285,9 +286,34 @@ public sealed class ShellController : IDisposable
 
         pipe.EnvelopeReceived -= OnLiveEnvelope;
         pipe.Notice -= Report;
+        pipe.ConnectionsChanged -= OnConnectionsChanged;
 
         pipe.Dispose();
         ingest.Dispose();
+    }
+
+    /// <summary>
+    /// Keeps the reported status level with how many runs are actually connected.
+    /// </summary>
+    /// <remarks>
+    /// Only ever moves between listening and attached. A transport that has faulted stays faulted —
+    /// that is a fact about the tool rather than about how busy it happens to be, and quietly
+    /// downgrading it to "listening" because nothing is connected would hide it.
+    /// </remarks>
+    private void OnConnectionsChanged()
+    {
+        if (disposed)
+            return;
+
+        TransportStatus current = store.GetValue(state => state.Shell.Transport);
+
+        if (current == TransportStatus.Faulted || current == TransportStatus.Idle)
+            return;
+
+        TransportStatus next = pipe.AttachedRunCount > 0 ? TransportStatus.Attached : TransportStatus.Listening;
+
+        if (next != current)
+            store.Dispatch(RunActions.SetTransportStatus, next);
     }
 
     private void OnLiveEnvelope(DebugEnvelope envelope)

@@ -1,0 +1,31 @@
+<UserControl x:Class="TestFramework.DebugUI.Controls.Shell.UC_Toggle"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d" Cursor="Hand" Background="Transparent">
+    <!--
+        A setting and its switch on one row. The whole row is the target rather than just the pill:
+        a switch small enough to look right next to text is too small to be a comfortable click, and
+        the label is the part the eye is already on.
+    -->
+    <Grid MouseLeftButtonUp="Row_MouseLeftButtonUp">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Margin="0 0 12 0">
+            <TextBlock x:Name="tbLabel" Style="{StaticResource BodyText}"/>
+            <TextBlock x:Name="tbNote" Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0 2 0 0"/>
+        </StackPanel>
+
+        <Border x:Name="bTrack" Grid.Column="1" Width="34" Height="18" CornerRadius="4"
+                VerticalAlignment="Top" Margin="0 2 0 0"
+                Background="{StaticResource SurfaceRaised}" BorderThickness="1"
+                BorderBrush="{StaticResource SurfaceDivider}">
+            <Border x:Name="eKnob" Width="12" Height="12" CornerRadius="4" HorizontalAlignment="Left"
+                    Margin="3 0 0 0" Background="{StaticResource TextFaint}"/>
+        </Border>
+    </Grid>
+</UserControl>

@@ -3,11 +3,67 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:chrome="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
              mc:Ignorable="d">
-    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-        <Border x:Name="bIndicator" Width="7" Height="7" CornerRadius="3.5" VerticalAlignment="Center"
-                Background="{StaticResource StateNotRun}"/>
-        <TextBlock x:Name="tbStatus" Margin="7 0 0 0" VerticalAlignment="Center"
-                   Foreground="{StaticResource TextFaint}" FontSize="11" Text="Idle"/>
-    </StackPanel>
+    <Grid>
+        <!--
+            The badge answers "is the tool hearing anything" in one word. Clicking it answers the next
+            question - what exactly is connected, and what is each one doing - which is a list, and a
+            list has no business in a title bar.
+        -->
+        <Button x:Name="btBadge" Style="{StaticResource FlatButton}" Padding="7 3"
+                Click="btBadge_Click" chrome:WindowChrome.IsHitTestVisibleInChrome="True"
+                ToolTip="Connections">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Border x:Name="bIndicator" Width="7" Height="7" CornerRadius="3.5" VerticalAlignment="Center"
+                        Background="{StaticResource StateNotRun}"/>
+                <TextBlock x:Name="tbStatus" Margin="7 0 0 0" VerticalAlignment="Center"
+                           Foreground="{StaticResource TextFaint}" FontSize="11" Text="Idle"/>
+            </StackPanel>
+        </Button>
+
+        <!--
+            Custom placement rather than Bottom with an offset. Bottom nudges the popup sideways on its
+            own to keep it on screen and then applies the offset on top, so a centring offset came out
+            roughly a popup-width too far left. A callback is the only way to say exactly where it goes.
+        -->
+        <Popup x:Name="popDetails" PlacementTarget="{Binding ElementName=btBadge}" Placement="Custom"
+               CustomPopupPlacementCallback="PlaceUnderBadge"
+               StaysOpen="False" AllowsTransparency="True"
+               Opened="popDetails_Opened" Closed="popDetails_Closed">
+            <Border Background="{StaticResource SurfaceOverlay}" BorderBrush="#26FFFFFF" BorderThickness="1" CornerRadius="4"
+                    Width="380" Padding="0 0 0 10">
+                <StackPanel>
+                    <TextBlock Style="{StaticResource PanelHeading}" Text="TRANSPORT"/>
+
+                    <StackPanel Margin="12 0 12 0">
+                        <TextBlock x:Name="tbGeneral" Style="{StaticResource BodyText}"/>
+                        <TextBlock x:Name="tbGeneralNote" Style="{StaticResource MutedText}" TextWrapping="Wrap"
+                                   Margin="0 2 0 0"/>
+                    </StackPanel>
+
+                    <Border Height="1" Background="{StaticResource SurfaceDivider}" Margin="12 10 12 0"/>
+
+                    <TextBlock Style="{StaticResource PanelHeading}" Text="CONNECTIONS" Margin="10 8 10 4"/>
+
+                    <TextBlock x:Name="tbNoConnections" Style="{StaticResource MutedText}" Margin="12 0 12 0"
+                               TextWrapping="Wrap"
+                               Text="A run connects on its own when it starts."/>
+
+                    <ScrollViewer MaxHeight="260" VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel x:Name="spConnections" Margin="12 0 12 0"/>
+                    </ScrollViewer>
+
+                    <Border Height="1" Background="{StaticResource SurfaceDivider}" Margin="12 10 12 0"/>
+
+                    <StackPanel Margin="12 8 12 0">
+                        <TextBlock Style="{StaticResource MutedText}" Text="Pipe"/>
+                        <TextBlock x:Name="tbPipeName" Style="{StaticResource BodyText}" FontSize="10"
+                                   TextWrapping="Wrap" Margin="0 1 0 0"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Popup>
+    </Grid>
 </UserControl>

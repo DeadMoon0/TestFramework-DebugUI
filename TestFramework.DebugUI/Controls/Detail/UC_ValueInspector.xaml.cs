@@ -439,7 +439,7 @@ public partial class UC_ValueInspector : UserControl
 
             wpVersions.Children.Add(new Border
             {
-                CornerRadius = new CornerRadius(2),
+                CornerRadius = new CornerRadius(4),
                 Background = (Brush)FindResource("SurfaceCard"),
                 Padding = new Thickness(5, 1, 5, 1),
                 Margin = new Thickness(0, 0, 0, 2),

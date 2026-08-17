@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using TestFramework.DebugUI.Copying;
 using TestFramework.DebugUI.State;
 
 
@@ -26,6 +27,10 @@ public partial class UC_FeedItem : UserControl
         this.entry = entry;
 
         InitializeComponent();
+
+        // Feed entries carry the transport's own diagnostics, which is exactly what gets pasted into a
+        // bug report about the transport.
+        Copyable.Enable(tbTitle, tbDetail);
 
         tbWhen.Text = entry.AtUtc.ToLocalTime().ToString("HH:mm:ss", System.Globalization.CultureInfo.CurrentCulture);
         tbTitle.Text = entry.Title;

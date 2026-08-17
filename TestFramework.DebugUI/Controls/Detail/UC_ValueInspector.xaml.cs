@@ -12,6 +12,7 @@ using System.Windows.Documents;
 using System.Windows.Media;
 using Axiom.State;
 using TestFramework.Core.Debugger;
+using TestFramework.DebugUI.Copying;
 using TestFramework.DebugUI.State;
 
 namespace TestFramework.DebugUI.Controls.Detail;
@@ -44,6 +45,10 @@ public partial class UC_ValueInspector : UserControl
     public UC_ValueInspector()
     {
         InitializeComponent();
+
+        // The value itself, its one-line summary and the facts about it. The preview below them is
+        // already a read-only text box and can be selected the ordinary way.
+        Copyable.Enable(tbKey, tbSummary, tbBody);
 
         Unloaded += (_, _) => subscriptions.Dispose();
     }

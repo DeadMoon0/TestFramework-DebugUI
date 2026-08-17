@@ -8,6 +8,8 @@ using System.Windows.Controls;
 using Axiom.State;
 using Axiom.Wpf.Extensions;
 using TestFramework.Core.Debugger;
+using TestFramework.DebugUI.Copying;
+using TestFramework.DebugUI.Editors;
 using TestFramework.DebugUI.State;
 
 namespace TestFramework.DebugUI.Controls.Shell;
@@ -31,6 +33,9 @@ public partial class UC_RunBar : UserControl
 {
     private readonly CompositeDisposable subscriptions = [];
 
+    private ExternalEditor? code;
+    private ExternalEditor? visualStudio;
+
     /// <summary>Creates the bar and binds it.</summary>
     public UC_RunBar()
     {
@@ -42,11 +47,18 @@ public partial class UC_RunBar : UserControl
             .Bind(state => Selected(state)?.Name ?? string.Empty)
             .BindToDependencyProperty(tbRunName, TextBlock.TextProperty));
 
-        // Capped and trimmed, so a long name cannot push the actions off the bar. The qualified name is
-        // on the tooltip for when the trimmed one is not enough.
+        // Capped and trimmed, so a long name cannot push the actions off the bar. The qualified name is on
+        // the tooltip for when the trimmed one is not enough — and it is what the field copies, because a
+        // method name on its own is not what anyone pastes into a filter or a search.
         subscriptions.Add(StateStore<MainState>.Default
             .Bind(state => Selected(state)?.Test ?? string.Empty)
-            .Subscribe(test => tbRunName.ToolTip = string.IsNullOrWhiteSpace(test) ? null : test));
+            .Subscribe(test =>
+            {
+                tbRunName.ToolTip = string.IsNullOrWhiteSpace(test) ? null : test;
+                Copyable.SetText(tbRunName, test);
+            }));
+
+        Copyable.Enable(tbRunName);
 
         subscriptions.Add(StateStore<MainState>.Default
             .Bind(state => state.SelectedSessionId is null ? Visibility.Collapsed : Visibility.Visible)
@@ -77,6 +89,11 @@ public partial class UC_RunBar : UserControl
             .Bind(state => state.ActiveRun.Stages.Any(stage => stage.Steps.Any(
                 step => step.Lifecycle is DebugLifecycleState.Error or DebugLifecycleState.Timeout)))
             .BindToDependencyProperty(btFirstFailure, IsEnabledProperty));
+
+        // Looked for in the background: finding Visual Studio runs vswhere, and the title bar must not wait
+        // on a process launch to appear. The buttons stay hidden until the answer arrives, which for an
+        // editor that is not installed is where they stay.
+        _ = ShowEditorsAsync();
 
         btContinue.ToolTip = Shortcuts.Describe("Release the breakpoint", Shortcuts.Continue);
         btStep.ToolTip = Shortcuts.Describe("Run on to the next step and stop there", Shortcuts.StepForward);
@@ -132,6 +149,88 @@ public partial class UC_RunBar : UserControl
 
     private async void btRerun_Click(object sender, RoutedEventArgs e)
         => await MainWindow.Shell.RerunSelectedAsync();
+
+    /// <summary>
+    /// Shows a button for each editor that is actually installed.
+    /// </summary>
+    /// <remarks>
+    /// The rule is the same for both: found means a button, not found means nothing at all. A disabled
+    /// button for an editor the machine does not have would be permanent furniture advertising something
+    /// the reader cannot use.
+    /// </remarks>
+    private async Task ShowEditorsAsync()
+    {
+        EditorSet editors = await ExternalEditors.ResolveAsync().ConfigureAwait(true);
+
+        code = editors.Code;
+        visualStudio = editors.VisualStudio;
+
+        Show(btCode, imgCode, code);
+        Show(btVisualStudio, imgVisualStudio, visualStudio);
+
+        bEditorRule.Visibility = code is null && visualStudio is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private static void Show(Button button, Image image, ExternalEditor? editor)
+    {
+        if (editor is null)
+        {
+            button.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        image.Source = editor.Icon;
+        button.ToolTip = $"Open this test's solution in {editor.Name}";
+        button.Visibility = Visibility.Visible;
+    }
+
+    private void btCode_Click(object sender, RoutedEventArgs e) => Open(code);
+
+    private void btVisualStudio_Click(object sender, RoutedEventArgs e) => Open(visualStudio);
+
+    /// <summary>
+    /// Opens the selected run's solution in an editor.
+    /// </summary>
+    /// <remarks>
+    /// The project file is the run's own — the one recorded so the test could be run again — so this opens
+    /// the code that produced what is on screen rather than whatever the reader last had open. A run that
+    /// never reported one says so instead of opening something arbitrary.
+    /// </remarks>
+    private void Open(ExternalEditor? editor)
+    {
+        if (editor is null)
+            return;
+
+        RunSummary? run = StateStore<MainState>.Default.GetValue(Selected);
+
+        string? target = EditorPaths.TargetFor(run?.ProjectFilePath, editor.WantsFolder, ExternalEditors.SolutionsIn);
+
+        if (target is null)
+        {
+            MainWindow.Shell.Report(new FeedEntry
+            {
+                AtUtc = DateTimeOffset.UtcNow,
+                Severity = FeedSeverity.Warning,
+                Source = FeedSource.App,
+                Title = $"There is nothing to open in {editor.Name}.",
+                Detail = "This run did not record which project file it came from."
+            });
+
+            return;
+        }
+
+        if (!ExternalEditors.TryOpen(editor, target))
+        {
+            MainWindow.Shell.Report(new FeedEntry
+            {
+                AtUtc = DateTimeOffset.UtcNow,
+                Severity = FeedSeverity.Warning,
+                Source = FeedSource.App,
+                Title = $"{editor.Name} could not be started.",
+                Detail = editor.ExecutablePath
+            });
+        }
+    }
 
     private void btFirstFailure_Click(object sender, RoutedEventArgs e) => FirstFailureRequested?.Invoke();
 

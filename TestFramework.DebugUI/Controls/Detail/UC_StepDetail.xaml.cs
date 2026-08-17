@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Axiom.State;
 using TestFramework.Core.Debugger;
+using TestFramework.DebugUI.Copying;
 using TestFramework.DebugUI.State;
 
 namespace TestFramework.DebugUI.Controls.Detail;
@@ -30,6 +31,13 @@ public partial class UC_StepDetail : UserControl
     public UC_StepDetail()
     {
         InitializeComponent();
+
+        // Everything here is something a reader ends up wanting somewhere else: an identity to paste into a
+        // filter, a message to paste into a ticket, a stack trace to read in an editor that wraps.
+        Copyable.Enable(
+            tbName, tbKind, tbDescription,
+            tbFailureType, tbFailureMessage, tbFriendly, tbRecovery, tbOptions, tbStack,
+            tbInputs, tbOutputs, tbLog);
 
         subscriptions.Add(StateStore<MainState>.Default
             .Bind(Resolve)
@@ -210,15 +218,8 @@ public partial class UC_StepDetail : UserControl
         if (!string.IsNullOrWhiteSpace(failure.StackTrace))
             text.AppendLine().AppendLine(failure.StackTrace);
 
-        try
-        {
-            Clipboard.SetText(text.ToString());
-        }
-        catch (Exception exception)
-        {
-            // The clipboard can be held by another process. Losing a copy is not worth a crash in
-            // the window that is showing someone their failure.
-            System.Diagnostics.Debug.WriteLine(exception);
-        }
+        // The clipboard can be held by another process, and Clip is where that is dealt with once for every
+        // copy in the application rather than here for this one.
+        Clipboards.Set(text.ToString());
     }
 }

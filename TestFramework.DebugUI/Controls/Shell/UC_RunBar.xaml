@@ -60,5 +60,22 @@
             <Path Data="{StaticResource IconFit}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
         </Button>
+
+        <!--
+            Leaving the tool entirely, so it is fenced off from everything that acts inside it. Each button
+            wears the icon of the program it starts, read from that program - the icons are Microsoft's and
+            are not shipped here - and stays hidden on a machine where the program is not installed. An
+            editor nobody has is a button that can only disappoint.
+        -->
+        <Border x:Name="bEditorRule" Width="1" Height="16" Margin="5 0" Background="#1FFFFFFF" Visibility="Collapsed"/>
+
+        <Button x:Name="btCode" Style="{StaticResource CaptionIconButton}" Click="btCode_Click"
+                Visibility="Collapsed" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <Image x:Name="imgCode" Width="17" Height="17" RenderOptions.BitmapScalingMode="HighQuality"/>
+        </Button>
+        <Button x:Name="btVisualStudio" Style="{StaticResource CaptionIconButton}" Click="btVisualStudio_Click"
+                Visibility="Collapsed" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <Image x:Name="imgVisualStudio" Width="17" Height="17" RenderOptions.BitmapScalingMode="HighQuality"/>
+        </Button>
     </StackPanel>
 </UserControl>

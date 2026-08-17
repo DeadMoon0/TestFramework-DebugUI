@@ -11,6 +11,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Axiom.State;
+using TestFramework.DebugUI.Copying;
 using TestFramework.DebugUI.State;
 
 namespace TestFramework.DebugUI.Controls.Detail;
@@ -37,6 +38,9 @@ public partial class UC_ValueItem : UserControl
         IsArtifact = isArtifact;
 
         InitializeComponent();
+
+        // A rail entry is the shortest form of a value, and its key is what a reader searches for.
+        Copyable.Enable(tbKey, tbSummary, tbFacts, tbBody);
 
         bdEdge.Background = (Brush)FindResource(isArtifact ? "FlowArtifact" : "FlowVariable");
 

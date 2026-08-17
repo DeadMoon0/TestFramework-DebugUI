@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Axiom.State;
+using TestFramework.DebugUI.Copying;
 using TestFramework.DebugUI.State;
 
 namespace TestFramework.DebugUI.Controls.Detail;
@@ -27,6 +28,9 @@ public partial class UC_RunSummary : UserControl
     public UC_RunSummary()
     {
         InitializeComponent();
+
+        // The verdict and the counts behind it: what someone reports when asked how the run went.
+        Copyable.Enable(tbVerdict, tbVerdictWhy, tbCounts);
 
         subscriptions.Add(StateStore<MainState>.Default
             .Bind(state => RunTally.Of(state.ActiveRun))

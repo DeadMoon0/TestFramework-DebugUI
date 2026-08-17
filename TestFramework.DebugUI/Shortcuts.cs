@@ -41,6 +41,17 @@ public static class Shortcuts
     public static readonly RoutedUICommand Continue =
         Make(nameof(Continue), "Release a breakpoint", Key.F8, ModifierKeys.None);
 
+    /// <summary>
+    /// Releases the run and stops it again at its next step.
+    /// </summary>
+    /// <remarks>
+    /// F10, which is Step Over everywhere else, so the one key a reader will try first is the one that
+    /// works. It is deliberately not next to F8 on the keyboard by accident — these two are pressed
+    /// alternately for minutes at a time, and F5 could not be used for either.
+    /// </remarks>
+    public static readonly RoutedUICommand StepForward =
+        Make(nameof(StepForward), "Step to the next step", Key.F10, ModifierKeys.None);
+
     public static readonly RoutedUICommand Fit =
         Make(nameof(Fit), "Fit the board", Key.F, ModifierKeys.Control);
 
@@ -67,7 +78,7 @@ public static class Shortcuts
     public static ImmutableList<RoutedUICommand> All =>
     [
         Runs, Settings, ToggleWatch, CloseTopmost,
-        Rerun, Stop, Continue, Refresh,
+        Rerun, Stop, Continue, StepForward, Refresh,
         Fit, Summary, FirstFailure
     ];
 

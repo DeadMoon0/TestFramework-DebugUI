@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using Axiom.State;
@@ -53,10 +54,12 @@ public partial class UC_RunBar : UserControl
 
         // Shown only when there is something to release. A button that is always there and almost always
         // does nothing teaches people not to look at it.
-        subscriptions.Add(StateStore<MainState>.Default
+        IObservable<Visibility> held = StateStore<MainState>.Default
             .Bind(state => state.ActiveRun.Stages.Any(stage => stage.Steps.Any(step => step.IsWaitingAtBreakpoint)))
-            .Select(waiting => waiting ? Visibility.Visible : Visibility.Collapsed)
-            .BindToDependencyProperty(btContinue, VisibilityProperty));
+            .Select(waiting => waiting ? Visibility.Visible : Visibility.Collapsed);
+
+        subscriptions.Add(held.BindToDependencyProperty(btContinue, VisibilityProperty));
+        subscriptions.Add(held.BindToDependencyProperty(btStep, VisibilityProperty));
 
         subscriptions.Add(StateStore<MainState>.Default
             .Bind(state => state.SelectedSessionId is not null && !state.ActiveRun.IsFinished)
@@ -76,6 +79,7 @@ public partial class UC_RunBar : UserControl
             .BindToDependencyProperty(btFirstFailure, IsEnabledProperty));
 
         btContinue.ToolTip = Shortcuts.Describe("Release the breakpoint", Shortcuts.Continue);
+        btStep.ToolTip = Shortcuts.Describe("Run on to the next step and stop there", Shortcuts.StepForward);
         btStop.ToolTip = Shortcuts.Describe("Ask the run to stop", Shortcuts.Stop);
         btRerun.ToolTip = Shortcuts.Describe("Run this test again", Shortcuts.Rerun);
         btFirstFailure.ToolTip = Shortcuts.Describe("Jump to the first failure", Shortcuts.FirstFailure);
@@ -99,6 +103,29 @@ public partial class UC_RunBar : UserControl
 
     private async void btContinue_Click(object sender, RoutedEventArgs e)
         => await MainWindow.Shell.ContinueSelectedRunAsync();
+
+    private async void btStep_Click(object sender, RoutedEventArgs e) => await StepAsync();
+
+    /// <summary>
+    /// Releases the run and has it stop again at its next step.
+    /// </summary>
+    /// <remarks>
+    /// Armed before the release, not after: a run let go first can reach its next step and ask about it
+    /// before this side has said anything, and would then run to the end. If the release fails the arming
+    /// is withdrawn, so a run that was never let go does not stop unbidden later.
+    /// </remarks>
+    internal static async Task StepAsync()
+    {
+        string? sessionId = StateStore<MainState>.Default.GetValue(state => state.SelectedSessionId);
+
+        if (sessionId is null)
+            return;
+
+        Breakpoints.StepOnce(sessionId);
+
+        if (!await MainWindow.Shell.ContinueSelectedRunAsync())
+            Breakpoints.CancelStep(sessionId);
+    }
 
     private async void btStop_Click(object sender, RoutedEventArgs e)
         => await MainWindow.Shell.CancelSelectedRunAsync();

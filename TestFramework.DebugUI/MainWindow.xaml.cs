@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Reactive.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
@@ -34,6 +36,7 @@ public partial class MainWindow : Window
     private UiSettings saved = UiSettings.Defaults;
     private TrayIcon? tray;
     private WatchNotifier? notifier;
+    private IDisposable? halts;
 
     /// <summary>
     /// Gets the controller the views drive.
@@ -85,6 +88,19 @@ public partial class MainWindow : Window
         // whether a run is selected: the first live run selects itself, and having the page vanish
         // under the reader because a test started elsewhere would be the tool moving on its own.
         ucHome.Closed += () => ucHome.Visibility = Visibility.Collapsed;
+
+        // A halt is the one exception. The step that stopped the run is marked on the board, the buttons
+        // that answer it are in the title bar, and a run held up is waiting on the reader rather than
+        // merely informing them — so this gets out of the way rather than leaving the mark behind a page.
+        // Only on the transition into waiting, so closing the page and reopening it does not fight this.
+        halts = StateStore<MainState>.Default
+            .Bind(state => state.ActiveRun.Stages.Any(stage => stage.Steps.Any(step => step.IsWaitingAtBreakpoint)))
+            .DistinctUntilChanged()
+            .Subscribe(waiting =>
+            {
+                if (waiting)
+                    ucHome.Visibility = Visibility.Collapsed;
+            });
 
         // Read before the window is shown, so restoring geometry does not visibly move it.
         saved = settings.Load();
@@ -202,6 +218,7 @@ public partial class MainWindow : Window
         Bind(Shortcuts.Rerun, () => _ = Shell.RerunSelectedAsync());
         Bind(Shortcuts.Stop, () => _ = Shell.CancelSelectedRunAsync());
         Bind(Shortcuts.Continue, () => _ = Shell.ContinueSelectedRunAsync());
+        Bind(Shortcuts.StepForward, () => _ = Controls.Shell.UC_RunBar.StepAsync());
         Bind(Shortcuts.Refresh, Shell.RefreshRecordedRuns);
 
         Bind(Shortcuts.Fit, ucBoard.FitToWindow);
@@ -600,6 +617,10 @@ public partial class MainWindow : Window
 
         Breakpoints.Changed -= SaveBreakpoints;
         Application.Current.DispatcherUnhandledException -= OnDispatcherUnhandledException;
+
+        // Before the store goes, since it is what is being observed.
+        halts?.Dispose();
+        halts = null;
 
         StopWatching();
 

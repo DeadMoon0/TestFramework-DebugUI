@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -16,25 +18,54 @@ using TestFramework.DebugUI.State;
 namespace TestFramework.DebugUI.Controls.Home;
 
 /// <summary>
-/// Every run the window knows about, live and recorded, arranged by project and test.
+/// Every run the window knows about, live and recorded, triaged and then listed.
 /// </summary>
 /// <remarks>
+/// <para>
 /// The landing surface. The board answers "what did this run do"; this answers the question you have
 /// before that one — "which run should I be looking at" — which the previous UI never answered at
 /// all, and which a list down the side answers only for runs you can already name.
+/// </para>
+/// <para>
+/// It answers it in two parts. Runs that need attention are few and get a card each. The rest are the
+/// bulk — passes and recordings nobody has replayed — and become one line apiece in a columned list,
+/// gathered under the burst of activity they arrived in.
+/// </para>
 /// </remarks>
 public partial class UC_Home : UserControl
 {
+    /// <summary>
+    /// How many cards the attention strip will show.
+    /// </summary>
+    /// <remarks>
+    /// A cap, because the whole point is that this strip is short. A suite that fails forty tests would
+    /// otherwise rebuild exactly the wall this replaced; past the cap the rest are counted, and they are
+    /// all in the list underneath anyway.
+    /// </remarks>
+    private const int AttentionCards = 6;
+
     private readonly CompositeDisposable subscriptions = [];
 
     /// <summary>
-    /// What the card grid is narrowed to.
+    /// What the list is narrowed to.
     /// </summary>
     /// <remarks>
     /// Deliberately not in the store: it is where this page is scrolled to, not something the
     /// application knows about, and nothing else in the window has any use for it.
     /// </remarks>
     private readonly BehaviorSubject<RunScope> scope = new(RunScope.Everything);
+
+    /// <summary>
+    /// What the page was last built for.
+    /// </summary>
+    /// <remarks>
+    /// The list is rebuilt whole rather than reconciled, so it must not rebuild on every event a live run
+    /// produces — that would be several times a second, and it would take the reader's hover and scroll
+    /// position with it each time. This is what the page's shape depends on: which runs there are, how
+    /// each stands, and what the rail has narrowed to. A step completing changes none of those, and the
+    /// rows update themselves from their own subscriptions.
+    /// </remarks>
+    private string shape = string.Empty;
 
     /// <summary>Creates the page and binds it.</summary>
     public UC_Home()
@@ -44,10 +75,8 @@ public partial class UC_Home : UserControl
         IObservable<ImmutableList<RunSummary>> runs = StateStore<MainState>.Default.Bind(state => state.Runs);
 
         subscriptions.Add(runs
-            .CombineLatest(scope, (all, narrowed) => (IEnumerable<RunSummary>)[.. all.Where(narrowed.Covers)])
-            .BindToCollection(wpRuns.Children, run => run.SessionId, run => Card(run.SessionId)));
-
-        subscriptions.Add(runs.CombineLatest(scope, (all, narrowed) => (all, narrowed)).Subscribe(pair => ShowTree(pair.all, pair.narrowed)));
+            .CombineLatest(scope, (all, narrowed) => (all, narrowed))
+            .Subscribe(pair => Refresh(pair.all, pair.narrowed)));
 
         subscriptions.Add(StateStore<MainState>.Default
             .Bind(state => Overview(state.Runs))
@@ -95,12 +124,38 @@ public partial class UC_Home : UserControl
         return string.Join(" · ", parts);
     }
 
+    private void Refresh(ImmutableList<RunSummary> all, RunScope narrowed)
+    {
+        string next = Shape(all, narrowed);
+
+        if (string.Equals(next, shape, StringComparison.Ordinal))
+            return;
+
+        shape = next;
+
+        ShowTree(all, narrowed);
+        ShowRuns([.. all.Where(narrowed.Covers)]);
+    }
+
+    /// <summary>Everything the page's layout depends on, as one comparable string.</summary>
+    private static string Shape(ImmutableList<RunSummary> all, RunScope narrowed)
+    {
+        StringBuilder builder = new(narrowed.Key);
+
+        foreach (RunSummary run in all)
+        {
+            builder.Append('|').Append(run.SessionId).Append(':').Append((int)run.Health);
+        }
+
+        return builder.ToString();
+    }
+
     /// <summary>
-    /// Draws the project and test rail.
+    /// Draws the project, class and test rail.
     /// </summary>
     /// <remarks>
-    /// Rebuilt whole rather than reconciled: the tree is a handful of rows and changes only when a
-    /// run appears or changes state, so the simple thing is fast enough and cannot drift.
+    /// Rebuilt whole rather than reconciled: the tree is a handful of rows and changes only when a run
+    /// appears or changes state, so the simple thing is fast enough and cannot drift.
     /// </remarks>
     private void ShowTree(ImmutableList<RunSummary> runs, RunScope narrowed)
     {
@@ -114,16 +169,174 @@ public partial class UC_Home : UserControl
             string projectName = project.Project;
 
             spTree.Children.Add(Row(projectName, project.Runs.Count, project.Health, indent: 0,
-                selected: narrowed.IsProject(projectName), bold: true, () => scope.OnNext(RunScope.OfProject(projectName))));
+                selected: narrowed.IsProject(projectName), bold: true,
+                () => scope.OnNext(RunScope.OfProject(projectName)), projectName));
 
-            foreach (TestGroup test in project.Tests)
+            foreach (ClassGroup type in project.Classes)
             {
-                string testName = test.Test;
+                string className = type.Class;
 
-                spTree.Children.Add(Row(test.DisplayName, test.Runs.Count, test.Health, indent: 14,
-                    selected: narrowed.IsTest(testName), bold: false, () => scope.OnNext(RunScope.OfTest(testName)), testName));
+                spTree.Children.Add(Row(type.DisplayName, type.Runs.Count, type.Health, indent: 12,
+                    selected: narrowed.IsClass(className), bold: false,
+                    () => scope.OnNext(narrowed.IsClass(className) ? RunScope.OfProject(projectName) : RunScope.OfClass(className)),
+                    className));
+
+                // Only the class being looked at spells out its tests. All of them at once was twenty
+                // rows of one repeated prefix, each truncated in the middle of the part that differed.
+                if (!narrowed.InClass(className))
+                    continue;
+
+                foreach (TestGroup test in type.Tests)
+                {
+                    string testName = test.Test;
+
+                    spTree.Children.Add(Row(test.DisplayName, test.Runs.Count, test.Health, indent: 26,
+                        selected: narrowed.IsTest(testName), bold: false,
+                        () => scope.OnNext(RunScope.OfTest(testName)), testName));
+                }
             }
         }
+    }
+
+    /// <summary>
+    /// Draws the attention strip and the batched list.
+    /// </summary>
+    private void ShowRuns(ImmutableList<RunSummary> runs)
+    {
+        ImmutableList<RunSummary> attention =
+        [
+            .. runs
+                .Where(run => RunTree.NeedsAttention(run.Health))
+                .OrderByDescending(run => run.StartedAtUtc)
+        ];
+
+        wpAttention.Children.Clear();
+
+        foreach (RunSummary run in attention.Take(AttentionCards))
+            wpAttention.Children.Add(Card(run.SessionId));
+
+        spAttention.Visibility = attention.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        tbAttention.Text = Heading(attention);
+
+        int hidden = attention.Count - AttentionCards;
+
+        tbAttentionMore.Visibility = hidden > 0 ? Visibility.Visible : Visibility.Collapsed;
+        tbAttentionMore.Text = hidden > 0 ? $"and {hidden} more in the list below" : string.Empty;
+
+        spRuns.Children.Clear();
+        gColumns.Visibility = runs.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+
+        foreach (RunBatch batch in RunBatches.Of(runs))
+        {
+            spRuns.Children.Add(BatchHeader(batch));
+
+            foreach (RunSummary run in batch.Runs)
+                spRuns.Children.Add(RowFor(run.SessionId));
+        }
+    }
+
+    /// <summary>
+    /// What the attention strip is called, which is what is in it.
+    /// </summary>
+    /// <remarks>
+    /// Named by the states actually present. "NEEDS ATTENTION" over a single unproven run overstates it,
+    /// and over two failures understates it.
+    /// </remarks>
+    private static string Heading(ImmutableList<RunSummary> attention)
+    {
+        List<string> parts = [];
+
+        void Count(RunHealth health, string label)
+        {
+            int count = attention.Count(run => run.Health == health);
+            if (count > 0)
+                parts.Add($"{count} {label}");
+        }
+
+        Count(RunHealth.Waiting, "PAUSED");
+        Count(RunHealth.Running, "RUNNING");
+        Count(RunHealth.Failed, "FAILED");
+        Count(RunHealth.Aborted, "ABORTED");
+        Count(RunHealth.Unproven, "UNPROVEN");
+
+        return string.Join("  ·  ", parts);
+    }
+
+    /// <summary>
+    /// The line above one burst of runs.
+    /// </summary>
+    /// <remarks>
+    /// This is where "not opened yet" is said. It is true of most of the rows underneath, so it is stated
+    /// once as a property of the batch instead of fifty times as a property of each run.
+    /// </remarks>
+    private UIElement BatchHeader(RunBatch batch)
+    {
+        List<string> parts = [$"{batch.Runs.Count} run(s)"];
+
+        if (batch.NotOpened == batch.Runs.Count)
+            parts.Add("none opened yet");
+        else if (batch.NotOpened > 0)
+            parts.Add($"{batch.NotOpened} not opened");
+
+        TextBlock when = new()
+        {
+            Text = When(batch.LastStartedAtUtc),
+            Foreground = (Brush)FindResource("TextSecondary"),
+            FontSize = 11,
+            FontWeight = FontWeights.Bold,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        TextBlock detail = new()
+        {
+            Text = string.Join(" · ", parts),
+            Foreground = (Brush)FindResource("TextFaint"),
+            FontSize = 10,
+            Margin = new Thickness(8, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        StackPanel content = new()
+        {
+            Orientation = Orientation.Horizontal,
+            Children = { when, detail }
+        };
+
+        return new Border
+        {
+            Child = content,
+            Margin = new Thickness(0, 10, 0, 4),
+            Padding = new Thickness(3, 0, 0, 4),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            BorderBrush = (Brush)FindResource("SurfaceRaised")
+        };
+    }
+
+    /// <summary>
+    /// When a burst happened, in the terms someone would use out loud.
+    /// </summary>
+    /// <remarks>
+    /// A date is only worth printing once it is not today's. Most of what this tool lists was produced in
+    /// the last few minutes, and "Mo 17:20:58" spends its width establishing a day the reader is standing
+    /// in.
+    /// </remarks>
+    private static string When(DateTimeOffset at)
+    {
+        if (at == default)
+            return "Time not recorded";
+
+        DateTime local = at.ToLocalTime().DateTime;
+        DateTime today = DateTime.Today;
+
+        string clock = local.ToString("HH:mm", CultureInfo.CurrentCulture);
+
+        if (local.Date == today)
+            return $"Today {clock}";
+
+        if (local.Date == today.AddDays(-1))
+            return $"Yesterday {clock}";
+
+        return local.ToString("ddd d MMM HH:mm", CultureInfo.CurrentCulture);
     }
 
     /// <summary>
@@ -139,7 +352,7 @@ public partial class UC_Home : UserControl
         {
             Width = 3,
             CornerRadius = new CornerRadius(1.5),
-            Background = (Brush)FindResource(BrushFor(health)),
+            Background = (Brush)FindResource(HealthLook.BrushKey(health)),
             Margin = new Thickness(0, 0, 8, 0)
         };
 
@@ -155,7 +368,7 @@ public partial class UC_Home : UserControl
 
         TextBlock tally = new()
         {
-            Text = count.ToString(System.Globalization.CultureInfo.CurrentCulture),
+            Text = count.ToString(CultureInfo.CurrentCulture),
             Foreground = (Brush)FindResource("TextFaint"),
             FontSize = 11,
             VerticalAlignment = VerticalAlignment.Center,
@@ -191,17 +404,6 @@ public partial class UC_Home : UserControl
         return row;
     }
 
-    private static string BrushFor(RunHealth health) => health switch
-    {
-        RunHealth.Running => "StateRunning",
-        RunHealth.Waiting => "StatePaused",
-        RunHealth.Passed => "StateComplete",
-        RunHealth.Unproven => "StateTimeout",
-        RunHealth.Failed => "StateError",
-        RunHealth.Aborted => "StateError",
-        _ => "StateNotRun"
-    };
-
     private UC_HomeCard Card(string sessionId)
     {
         UC_HomeCard card = new(sessionId);
@@ -213,16 +415,25 @@ public partial class UC_Home : UserControl
         return card;
     }
 
+    private UC_RunRow RowFor(string sessionId)
+    {
+        UC_RunRow row = new(sessionId);
+
+        row.Opened += () => Closed?.Invoke();
+
+        return row;
+    }
+
     private void btRefresh_Click(object sender, RoutedEventArgs e) => MainWindow.Shell.RefreshRecordedRuns();
 
     private void btClose_Click(object sender, RoutedEventArgs e) => Closed?.Invoke();
 }
 
 /// <summary>
-/// What the card grid is narrowed to.
+/// What the list is narrowed to.
 /// </summary>
 /// <remarks>
-/// A project or a test rather than an arbitrary predicate, because those are the only two things the
+/// A project, a class or a test rather than an arbitrary predicate, because those are the only things the
 /// rail can select and a filter that could be anything cannot be shown as selected.
 /// </remarks>
 internal sealed record RunScope
@@ -232,20 +443,40 @@ internal sealed record RunScope
 
     private string? Project { get; init; }
 
+    private string? Class { get; init; }
+
     private string? Test { get; init; }
 
-    internal bool IsEverything => Project is null && Test is null;
+    internal bool IsEverything => Project is null && Class is null && Test is null;
+
+    /// <summary>The scope as one comparable string, for deciding whether the page must be rebuilt.</summary>
+    internal string Key => $"{Project}{Class}{Test}";
 
     internal static RunScope OfProject(string project) => new() { Project = project };
+
+    internal static RunScope OfClass(string type) => new() { Class = type };
 
     internal static RunScope OfTest(string test) => new() { Test = test };
 
     internal bool IsProject(string project) => string.Equals(Project, project, StringComparison.Ordinal);
 
+    internal bool IsClass(string type) => string.Equals(Class, type, StringComparison.Ordinal);
+
     internal bool IsTest(string test) => string.Equals(Test, test, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Whether a class should be showing its tests.
+    /// </summary>
+    /// <remarks>
+    /// True for the selected class, and also for the class of a selected test — narrowing to one test
+    /// must not collapse the list it was picked from.
+    /// </remarks>
+    internal bool InClass(string type)
+        => IsClass(type) || (Test is not null && string.Equals(RunTree.ClassOf(Test), type, StringComparison.Ordinal));
 
     /// <summary>Whether a run belongs in this scope.</summary>
     internal bool Covers(RunSummary run)
         => (Project is null || string.Equals(run.Project, Project, StringComparison.Ordinal))
+           && (Class is null || string.Equals(RunTree.ClassOf(run.Test), Class, StringComparison.Ordinal))
            && (Test is null || string.Equals(run.Test, Test, StringComparison.Ordinal));
 }

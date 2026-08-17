@@ -5,18 +5,26 @@ using System.Linq;
 namespace TestFramework.DebugUI.State;
 
 /// <summary>
-/// The runs a window knows about, arranged the way a person looks for one: project, then test, then
-/// the executions of it.
+/// The runs a window knows about, arranged the way a person looks for one: project, then class, then
+/// test, then the executions of it.
 /// </summary>
 /// <remarks>
+/// <para>
 /// A flat list of runs answers "what happened recently". It does not answer "how is this test
 /// doing", which is the question anyone re-running a failure actually has — five runs of one test
 /// read as five unrelated rows. The grouping is the answer, and it is computed here rather than in
 /// the view so it can be tested and so two surfaces cannot group the same runs differently.
+/// </para>
+/// <para>
+/// The class is a level of its own rather than part of each test's label. Written into the label it
+/// repeated on every row of a suite — twenty rows reading <c>RunValueOutputTests.Something</c>, each
+/// truncated in the middle of the part that differed — which spent the rail's whole width on the one
+/// piece of the name the rows had in common.
+/// </para>
 /// </remarks>
 public static class RunTree
 {
-    /// <summary>Groups runs by project and test, newest run first within each test.</summary>
+    /// <summary>Groups runs by project, class and test, newest run first within each test.</summary>
     public static ImmutableList<ProjectGroup> Of(ImmutableList<RunSummary> runs)
     {
         ArgumentNullException.ThrowIfNull(runs);
@@ -28,38 +36,91 @@ public static class RunTree
                 .Select(project => new ProjectGroup
                 {
                     Project = project.Key,
-                    Tests =
+                    Classes =
                     [
                         .. project
-                            .GroupBy(run => run.Test, StringComparer.Ordinal)
-                            .Select(test => new TestGroup
+                            .GroupBy(run => ClassOf(run.Test), StringComparer.Ordinal)
+                            .Select(type => new ClassGroup
                             {
-                                Test = test.Key,
-                                DisplayName = Shorten(test.Key),
-                                Runs = [.. test.OrderByDescending(run => run.StartedAtUtc)]
-                            })
+                                Class = type.Key,
+                                DisplayName = Shorten(type.Key),
+                                Tests =
+                                [
+                                    .. type
+                                        .GroupBy(run => run.Test, StringComparer.Ordinal)
+                                        .Select(test => new TestGroup
+                                        {
+                                            Test = test.Key,
+                                            DisplayName = Leaf(test.Key),
+                                            Runs = [.. test.OrderByDescending(run => run.StartedAtUtc)]
+                                        })
 
-                            // Tests ordered by their most recent run, so what someone is working on
-                            // right now stays at the top rather than sinking under an alphabet.
-                            .OrderByDescending(test => test.Runs.Max(run => run.StartedAtUtc))
+                                        // Tests ordered by their most recent run, so what someone is
+                                        // working on right now stays at the top rather than sinking
+                                        // under an alphabet.
+                                        .OrderByDescending(test => test.Runs.Max(run => run.StartedAtUtc))
+                                ]
+                            })
+                            .OrderByDescending(type => type.Tests.Max(test => test.Runs.Max(run => run.StartedAtUtc)))
                     ]
                 })
-                .OrderByDescending(project => project.Tests.Max(test => test.Runs.Max(run => run.StartedAtUtc)))
+                .OrderByDescending(project => project.Runs.Max(run => run.StartedAtUtc))
         ];
     }
 
     /// <summary>
-    /// The part of a qualified test name worth showing.
+    /// The class a test belongs to, which is its name up to the last dot.
     /// </summary>
     /// <remarks>
-    /// Every test in a suite shares its leading namespaces, so a name trimmed from the right shows
+    /// A run with no test identity has no class either. It groups under a name of its own rather than
+    /// being dropped or filed under an empty heading — the tool is often pointed at a host process that
+    /// never reported which test it was running, and those runs are still worth opening.
+    /// </remarks>
+    public static string ClassOf(string test)
+    {
+        if (string.IsNullOrWhiteSpace(test))
+            return NoIdentity;
+
+        int lastDot = test.LastIndexOf('.');
+
+        return lastDot > 0 ? test[..lastDot] : NoIdentity;
+    }
+
+    /// <summary>The name given to runs that never reported which test they were.</summary>
+    public const string NoIdentity = "No test identity";
+
+    /// <summary>
+    /// Whether a run is one of the few worth putting in front of the reader.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Everything except "passed" and "never opened". Those two are the bulk of any journal — a suite
+    /// that is behaving produces fifty passes, and a tool opened after the fact has never replayed any
+    /// of them — and giving each of those a card is what turns a page into a wall.
+    /// </para>
+    /// <para>
+    /// Unproven counts. A run that finished without asserting anything did not fail, but it did not
+    /// prove anything either, and it is exactly the case a reader would otherwise never think to look
+    /// for.
+    /// </para>
+    /// </remarks>
+    public static bool NeedsAttention(RunHealth health)
+        => health is RunHealth.Waiting or RunHealth.Running or RunHealth.Failed or RunHealth.Aborted or RunHealth.Unproven;
+
+    /// <summary>
+    /// The part of a qualified class name worth showing.
+    /// </summary>
+    /// <remarks>
+    /// Every class in a suite shares its leading namespaces, so a name trimmed from the right shows
     /// the same prefix on every row. The tail is what tells them apart.
     /// </remarks>
-    private static string Shorten(string test)
-    {
-        string[] parts = test.Split('.', StringSplitOptions.RemoveEmptyEntries);
+    private static string Shorten(string type) => Leaf(type);
 
-        return parts.Length <= 2 ? test : string.Join('.', parts[^2..]);
+    private static string Leaf(string name)
+    {
+        int lastDot = name.LastIndexOf('.');
+
+        return lastDot >= 0 && lastDot < name.Length - 1 ? name[(lastDot + 1)..] : name;
     }
 
     /// <summary>
@@ -99,19 +160,52 @@ public static class RunTree
     }
 }
 
-/// <summary>One project, and the tests run from it.</summary>
+/// <summary>One project, and the classes run from it.</summary>
 public sealed record ProjectGroup
 {
     /// <summary>Gets the project name.</summary>
     public required string Project { get; init; }
 
+    /// <summary>Gets the test classes, most recently run first.</summary>
+    public required ImmutableList<ClassGroup> Classes { get; init; }
+
+    /// <summary>
+    /// Gets the tests, most recently run first, without their class grouping.
+    /// </summary>
+    /// <remarks>
+    /// For callers that want the tests and do not care which class they came from. Flattened here rather
+    /// than at each call site so "most recently run first" means the same thing everywhere.
+    /// </remarks>
+    public ImmutableList<TestGroup> Tests =>
+    [
+        .. Classes
+            .SelectMany(type => type.Tests)
+            .OrderByDescending(test => test.Runs.Max(run => run.StartedAtUtc))
+    ];
+
+    /// <summary>Gets every run in the project.</summary>
+    public ImmutableList<RunSummary> Runs => [.. Classes.SelectMany(type => type.Runs)];
+
+    /// <summary>Gets how the project stands, taken from its worst run.</summary>
+    public RunHealth Health => RunTree.WorstOf(Runs);
+}
+
+/// <summary>One test class, and the tests in it.</summary>
+public sealed record ClassGroup
+{
+    /// <summary>Gets the class's identity, which is the qualified test name up to its last dot.</summary>
+    public required string Class { get; init; }
+
+    /// <summary>Gets the part of the name worth showing.</summary>
+    public required string DisplayName { get; init; }
+
     /// <summary>Gets the tests, most recently run first.</summary>
     public required ImmutableList<TestGroup> Tests { get; init; }
 
-    /// <summary>Gets every run in the project.</summary>
+    /// <summary>Gets every run of every test in the class.</summary>
     public ImmutableList<RunSummary> Runs => [.. Tests.SelectMany(test => test.Runs)];
 
-    /// <summary>Gets how the project stands, taken from its worst run.</summary>
+    /// <summary>Gets how the class stands, taken from its worst run.</summary>
     public RunHealth Health => RunTree.WorstOf(Runs);
 }
 

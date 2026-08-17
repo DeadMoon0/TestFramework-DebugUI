@@ -47,6 +47,7 @@ public class ShortcutsTests
     [InlineData(Key.R, ModifierKeys.Control, nameof(Shortcuts.Runs))]
     [InlineData(Key.I, ModifierKeys.Control, nameof(Shortcuts.Summary))]
     [InlineData(Key.F8, ModifierKeys.None, nameof(Shortcuts.Continue))]
+    [InlineData(Key.F10, ModifierKeys.None, nameof(Shortcuts.StepForward))]
     [InlineData(Key.Escape, ModifierKeys.None, nameof(Shortcuts.CloseTopmost))]
     public void AKeyPressResolvesToItsCommand(Key key, ModifierKeys modifiers, string expected)
     {

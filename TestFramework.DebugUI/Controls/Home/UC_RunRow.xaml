@@ -1,0 +1,51 @@
+<UserControl x:Class="TestFramework.DebugUI.Controls.Home.UC_RunRow"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d" Cursor="Hand">
+    <!--
+        One run on one line. The card this replaces was a hundred pixels tall and said four things in
+        four sentences; fifty of them was four screens of prose to answer "which one should I open".
+
+        Columns rather than sentences, because columns can be scanned: the eye runs down one of them
+        instead of reading every row to find where its numbers are. The widths are shared with the header
+        in UC_Home, which is what keeps them lined up.
+    -->
+    <Border x:Name="bRoot" CornerRadius="4" Background="Transparent" Padding="0 0 6 0"
+            MouseLeftButtonUp="Root_MouseLeftButtonUp" MouseEnter="Root_MouseEnter" MouseLeave="Root_MouseLeave">
+        <Grid Height="26">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="3"/>
+                <ColumnDefinition Width="*" MinWidth="140"/>
+                <ColumnDefinition Width="190"/>
+                <ColumnDefinition Width="62"/>
+                <ColumnDefinition Width="62"/>
+                <ColumnDefinition Width="92"/>
+                <ColumnDefinition Width="96"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- The verdict, as a colour, so a column of these reads without a word being parsed. -->
+            <Border x:Name="bEdge" CornerRadius="1.5" Margin="0 4" Background="{StaticResource StateNotRun}"/>
+
+            <TextBlock x:Name="tbName" Grid.Column="1" Style="{StaticResource BodyText}" Margin="10 0 8 0"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+
+            <TextBlock x:Name="tbWhere" Grid.Column="2" Style="{StaticResource MutedText}" FontSize="10"
+                       Foreground="{StaticResource TextFaint}" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+
+            <TextBlock x:Name="tbWhen" Grid.Column="3" Style="{StaticResource MutedText}" FontSize="10"
+                       Foreground="{StaticResource TextFaint}" VerticalAlignment="Center" TextWrapping="NoWrap"/>
+
+            <TextBlock x:Name="tbTook" Grid.Column="4" Style="{StaticResource MutedText}" FontSize="10"
+                       Foreground="{StaticResource TextFaint}" VerticalAlignment="Center" TextWrapping="NoWrap"/>
+
+            <TextBlock x:Name="tbSteps" Grid.Column="5" Style="{StaticResource MutedText}" FontSize="10"
+                       VerticalAlignment="Center" TextWrapping="NoWrap"/>
+
+            <TextBlock x:Name="tbChecks" Grid.Column="6" Style="{StaticResource MutedText}" FontSize="10"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"/>
+        </Grid>
+    </Border>
+</UserControl>

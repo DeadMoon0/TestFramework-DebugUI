@@ -63,11 +63,9 @@ public partial class UC_HomeCard : UserControl
         tbCounts.Text = Counts(run.Progress);
         tbWhen.Text = When(run);
 
-        (string label, string brush) = Verdict(run.Health);
-
-        tbHealth.Text = label;
-        bHealth.Background = (Brush)FindResource(brush);
-        bEdge.Background = (Brush)FindResource(brush);
+        tbHealth.Text = HealthLook.Label(run.Health);
+        bHealth.Background = (Brush)FindResource(HealthLook.BrushKey(run.Health));
+        bEdge.Background = (Brush)FindResource(HealthLook.BrushKey(run.Health));
 
         DrawBar(run.Progress);
     }
@@ -95,34 +93,17 @@ public partial class UC_HomeCard : UserControl
     }
 
     /// <summary>
-    /// The verdict as a word and a colour.
-    /// </summary>
-    /// <remarks>
-    /// Amber for a run that passed without asserting anything: it did not fail, but it did not prove
-    /// anything either, and a wall of green for runs that checked nothing would be a comfortable lie.
-    /// </remarks>
-    private static (string Label, string Brush) Verdict(RunHealth health) => health switch
-    {
-        RunHealth.Running => ("RUNNING", "StateRunning"),
-        RunHealth.Waiting => ("PAUSED", "StatePaused"),
-        RunHealth.Passed => ("PASSED", "StateComplete"),
-        RunHealth.Unproven => ("UNPROVEN", "StateTimeout"),
-        RunHealth.Failed => ("FAILED", "StateError"),
-        RunHealth.Aborted => ("ABORTED", "StateError"),
-        _ => ("NOT OPENED", "StateNotRun")
-    };
-
-    /// <summary>
     /// The one line of numbers under the name.
     /// </summary>
     /// <remarks>
     /// A run listed from disk that nobody has opened says so rather than showing zeros, which would
-    /// read as a run in which nothing failed.
+    /// read as a run in which nothing failed. It is a fallback rather than a common case now: cards are
+    /// only made for runs that need attention, and a run nobody has opened is never one of those.
     /// </remarks>
     private static string Counts(RunProgress? progress)
     {
         if (progress is null || !progress.IsKnown)
-            return "not opened yet — pick it to replay the recording";
+            return "not opened yet";
 
         List<string> parts =
         [

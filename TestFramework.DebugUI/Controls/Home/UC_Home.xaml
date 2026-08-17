@@ -8,6 +8,11 @@
         Every run in one place. An overlay rather than a full-bleed page: inset so the board is
         visibly still there underneath, on a scrim so it is clearly the thing in front, and opaque
         because a wall of cards read through a live canvas is unreadable.
+
+        Triage, then browse. A journal is mostly runs that passed and runs nobody has opened, and giving
+        each of those the same hundred-pixel card as a failure made the one run worth looking at
+        indistinguishable from the fifty that were not. So the few that need attention get cards at the
+        top, and everything else becomes a scannable list underneath.
     -->
     <Grid Background="{StaticResource Scrim}">
     <Border Margin="16" CornerRadius="4" Background="{StaticResource SurfaceOverlay}"
@@ -50,9 +55,11 @@
             </Grid>
 
             <!--
-                Project, then test, then the runs of it. The rail is the categorisation: a run belongs
-                to a test and a test belongs to a project, and that is how anyone looks for one. It
-                narrows what is on the right rather than opening anything, so browsing costs nothing.
+                Project, then class, then the tests in it. The rail is the categorisation: a run belongs
+                to a test, a test to a class and a class to a project, and that is how anyone looks for
+                one. It narrows what is on the right rather than opening anything, so browsing costs
+                nothing. Only the selected class shows its tests, which is what keeps the rail short
+                enough to be read at all.
             -->
             <Border Grid.Row="1" Margin="20 0 0 20" CornerRadius="4" Background="{StaticResource SurfacePanel}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
@@ -61,16 +68,52 @@
                 </ScrollViewer>
             </Border>
 
-            <ScrollViewer Grid.Row="1" Grid.Column="1" Margin="16 0 10 0" Padding="0 0 10 20"
-                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <Grid>
-                    <WrapPanel x:Name="wpRuns" Orientation="Horizontal"/>
+            <Grid Grid.Row="1" Grid.Column="1" Margin="16 0 20 20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
 
-                    <TextBlock x:Name="tbEmpty" Style="{StaticResource MutedText}" Margin="0 40 0 0"
-                               HorizontalAlignment="Center"
-                               Text="No runs yet. Start a test with the debugger attached, or record one and it will be listed here."/>
+                <!-- The few worth looking at, in full. Hidden outright when there are none, because a
+                     heading over an empty box is a heading that has to be read to learn nothing. -->
+                <StackPanel x:Name="spAttention" Visibility="Collapsed" Margin="0 0 0 14">
+                    <TextBlock x:Name="tbAttention" Style="{StaticResource PanelHeading}" Margin="0 0 0 8"/>
+                    <WrapPanel x:Name="wpAttention" Orientation="Horizontal"/>
+                    <TextBlock x:Name="tbAttentionMore" Style="{StaticResource MutedText}" FontSize="10"
+                               Foreground="{StaticResource TextFaint}" Visibility="Collapsed" Margin="2 2 0 0"/>
+                </StackPanel>
+
+                <!-- Outside the scroll, so the columns are still labelled at the bottom of a long list.
+                     The widths are duplicated from UC_RunRow on purpose: this is the one place they have
+                     to agree, and a shared style would hide that. -->
+                <Grid x:Name="gColumns" Grid.Row="1" Margin="0 0 6 4" Visibility="Collapsed">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="3"/>
+                        <ColumnDefinition Width="*" MinWidth="140"/>
+                        <ColumnDefinition Width="190"/>
+                        <ColumnDefinition Width="62"/>
+                        <ColumnDefinition Width="62"/>
+                        <ColumnDefinition Width="92"/>
+                        <ColumnDefinition Width="96"/>
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock Grid.Column="1" Style="{StaticResource PanelHeading}" Margin="10 0 8 0" Text="TEST"/>
+                    <TextBlock Grid.Column="2" Style="{StaticResource PanelHeading}" Margin="0" Text="CLASS"/>
+                    <TextBlock Grid.Column="3" Style="{StaticResource PanelHeading}" Margin="0" Text="TIME"/>
+                    <TextBlock Grid.Column="4" Style="{StaticResource PanelHeading}" Margin="0" Text="TOOK"/>
+                    <TextBlock Grid.Column="5" Style="{StaticResource PanelHeading}" Margin="0" Text="STEPS"/>
+                    <TextBlock Grid.Column="6" Style="{StaticResource PanelHeading}" Margin="0" Text="CHECKS"/>
                 </Grid>
-            </ScrollViewer>
+
+                <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="spRuns"/>
+                </ScrollViewer>
+
+                <TextBlock x:Name="tbEmpty" Grid.Row="2" Style="{StaticResource MutedText}" Margin="0 40 0 0"
+                           HorizontalAlignment="Center"
+                           Text="No runs yet. Start a test with the debugger attached, or record one and it will be listed here."/>
+            </Grid>
         </Grid>
     </Border>
     </Grid>

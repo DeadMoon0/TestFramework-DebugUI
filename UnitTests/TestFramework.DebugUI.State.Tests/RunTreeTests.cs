@@ -126,13 +126,72 @@ public class RunTreeTests
     }
 
     [Fact]
-    public void ALongTestNameIsShownByItsTail()
+    public void ATestIsLabelledByItsMethodAndItsClassByItsOwnRow()
     {
-        // Every test in a suite shares its leading namespaces, so a name trimmed from the right
-        // shows the same prefix on every row.
+        // The class is a level, not part of the label. Written into every test's name it was the one
+        // part of the name a suite's rows had in common, repeated down the whole rail.
         ImmutableList<ProjectGroup> tree = RunTree.Of([Run("a", "Very.Deep.Name.Space.LoginTests.Works")]);
 
-        Assert.Equal("LoginTests.Works", Assert.Single(Assert.Single(tree).Tests).DisplayName);
+        ClassGroup type = Assert.Single(Assert.Single(tree).Classes);
+
+        Assert.Equal("LoginTests", type.DisplayName);
+        Assert.Equal("Very.Deep.Name.Space.LoginTests", type.Class);
+        Assert.Equal("Works", Assert.Single(type.Tests).DisplayName);
+    }
+
+    [Fact]
+    public void TestsOfOneClassGroupUnderIt()
+    {
+        ImmutableList<ProjectGroup> tree = RunTree.Of(
+        [
+            Run("a", "Suite.LoginTests.Accepts"),
+            Run("b", "Suite.LoginTests.Rejects"),
+            Run("c", "Suite.LogoutTests.Works")
+        ]);
+
+        ImmutableList<ClassGroup> classes = Assert.Single(tree).Classes;
+
+        Assert.Equal(2, classes.Count);
+        Assert.Equal(2, classes.Single(type => type.DisplayName == "LoginTests").Tests.Count);
+        Assert.Single(classes.Single(type => type.DisplayName == "LogoutTests").Tests);
+    }
+
+    [Fact]
+    public void ARunWithNoTestIdentityGetsAClassOfItsOwn()
+    {
+        // These are real: the tool is often pointed at a host process that never said which test it was
+        // running. They are listed rather than dropped, and not filed under a blank heading.
+        ImmutableList<ProjectGroup> tree = RunTree.Of([Run("a", fullyQualifiedName: null, name: "testhost")]);
+
+        Assert.Equal(RunTree.NoIdentity, Assert.Single(Assert.Single(tree).Classes).Class);
+    }
+
+    [Fact]
+    public void AProjectStillReportsItsTestsWithoutTheirClasses()
+    {
+        // The flattened view, for callers that want the tests and do not care which class they are in.
+        ImmutableList<ProjectGroup> tree = RunTree.Of(
+        [
+            Run("a", "Suite.LoginTests.Accepts", at: 1),
+            Run("b", "Suite.LogoutTests.Works", at: 5)
+        ]);
+
+        Assert.Equal(["Works", "Accepts"], Assert.Single(tree).Tests.Select(test => test.DisplayName));
+    }
+
+    [Fact]
+    public void OnlyRunsWorthLookingAtNeedAttention()
+    {
+        // The whole basis of the page's two halves. Passed and never-opened are the bulk of any journal;
+        // if either were to count as needing attention the strip would be the wall it replaced.
+        Assert.True(RunTree.NeedsAttention(RunHealth.Failed));
+        Assert.True(RunTree.NeedsAttention(RunHealth.Aborted));
+        Assert.True(RunTree.NeedsAttention(RunHealth.Unproven));
+        Assert.True(RunTree.NeedsAttention(RunHealth.Waiting));
+        Assert.True(RunTree.NeedsAttention(RunHealth.Running));
+
+        Assert.False(RunTree.NeedsAttention(RunHealth.Passed));
+        Assert.False(RunTree.NeedsAttention(RunHealth.Unknown));
     }
 
     private static RunSummary Run(

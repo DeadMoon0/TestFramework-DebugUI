@@ -11,9 +11,17 @@
             spare and does not have a run drawn underneath it.
         -->
         <Grid>
+            <!--
+                The button events are the tunnelling ones. A card handles its own click to select itself,
+                and a bubbling handler here never ran once it did — which left the surface believing a
+                button was still down, so the board went on panning with nothing held. Tunnelling reaches
+                the surface before any card can mark the event handled, so the pan can always be ended.
+            -->
             <Border x:Name="bSurface" Background="Transparent" Margin="0"
                     ClipToBounds="True" MouseWheel="Surface_MouseWheel"
-                    MouseLeftButtonDown="Surface_MouseLeftButtonDown" MouseLeftButtonUp="Surface_MouseLeftButtonUp"
+                    PreviewMouseLeftButtonDown="Surface_MouseLeftButtonDown"
+                    PreviewMouseLeftButtonUp="Surface_MouseLeftButtonUp"
+                    LostMouseCapture="Surface_LostMouseCapture"
                     MouseMove="Surface_MouseMove">
                 <Canvas x:Name="cBoard" Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Top">
                     <Canvas.RenderTransform>

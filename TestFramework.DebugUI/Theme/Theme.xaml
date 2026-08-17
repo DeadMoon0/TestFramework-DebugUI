@@ -172,6 +172,9 @@
     <Geometry x:Key="IconHome">M 2.6,8.6 L 9,3 L 15.4,8.6 M 4.6,7.4 L 4.6,15 L 13.4,15 L 13.4,7.4</Geometry>
     <Geometry x:Key="IconContinue">M 4.4,4.2 L 4.4,13.8 M 8.2,4.6 L 14.6,9 L 8.2,13.4 Z</Geometry>
     <Geometry x:Key="IconStop">M 5.2,5.2 L 12.8,5.2 L 12.8,12.8 L 5.2,12.8 Z</Geometry>
+
+    <!-- Step forward: an arc hopping over the step it is leaving, which is the shape every debugger uses. -->
+    <Geometry x:Key="IconStepOver">M 3.6,8.6 A 5.4,5.4 0 0 1 14.4,8.6 M 14.4,8.6 L 12.1,7.3 M 14.4,8.6 L 12.2,10.4 M 9,11.7 A 1.7,1.7 0 1 1 9,15.1 A 1.7,1.7 0 1 1 9,11.7 Z</Geometry>
     <Geometry x:Key="IconRerun">M 3,9 A 6,6 0 1 0 5.2,4.4 M 3,3.2 L 3,4.6 L 4.4,4.6</Geometry>
     <Geometry x:Key="IconAlert">M 9,3.4 L 15.8,14.4 L 2.2,14.4 Z M 9,7.2 L 9,10.6 M 9,12.3 L 9,12.6</Geometry>
     <Geometry x:Key="IconSummary">M 3.4,4.4 L 14.6,4.4 M 3.4,7.8 L 14.6,7.8 M 3.4,11.2 L 10.6,11.2 M 3.4,14.6 L 8.2,14.6</Geometry>

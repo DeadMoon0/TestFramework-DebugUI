@@ -186,6 +186,15 @@ public partial class UC_Board : UserControl
     /// </remarks>
     private const double DormantOpacity = 0.4;
 
+    /// <summary>
+    /// How visible an unset breakpoint dot is.
+    /// </summary>
+    /// <remarks>
+    /// Faint enough that a board of thirty steps is not a board of thirty dots, strong enough that the
+    /// spot can be found without already knowing it is there.
+    /// </remarks>
+    private const double RestingDotOpacity = 0.25;
+
     /// <summary>Whether a step has started, which is what decides if it is drawn as live.</summary>
     private static bool HasRun(StepNode step)
         => step.Lifecycle != DebugLifecycleState.Initialized || step.Attempts.Count > 0;
@@ -388,8 +397,6 @@ public partial class UC_Board : UserControl
 
         Border box = new()
         {
-            Width = node.Width,
-            Height = node.Height,
             CornerRadius = new CornerRadius(4),
             Background = (Brush)FindResource("SurfaceCard"),
             BorderThickness = new Thickness(2),
@@ -407,16 +414,63 @@ public partial class UC_Board : UserControl
             MainWindow.Shell.SelectStep(stageName, stepId);
         };
 
-        // Right-click sets a breakpoint. Kept off the left button so inspecting a step — by far the
-        // commoner action — never accidentally changes what the run will do.
+        // Right-click still sets a breakpoint anywhere on the card. The dot is the discoverable way in;
+        // this is the fast one, and it costs nothing to keep both.
         box.MouseRightButtonUp += (_, e) =>
         {
             e.Handled = true;
             Breakpoints.Toggle(stageName, stepId);
         };
 
-        stepVisuals[node.Id] = new StepVisual(box, status, name, note, outputs, log, elapsed);
-        return box;
+        Border breakpoint = BuildBreakpointDot(stageName, stepId);
+
+        // The dot sits beside the card rather than inside it, because a card that has not run yet is
+        // dimmed to four-tenths — and a breakpoint set on a step that has not run is precisely the case
+        // worth being able to see. Dimming is applied to the box; the dot is not in it.
+        Grid host = new() { Width = node.Width, Height = node.Height };
+
+        host.Children.Add(box);
+        host.Children.Add(breakpoint);
+
+        stepVisuals[node.Id] = new StepVisual(box, status, name, note, outputs, log, elapsed, breakpoint);
+        return host;
+    }
+
+    /// <summary>
+    /// Builds the breakpoint dot for one step.
+    /// </summary>
+    /// <remarks>
+    /// In the card's top-right corner, filled red when set, and a faint ring when not — the ring is what
+    /// makes the spot discoverable at all. Before this, a breakpoint was an amber card border set by a
+    /// right-click nobody would guess at, which made the tool's most useful feature its least findable.
+    /// </remarks>
+    private Border BuildBreakpointDot(string stageName, int stepId)
+    {
+        Border dot = new()
+        {
+            Width = 13,
+            Height = 13,
+            CornerRadius = new CornerRadius(6.5),
+            BorderThickness = new Thickness(1.5),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 8, 8, 0),
+            Cursor = Cursors.Hand,
+            ToolTip = "Stop the run here."
+        };
+
+        dot.MouseLeftButtonUp += (_, e) =>
+        {
+            // Handled, so toggling a breakpoint does not also select the step underneath. The surface
+            // ends its pan on the tunnelling event, so marking this one handled cannot strand it.
+            e.Handled = true;
+            Breakpoints.Toggle(stageName, stepId);
+        };
+
+        dot.MouseEnter += (_, _) => dot.Opacity = 1;
+        dot.MouseLeave += (_, _) => dot.Opacity = Breakpoints.IsSet(stageName, stepId) ? 1 : RestingDotOpacity;
+
+        return dot;
     }
 
     /// <summary>
@@ -587,10 +641,16 @@ public partial class UC_Board : UserControl
                 // what is happening now without hunting through everything that is merely declared.
                 visual.Box.Opacity = HasRun(step) ? 1 : DormantOpacity;
 
-                visual.Box.BorderBrush = isSelected
-                    ? (Brush)FindResource("AccentSelection")
-                    : Breakpoints.IsSet(stage.Name, step.StepId)
-                        ? (Brush)FindResource("StatePaused")
+                ShowBreakpoint(visual.Breakpoint, Breakpoints.IsSet(stage.Name, step.StepId));
+
+                // The halt outranks the selection. A run stopped somewhere is the most important thing on
+                // the board and lasts only until it is released, whereas which step a reader last clicked
+                // is on the panel to the right anyway. A breakpoint that is merely set is the dot's job
+                // now, which is what frees the border to mean "stopped, here".
+                visual.Box.BorderBrush = step.IsWaitingAtBreakpoint
+                    ? (Brush)FindResource("StateError")
+                    : isSelected
+                        ? (Brush)FindResource("AccentSelection")
                         : Brushes.Transparent;
             }
         }
@@ -782,15 +842,34 @@ public partial class UC_Board : UserControl
         panning = true;
     }
 
-    private void Surface_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    /// <summary>
+    /// Ends a pan, whether or not one had started.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not conditional on anything. This is the one place the pan is ended, and a release
+    /// that fails to reach it leaves the board following the pointer with no button held — which is what
+    /// happened while this was a bubbling handler and a card marked the click as its own.
+    /// </remarks>
+    private void Surface_MouseLeftButtonUp(object sender, MouseButtonEventArgs e) => EndPan();
+
+    /// <summary>
+    /// Ends a pan when the capture is taken away rather than released.
+    /// </summary>
+    /// <remarks>
+    /// A window losing activation mid-drag, or anything else claiming the mouse, never sends the button
+    /// up. Without this the board would be left mid-pan until the next click.
+    /// </remarks>
+    private void Surface_LostMouseCapture(object sender, MouseEventArgs e) => EndPan();
+
+    private void EndPan()
     {
         panning = false;
 
-        if (dragging)
-        {
-            dragging = false;
-            ((UIElement)sender).ReleaseMouseCapture();
-        }
+        if (!dragging)
+            return;
+
+        dragging = false;
+        bSurface.ReleaseMouseCapture();
     }
 
     private void Surface_MouseMove(object sender, MouseEventArgs e)
@@ -818,7 +897,23 @@ public partial class UC_Board : UserControl
         panOrigin = now;
     }
 
-    private sealed record StepVisual(Border Box, Border Status, TextBlock Name, TextBlock Note, TextBlock Outputs, TextBlock Log, TextBlock Elapsed);
+    /// <summary>Makes a breakpoint dot read as set or as an invitation to set one.</summary>
+    private void ShowBreakpoint(Border dot, bool isSet)
+    {
+        dot.Background = isSet ? (Brush)FindResource("StateError") : Brushes.Transparent;
+        dot.BorderBrush = isSet ? Brushes.Transparent : (Brush)FindResource("TextSecondary");
+        dot.Opacity = isSet ? 1 : RestingDotOpacity;
+    }
+
+    private sealed record StepVisual(
+        Border Box,
+        Border Status,
+        TextBlock Name,
+        TextBlock Note,
+        TextBlock Outputs,
+        TextBlock Log,
+        TextBlock Elapsed,
+        Border Breakpoint);
 
     private sealed record VerdictVisual(Border Box, TextBlock Heading, TextBlock Why);
 }

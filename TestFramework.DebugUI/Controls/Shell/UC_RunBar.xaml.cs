@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
@@ -8,7 +8,6 @@ using System.Windows.Controls;
 using Axiom.State;
 using Axiom.Wpf.Extensions;
 using TestFramework.Core.Debugger;
-using TestFramework.DebugUI.Copying;
 using TestFramework.DebugUI.Editors;
 using TestFramework.DebugUI.State;
 
@@ -48,17 +47,12 @@ public partial class UC_RunBar : UserControl
             .BindToDependencyProperty(tbRunName, TextBlock.TextProperty));
 
         // Capped and trimmed, so a long name cannot push the actions off the bar. The qualified name is on
-        // the tooltip for when the trimmed one is not enough — and it is what the field copies, because a
-        // method name on its own is not what anyone pastes into a filter or a search.
+        // the tooltip for when the trimmed one is not enough. No copy button on it: this is the title bar,
+        // and a button that appears under the pointer in the strip you grab the window by is a button in
+        // the way. The same name is copyable from the step panel, where reading it is the point.
         subscriptions.Add(StateStore<MainState>.Default
             .Bind(state => Selected(state)?.Test ?? string.Empty)
-            .Subscribe(test =>
-            {
-                tbRunName.ToolTip = string.IsNullOrWhiteSpace(test) ? null : test;
-                Copyable.SetText(tbRunName, test);
-            }));
-
-        Copyable.Enable(tbRunName);
+            .Subscribe(test => tbRunName.ToolTip = string.IsNullOrWhiteSpace(test) ? null : test));
 
         subscriptions.Add(StateStore<MainState>.Default
             .Bind(state => state.SelectedSessionId is null ? Visibility.Collapsed : Visibility.Visible)

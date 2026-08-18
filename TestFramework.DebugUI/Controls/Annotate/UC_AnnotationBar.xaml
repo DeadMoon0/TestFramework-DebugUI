@@ -1,0 +1,96 @@
+<UserControl x:Class="TestFramework.DebugUI.Controls.Annotate.UC_AnnotationBar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d">
+    <!--
+        A bar along the bottom, the way every drawing tool puts one: the canvas is what you are looking at, and
+        the instruments belong at the edge of it rather than over it. Centred and floating, so it never covers the
+        run and never takes width from the board.
+
+        The pointer is a tool like the others on purpose. While a drawing tool is chosen the left button draws,
+        which means selecting a step and panning have to be reachable, and the honest way to say that is to make
+        "back to the board" one of the choices rather than a mode nobody can find.
+    -->
+    <Border HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0 0 0 14"
+            CornerRadius="4" Background="{StaticResource SurfaceOverlay}"
+            BorderBrush="#1FFFFFFF" BorderThickness="1" Padding="6 5">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.55" Color="Black"/>
+        </Border.Effect>
+
+        <StackPanel Orientation="Horizontal">
+            <Button x:Name="btPointer" Style="{StaticResource CaptionIconButton}" Click="Tool_Click" Tag="Pointer">
+                <Path x:Name="pathPointer" Data="{StaticResource IconPointer}" Stroke="{StaticResource TextSecondary}"
+                      StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                      Width="18" Height="18" Stretch="None"/>
+            </Button>
+
+            <Border Width="1" Height="18" Margin="5 0" Background="#1FFFFFFF"/>
+
+            <Button x:Name="btPen" Style="{StaticResource CaptionIconButton}" Click="Tool_Click" Tag="Freehand">
+                <Path x:Name="pathPen" Data="{StaticResource IconPen}" Stroke="{StaticResource TextSecondary}"
+                      StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                      Width="18" Height="18" Stretch="None"/>
+            </Button>
+            <Button x:Name="btRectangle" Style="{StaticResource CaptionIconButton}" Click="Tool_Click" Tag="Rectangle">
+                <Path x:Name="pathRectangle" Data="{StaticResource IconRectangle}" Stroke="{StaticResource TextSecondary}"
+                      StrokeThickness="1.4" Width="18" Height="18" Stretch="None"/>
+            </Button>
+            <Button x:Name="btEllipse" Style="{StaticResource CaptionIconButton}" Click="Tool_Click" Tag="Ellipse">
+                <Path x:Name="pathEllipse" Data="{StaticResource IconEllipse}" Stroke="{StaticResource TextSecondary}"
+                      StrokeThickness="1.4" Width="18" Height="18" Stretch="None"/>
+            </Button>
+            <Button x:Name="btArrow" Style="{StaticResource CaptionIconButton}" Click="Tool_Click" Tag="Arrow">
+                <Path x:Name="pathArrow" Data="{StaticResource IconArrow}" Stroke="{StaticResource TextSecondary}"
+                      StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                      Width="18" Height="18" Stretch="None"/>
+            </Button>
+            <Button x:Name="btText" Style="{StaticResource CaptionIconButton}" Click="Tool_Click" Tag="Text">
+                <Path x:Name="pathText" Data="{StaticResource IconText}" Stroke="{StaticResource TextSecondary}"
+                      StrokeThickness="1.4" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                      Width="18" Height="18" Stretch="None"/>
+            </Button>
+
+            <Border Width="1" Height="18" Margin="5 0" Background="#1FFFFFFF"/>
+
+            <!-- Filled with the ink itself rather than labelled, because a colour is the only thing a swatch
+                 needs to say. -->
+            <StackPanel x:Name="spInks" Orientation="Horizontal" VerticalAlignment="Center"/>
+
+            <Border Width="1" Height="18" Margin="5 0" Background="#1FFFFFFF"/>
+
+            <!-- Three weights. A stroke thick enough to circle a card is too thick to underline a word. -->
+            <StackPanel x:Name="spWeights" Orientation="Horizontal" VerticalAlignment="Center"/>
+
+            <Border Width="1" Height="18" Margin="5 0" Background="#1FFFFFFF"/>
+
+            <Button x:Name="btUndo" Style="{StaticResource CaptionIconButton}" Click="btUndo_Click">
+                <Path Data="{StaticResource IconUndo}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.4"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+            </Button>
+            <Button x:Name="btVisible" Style="{StaticResource CaptionIconButton}" Click="btVisible_Click">
+                <Viewbox Width="17" Height="17">
+                    <Canvas Width="24" Height="24">
+                        <Path x:Name="pathEye" StrokeThickness="1.9" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                              Stroke="{StaticResource TextSecondary}"
+                              Data="M1.6 12S5.3 5.4 12 5.4 22.4 12 22.4 12 18.7 18.6 12 18.6 1.6 12 1.6 12Z"/>
+                        <Ellipse x:Name="ellipseEye" Canvas.Left="8.6" Canvas.Top="8.6" Width="6.8" Height="6.8"
+                                 Fill="{StaticResource TextSecondary}"/>
+                    </Canvas>
+                </Viewbox>
+            </Button>
+
+            <Border Width="1" Height="18" Margin="5 0" Background="#1FFFFFFF"/>
+
+            <Button x:Name="btClose" Style="{StaticResource CaptionIconButton}" Click="btClose_Click" ToolTip="Done">
+                <Path Data="{StaticResource IconClose}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+            </Button>
+
+            <TextBlock x:Name="tbNote" Style="{StaticResource MutedText}" FontSize="10" VerticalAlignment="Center"
+                       Foreground="{StaticResource TextFaint}" Margin="8 0 4 0" Visibility="Collapsed"/>
+        </StackPanel>
+    </Border>
+</UserControl>

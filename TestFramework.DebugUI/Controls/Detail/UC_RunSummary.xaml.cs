@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Reactive.Disposables;
@@ -8,7 +8,6 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Axiom.State;
-using TestFramework.DebugUI.Copying;
 using TestFramework.DebugUI.State;
 
 namespace TestFramework.DebugUI.Controls.Detail;
@@ -29,8 +28,9 @@ public partial class UC_RunSummary : UserControl
     {
         InitializeComponent();
 
-        // The verdict and the counts behind it: what someone reports when asked how the run went.
-        Copyable.Enable(tbVerdict, tbVerdictWhy, tbCounts);
+        // No copy buttons here. The verdict is one word and the counts are five numbers - quicker to
+        // read out than to reach for a button, and a button beside each of them was clutter over the one
+        // page in the tool that exists to be read at a glance.
 
         subscriptions.Add(StateStore<MainState>.Default
             .Bind(state => RunTally.Of(state.ActiveRun))

@@ -1,10 +1,12 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 using Axiom.State;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.Copying;
@@ -24,26 +26,64 @@ public partial class UC_StepDetail : UserControl
 {
     private readonly CompositeDisposable subscriptions = [];
 
+    /// <summary>The wash behind every other row, which is what separates one long entry from two.</summary>
+    private static readonly Brush Odd = new SolidColorBrush(Color.FromArgb(0x0A, 0xFF, 0xFF, 0xFF));
+
+    /// <summary>The resize handle when nobody is near it.</summary>
+    private static readonly Brush Resting = new SolidColorBrush(Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF));
+
     private StepNode? step;
     private string? stageName;
+    private LogNode[] entries = [];
+
+    private bool sizing;
+    private double sizingFrom;
+    private double sizingWidth;
 
     /// <summary>Creates the panel and binds it.</summary>
     public UC_StepDetail()
     {
         InitializeComponent();
 
-        // Everything here is something a reader ends up wanting somewhere else: an identity to paste into a
-        // filter, a message to paste into a ticket, a stack trace to read in an editor that wraps.
-        Copyable.Enable(
-            tbName, tbKind, tbDescription,
-            tbFailureType, tbFailureMessage, tbFriendly, tbRecovery, tbOptions, tbStack,
-            tbInputs, tbOutputs, tbLog);
+        // Three fields, each of them something a reader ends up wanting somewhere else: an identity to
+        // paste into a filter, a message to paste into a ticket, a trace to read in an editor that wraps.
+        // Everything else on this panel is a label, a count or a list of names already on the board, and a
+        // button under the pointer on all twelve of them made the panel feel like a form.
+        Copyable.Enable(tbName, tbFailureMessage, tbStack);
 
         subscriptions.Add(StateStore<MainState>.Default
             .Bind(Resolve)
             .Subscribe(Show));
 
         Unloaded += (_, _) => subscriptions.Dispose();
+    }
+
+    /// <summary>
+    /// Raised when the reader has finished dragging the panel wider or narrower.
+    /// </summary>
+    /// <remarks>
+    /// On finishing rather than on every pixel of the drag. The width is remembered in the settings file, and
+    /// a file written a hundred times while somebody drags a handle is a file being written for no reason.
+    /// </remarks>
+    public event Action<double>? Resized;
+
+    /// <summary>
+    /// Opens the panel at a remembered width.
+    /// </summary>
+    /// <remarks>
+    /// Clamped against the window it is actually opening in, not the one it was saved on: a width from a wide
+    /// desktop would otherwise cover a laptop's whole board.
+    /// </remarks>
+    public void SetWidth(double width)
+    {
+        Width = PanelWidth.Clamp(width, Available());
+    }
+
+    /// <summary>Brings the panel back inside the window after the window itself was made smaller.</summary>
+    public void Reclamp()
+    {
+        if (!sizing)
+            Width = PanelWidth.Clamp(Width, Available());
     }
 
     /// <summary>
@@ -115,16 +155,91 @@ public partial class UC_StepDetail : UserControl
         }
     }
 
+    /// <summary>
+    /// Lays the step's log out one entry per row.
+    /// </summary>
+    /// <remarks>
+    /// Built rather than bound, like the rest of this window, and rebuilt whole on every change: a log grows
+    /// only at its end, and is short enough per step that appending would be more code than it saves.
+    /// </remarks>
     private void ShowLog()
     {
+        spLog.Children.Clear();
+
         if (step is null)
             return;
 
-        LogNode[] entries = [.. step.Attempts.SelectMany(attempt => attempt.Logs)];
+        entries = [.. step.Attempts.SelectMany(attempt => attempt.Logs)];
 
-        tbLog.Text = entries.Length == 0
-            ? "Nothing logged."
-            : string.Join("\n", entries.Select(entry => $"{entry.OccurredAtUtc.ToLocalTime():HH:mm:ss} {entry.Level,-7} {entry.Message}"));
+        tbLogCount.Text = entries.Length == 0 ? string.Empty : LogLines.Count(entries.Length);
+        btCopyLog.Visibility = entries.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+
+        if (entries.Length == 0)
+        {
+            spLog.Children.Add(new TextBlock { Text = "Nothing logged.", Style = (Style)FindResource("MutedText") });
+            return;
+        }
+
+        for (int index = 0; index < entries.Length; index++)
+            spLog.Children.Add(Row(entries[index], index));
+    }
+
+    /// <summary>
+    /// One log entry: when, how bad, and what it said.
+    /// </summary>
+    /// <remarks>
+    /// The message is the only column that wraps, and it wraps inside its own column, so a long entry stays
+    /// under itself instead of running back beneath the timestamps. Every other row is washed a shade
+    /// lighter, which is what tells one entry over two lines apart from two entries.
+    /// </remarks>
+    private Grid Row(LogNode entry, int index)
+    {
+        Grid row = new()
+        {
+            Background = index % 2 == 1 ? Odd : Brushes.Transparent,
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = GridLength.Auto, SharedSizeGroup = "LogTime" },
+                new ColumnDefinition { Width = GridLength.Auto, SharedSizeGroup = "LogLevel" },
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+            }
+        };
+
+        TextBlock time = new()
+        {
+            Style = (Style)FindResource("CodeText"),
+            Foreground = (Brush)FindResource("TextFaint"),
+            TextWrapping = TextWrapping.NoWrap,
+            Margin = new Thickness(4, 1, 8, 1),
+            Text = LogLines.Time(entry)
+        };
+
+        TextBlock level = new()
+        {
+            Style = (Style)FindResource("CodeText"),
+            Foreground = (Brush)FindResource(LogLines.Brush(entry.Level)),
+            FontWeight = FontWeights.Bold,
+            TextWrapping = TextWrapping.NoWrap,
+            Margin = new Thickness(0, 1, 8, 1),
+            Text = LogLines.Tag(entry.Level)
+        };
+
+        TextBlock message = new()
+        {
+            Style = (Style)FindResource("CodeText"),
+            Foreground = (Brush)FindResource(entry.Level == DebugLogLevel.Information ? "TextSecondary" : "TextPrimary"),
+            Margin = new Thickness(0, 1, 4, 1),
+            Text = entry.Message
+        };
+
+        Grid.SetColumn(level, 1);
+        Grid.SetColumn(message, 2);
+
+        row.Children.Add(time);
+        row.Children.Add(level);
+        row.Children.Add(message);
+
+        return row;
     }
 
     /// <summary>
@@ -190,10 +305,13 @@ public partial class UC_StepDetail : UserControl
     private static string? Bullets(System.Collections.Generic.IReadOnlyList<string>? lines)
         => lines is null || lines.Count == 0 ? null : string.Join("\n", lines.Select(line => "• " + line));
 
-    private void btBreakpoint_Click(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// Puts the whole log on the clipboard, in the form the panel shows it in.
+    /// </summary>
+    private void btCopyLog_Click(object sender, RoutedEventArgs e)
     {
-        if (step is not null && stageName is not null)
-            Breakpoints.Toggle(stageName, step.StepId);
+        if (entries.Length != 0 && Clipboards.Set(LogLines.Text(entries)))
+            CopyGlyph.Confirm(pathCopyLog, this);
     }
 
     /// <summary>
@@ -221,5 +339,78 @@ public partial class UC_StepDetail : UserControl
         // The clipboard can be held by another process, and Clip is where that is dealt with once for every
         // copy in the application rather than here for this one.
         Clipboards.Set(text.ToString());
+    }
+
+    /// <summary>How much room the panel has to grow into.</summary>
+    private double Available()
+    {
+        FrameworkElement? host = Parent as FrameworkElement;
+
+        return host?.ActualWidth ?? double.NaN;
+    }
+
+    private void bGrip_MouseEnter(object sender, MouseEventArgs e)
+        => bGripBar.Background = (Brush)FindResource("Accent");
+
+    private void bGrip_MouseLeave(object sender, MouseEventArgs e)
+    {
+        if (!sizing)
+            bGripBar.Background = Resting;
+    }
+
+    /// <summary>
+    /// Starts a drag.
+    /// </summary>
+    /// <remarks>
+    /// The pointer is measured against the window rather than against this panel, because this panel is the
+    /// thing being resized: every position taken inside it would be measured from an edge that had just moved.
+    /// </remarks>
+    private void bGrip_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (Parent is not IInputElement host)
+            return;
+
+        sizing = true;
+        sizingFrom = e.GetPosition(host).X;
+        sizingWidth = ActualWidth;
+
+        bGrip.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void bGrip_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (!sizing || Parent is not IInputElement host)
+            return;
+
+        // Leftwards is wider: the panel is pinned to the right edge, so dragging its left edge away from that
+        // edge is asking for more of the window.
+        Width = PanelWidth.Clamp(sizingWidth + (sizingFrom - e.GetPosition(host).X), Available());
+    }
+
+    private void bGrip_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sizing)
+            bGrip.ReleaseMouseCapture();
+    }
+
+    /// <summary>
+    /// Ends a drag, however it ended.
+    /// </summary>
+    /// <remarks>
+    /// On losing capture rather than only on the button coming up, so a drag interrupted by anything else -
+    /// another window taking focus, a dialog opening - leaves the panel at a width and not mid-drag.
+    /// </remarks>
+    private void bGrip_LostCapture(object sender, MouseEventArgs e)
+    {
+        if (!sizing)
+            return;
+
+        sizing = false;
+
+        if (!bGrip.IsMouseOver)
+            bGripBar.Background = Resting;
+
+        Resized?.Invoke(Width);
     }
 }

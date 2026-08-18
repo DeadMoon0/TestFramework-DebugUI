@@ -30,6 +30,16 @@ public static class RunBundleWriter
         /// <summary>Gets a value indicating whether artifact files travel with the runs.</summary>
         public bool IncludeArtifacts { get; init; } = true;
 
+        /// <summary>
+        /// Gets a value indicating whether the marks drawn on the runs travel with them.
+        /// </summary>
+        /// <remarks>
+        /// On by default, because the reason to send somebody a run is usually to say something about it, and the
+        /// marks are that something. Sharing the evidence and withholding the argument is the odd choice, not the
+        /// other way round.
+        /// </remarks>
+        public bool IncludeAnnotations { get; init; } = true;
+
         /// <summary>Gets a value indicating whether the sender is redacted.</summary>
         public bool Anonymous { get; init; }
 
@@ -72,6 +82,9 @@ public static class RunBundleWriter
 
         /// <summary>Gets the number of artifact files written.</summary>
         public int FileCount => Manifest.Runs.Sum(run => run.Files.Count(file => !file.WasMissing));
+
+        /// <summary>Gets the number of runs that carried marks.</summary>
+        public int AnnotatedCount => Manifest.Runs.Count(run => run.HasAnnotations);
     }
 
     /// <summary>Writes a bundle, replacing anything already at the path.</summary>
@@ -135,6 +148,7 @@ public static class RunBundleWriter
         MachineName = request.Anonymous ? null : request.Identity.MachineName,
         IsAnonymous = request.Anonymous,
         IncludesArtifacts = request.IncludeArtifacts,
+        IncludesAnnotations = request.IncludeAnnotations,
         Runs = runs
     };
 
@@ -231,8 +245,11 @@ public static class RunBundleWriter
             }
         }
 
+        bool annotated = request.IncludeAnnotations && AddAnnotations(archive, journalPath, folder, sessionId, request);
+
         return new BundleRun
         {
+            HasAnnotations = annotated,
             SessionId = sessionId,
             Name = metadata.Value<string>("Name") ?? sessionId,
             FullyQualifiedName = metadata["Identity"]?.Value<string>("FullyQualifiedName"),
@@ -269,6 +286,28 @@ public static class RunBundleWriter
     /// </remarks>
     private static DateTimeOffset? Moment(JObject metadata, string name)
         => metadata[name] is { Type: not JTokenType.Null } token ? token.ToObject<DateTimeOffset?>() : null;
+
+    /// <summary>
+    /// Puts a run's marks in the bundle, and says whether there were any.
+    /// </summary>
+    /// <remarks>
+    /// Read through the store rather than copied as a file, because an anonymous share has to replace the authors
+    /// — and that is a change to the marks, not to the run, so it happens on the way out and never on disk.
+    /// </remarks>
+    private static bool AddAnnotations(ZipArchive archive, string journalPath, string folder, string sessionId, Request request)
+    {
+        Annotations.RunAnnotations marks = new Annotations.AnnotationStore().Load(journalPath, sessionId);
+
+        if (marks.IsEmpty)
+            return false;
+
+        if (request.Anonymous)
+            marks = marks.Anonymised();
+
+        WriteText(archive, $"{folder}/{BundleFormat.AnnotationsFile}", JsonConvert.SerializeObject(marks, Formatting.Indented));
+
+        return true;
+    }
 
     /// <summary>The sidecar that belongs to a journal.</summary>
     /// <remarks>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
@@ -11,7 +11,6 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Axiom.State;
-using TestFramework.DebugUI.Copying;
 using TestFramework.DebugUI.State.Bundles;
 using TestFramework.DebugUI.State;
 
@@ -40,8 +39,9 @@ public partial class UC_ValueItem : UserControl
 
         InitializeComponent();
 
-        // A rail entry is the shortest form of a value, and its key is what a reader searches for.
-        Copyable.Enable(tbKey, tbSummary, tbFacts, tbBody);
+        // No copy buttons here. A rail entry is four short lines about a value, every one of which is
+        // repeated in the panel a click away - and a card that grows a button under the pointer four
+        // times over is a card nobody can read.
 
         bdEdge.Background = (Brush)FindResource(isArtifact ? "FlowArtifact" : "FlowVariable");
 

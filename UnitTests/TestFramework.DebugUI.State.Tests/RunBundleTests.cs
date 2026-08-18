@@ -5,6 +5,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json.Linq;
+using TestFramework.DebugUI.State.Annotations;
 using TestFramework.DebugUI.State.Bundles;
 
 namespace TestFramework.DebugUI.State.Tests;
@@ -226,6 +227,97 @@ public sealed class RunBundleTests : IDisposable
         Assert.Equal("Someone", written.Manifest.ExportedBy);
         Assert.Empty(written.Warnings);
     }
+
+    [Fact]
+    public void MarksTravelWithTheRunTheyWereDrawnOn()
+    {
+        // The reason to send somebody a run is usually to say something about it. Sharing the evidence and
+        // withholding the argument would be the odd choice.
+        string journal = WriteRun("annotated", "a.txt", "1");
+
+        new AnnotationStore().Save(journal, new RunAnnotations { SessionId = "annotated", LayoutVersion = 1 }
+            .With(Mark("m1", "alex", "the payload is wrong")));
+
+        RunBundleWriter.Result written = Export(journal);
+
+        Assert.Equal(1, written.AnnotatedCount);
+        Assert.True(written.Manifest.IncludesAnnotations);
+        Assert.True(Assert.Single(written.Manifest.Runs).HasAnnotations);
+
+        RunBundleReader.Result read = RunBundleReader.Read(written.Path, Recipient);
+        BundleRun run = Assert.Single(read.Imported);
+
+        Assert.Equal(1, read.Annotated);
+
+        RunAnnotations arrived = new AnnotationStore().Load(Path.Combine(Recipient, run.JournalFileName), "annotated");
+
+        Assert.Equal("the payload is wrong", Assert.Single(arrived.Marks).Text);
+        Assert.Equal("alex", Assert.Single(arrived.Marks).Author);
+    }
+
+    [Fact]
+    public void AnAnonymousShareNumbersTheAuthorsOfTheMarks()
+    {
+        // The drawing is the point and stays; who drew it is what an anonymous share is for hiding.
+        string journal = WriteRun("hidden", "a.txt", "1");
+
+        new AnnotationStore().Save(journal, new RunAnnotations { SessionId = "hidden" }
+            .With(Mark("m1", "alex", "look here"))
+            .With(Mark("m2", "sam", "and here")));
+
+        RunBundleReader.Result read = RunBundleReader.Read(Export(journal, anonymous: true).Path, Recipient);
+        BundleRun run = Assert.Single(read.Imported);
+
+        RunAnnotations arrived = new AnnotationStore().Load(Path.Combine(Recipient, run.JournalFileName), "hidden");
+
+        Assert.Equal(["Author 1", "Author 2"], arrived.Marks.Select(mark => mark.Author));
+        Assert.Equal(["look here", "and here"], arrived.Marks.Select(mark => mark.Text));
+    }
+
+    [Fact]
+    public void MarksCanBeLeftBehind()
+    {
+        string journal = WriteRun("quiet", "a.txt", "1");
+
+        new AnnotationStore().Save(journal, new RunAnnotations { SessionId = "quiet" }.With(Mark("m1", "alex", "private note")));
+
+        RunBundleWriter.Result written = RunBundleWriter.Write(
+            Path.Combine(root, $"no-marks{BundleFormat.Extension}"),
+            new RunBundleWriter.Request
+            {
+                JournalPaths = [journal],
+                IncludeAnnotations = false,
+                CreatedAtUtc = DateTimeOffset.UnixEpoch
+            });
+
+        Assert.Equal(0, written.AnnotatedCount);
+        Assert.False(written.Manifest.IncludesAnnotations);
+
+        RunBundleReader.Result read = RunBundleReader.Read(written.Path, Recipient);
+        BundleRun run = Assert.Single(read.Imported);
+
+        Assert.True(new AnnotationStore().Load(Path.Combine(Recipient, run.JournalFileName), "quiet").IsEmpty);
+    }
+
+    [Fact]
+    public void ARunNobodyDrewOnCarriesNoMarksFile()
+    {
+        RunBundleWriter.Result written = Export(WriteRun("plain", "a.txt", "1"));
+
+        Assert.Equal(0, written.AnnotatedCount);
+        Assert.False(Assert.Single(written.Manifest.Runs).HasAnnotations);
+    }
+
+    private static Annotation Mark(string id, string author, string text) => new()
+    {
+        Id = id,
+        Kind = AnnotationKind.Text,
+        Ink = "InkCyan",
+        Points = [new AnnotationPoint(10, 20)],
+        Text = text,
+        Author = author,
+        AtUtc = DateTimeOffset.UnixEpoch
+    };
 
     [Fact]
     public void SomethingThatIsNotABundleIsRefusedWithAnExplanation()

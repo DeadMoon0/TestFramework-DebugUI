@@ -21,13 +21,13 @@
         <!-- What the run does. -->
         <Button x:Name="btContinue" Style="{StaticResource CaptionIconButton}" Click="btContinue_Click"
                 Visibility="Collapsed" shell:WindowChrome.IsHitTestVisibleInChrome="True">
-            <Path Data="{StaticResource IconContinue}" Stroke="{StaticResource StateRunning}" StrokeThickness="1.5"
+            <Path Data="{StaticResource IconContinue}" Stroke="{StaticResource Accent}" StrokeThickness="1.5"
                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
         </Button>
         <!-- Beside Continue and shown with it: the two are pressed alternately while walking a run. -->
         <Button x:Name="btStep" Style="{StaticResource CaptionIconButton}" Click="btStep_Click"
                 Visibility="Collapsed" shell:WindowChrome.IsHitTestVisibleInChrome="True">
-            <Path Data="{StaticResource IconStepOver}" Stroke="{StaticResource StateRunning}" StrokeThickness="1.5"
+            <Path Data="{StaticResource IconStepOver}" Stroke="{StaticResource Accent}" StrokeThickness="1.5"
                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
         </Button>
         <Button x:Name="btStop" Style="{StaticResource CaptionIconButton}" Click="btStop_Click"

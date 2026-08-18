@@ -23,14 +23,27 @@
                     PreviewMouseLeftButtonUp="Surface_MouseLeftButtonUp"
                     LostMouseCapture="Surface_LostMouseCapture"
                     MouseMove="Surface_MouseMove">
-                <Canvas x:Name="cBoard" Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Top">
-                    <Canvas.RenderTransform>
-                        <TransformGroup>
-                            <ScaleTransform x:Name="stZoom" ScaleX="1" ScaleY="1"/>
-                            <TranslateTransform x:Name="ttPan" X="0" Y="0"/>
-                        </TransformGroup>
-                    </Canvas.RenderTransform>
-                </Canvas>
+                <!--
+                    Two layers over one surface: the run, and whatever somebody drew on it. A grid rather than
+                    nesting them, because a redraw of the board must not be able to take a drawing with it.
+                -->
+                <Grid>
+                    <Canvas x:Name="cBoard" Background="Transparent" HorizontalAlignment="Left" VerticalAlignment="Top">
+                        <Canvas.RenderTransform>
+                            <TransformGroup>
+                                <ScaleTransform x:Name="stZoom" ScaleX="1" ScaleY="1"/>
+                                <TranslateTransform x:Name="ttPan" X="0" Y="0"/>
+                            </TransformGroup>
+                        </Canvas.RenderTransform>
+                    </Canvas>
+
+                    <!--
+                        Carries the board's own transform - set in code to the very same object - so panning and
+                        zooming move the marks with the run. No background, so the board underneath stays
+                        clickable everywhere a mark is not.
+                    -->
+                    <Canvas x:Name="cAnnotations" HorizontalAlignment="Left" VerticalAlignment="Top" Panel.ZIndex="5"/>
+                </Grid>
             </Border>
 
             <TextBlock x:Name="tbEmpty" Style="{StaticResource MutedText}"

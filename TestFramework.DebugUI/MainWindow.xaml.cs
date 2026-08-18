@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -87,6 +87,14 @@ public partial class MainWindow : Window
         ucRunBar.FitRequested += ucBoard.FitToWindow;
         ucRunBar.FirstFailureRequested += ucBoard.GoToFirstFailure;
 
+        // The bar chooses; the board draws. Nothing about a stroke is decided in the window.
+        ucAnnotate.ToolChosen += ucBoard.SetAnnotationTool;
+        ucAnnotate.InkChosen += ucBoard.SetAnnotationInk;
+        ucAnnotate.WeightChosen += ucBoard.SetAnnotationWeight;
+        ucAnnotate.UndoRequested += ucBoard.UndoAnnotation;
+        ucAnnotate.VisibilityChanged += ucBoard.SetAnnotationsVisible;
+        ucAnnotate.Closed += StopAnnotating;
+
         ucValues.ValueOpened += (key, isArtifact) => ucValueInspector.Show(key, isArtifact);
         ucValueInspector.Closed += () => ucValueInspector.Visibility = Visibility.Collapsed;
 
@@ -113,6 +121,13 @@ public partial class MainWindow : Window
         Breakpoints.Restore(saved.Breakpoints);
         ApplyPlacement(saved.Window);
 
+        // The step panel's width is the reader's, and it is theirs on the next start too. Written when the
+        // drag ends, and re-checked whenever the window changes size - a panel dragged wide on a maximised
+        // window would otherwise cover the whole board once the window was made small again.
+        ucStep.SetWidth(saved.Panels.StepDetailWidth);
+        ucStep.Resized += width => Persist(saved with { Panels = saved.Panels with { StepDetailWidth = width } });
+        SizeChanged += (_, _) => ucStep.Reclamp();
+
         // Saved on change rather than on exit. A tool that is killed - and this one is attached to
         // test hosts that get killed - would otherwise lose every breakpoint set in the session.
         Breakpoints.Changed += SaveBreakpoints;
@@ -134,6 +149,7 @@ public partial class MainWindow : Window
         BindShortcuts();
 
         btHome.ToolTip = Shortcuts.Describe("Every run, with what became of each", Shortcuts.Runs);
+        btAnnotate.ToolTip = "Draw on this run";
         btSettings.ToolTip = Shortcuts.Describe("Settings", Shortcuts.Settings);
         ApplyWatchMode(saved.Watch.Enabled, announce: false);
 
@@ -280,6 +296,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (ucAnnotate.Visibility == Visibility.Visible)
+        {
+            StopAnnotating();
+            return;
+        }
+
         if (ucExport.Visibility == Visibility.Visible)
         {
             ucExport.Visibility = Visibility.Collapsed;
@@ -357,7 +379,7 @@ public partial class MainWindow : Window
     /// </remarks>
     private void ShowWatchState(bool enabled)
     {
-        Brush ink = (Brush)FindResource(enabled ? "StateRunning" : "TextSecondary");
+        Brush ink = (Brush)FindResource(enabled ? "Accent" : "TextSecondary");
 
         pathWatchOutline.Stroke = ink;
         ellipseWatchPupil.Fill = ink;
@@ -626,6 +648,52 @@ public partial class MainWindow : Window
         if (notifier is not null)
             notifier.IsHidden = false;
     }
+
+    /// <summary>
+    /// Opens or closes the drawing instruments.
+    /// </summary>
+    /// <remarks>
+    /// Closing hands the mouse back to the board explicitly rather than leaving a tool armed behind a hidden bar,
+    /// which would leave the next click drawing a line nobody asked for.
+    /// </remarks>
+    private void btAnnotate_Click(object sender, RoutedEventArgs e)
+    {
+        if (ucAnnotate.Visibility == Visibility.Visible)
+        {
+            StopAnnotating();
+            return;
+        }
+
+        ucAnnotate.Open();
+
+        // The one thing a reader cannot see for themselves: these marks were drawn on a board that has since
+        // been arranged differently, so they may no longer point where they were aimed.
+        ucAnnotate.Note(ucBoard.AnnotationsPredateThisLayout()
+            ? "These marks were drawn on an earlier layout"
+            : null);
+
+        ShowAnnotateState(annotating: true);
+    }
+
+    private void StopAnnotating()
+    {
+        ucBoard.SetAnnotationTool(null);
+        ucAnnotate.Visibility = Visibility.Collapsed;
+
+        ShowAnnotateState(annotating: false);
+    }
+
+    /// <summary>
+    /// Lights the pen while the toolbar is open.
+    /// </summary>
+    /// <remarks>
+    /// The accent rather than the ink being drawn with. It says the tool is armed, which is the same thing
+    /// the eye beside it says about watching - and lighting one cyan and the other blue made two toggles a
+    /// pixel apart look like two different kinds of switch. Which colour the pen draws in is the toolbar's
+    /// business, and it is shown there.
+    /// </remarks>
+    private void ShowAnnotateState(bool annotating)
+        => pathAnnotate.Stroke = (Brush)FindResource(annotating ? "Accent" : "TextSecondary");
 
     private void ShowSummary() => ucSummary.Visibility = Visibility.Visible;
 

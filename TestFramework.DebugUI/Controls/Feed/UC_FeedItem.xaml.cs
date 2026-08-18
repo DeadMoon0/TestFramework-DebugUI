@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -28,9 +28,9 @@ public partial class UC_FeedItem : UserControl
 
         InitializeComponent();
 
-        // Feed entries carry the transport's own diagnostics, which is exactly what gets pasted into a
-        // bug report about the transport.
-        Copyable.Enable(tbTitle, tbDetail);
+        // The detail, not the heading. An entry's detail is the transport's own diagnostic, which is what
+        // gets pasted into a bug report; the heading above it is a handful of words describing it.
+        Copyable.Enable(tbDetail);
 
         tbWhen.Text = entry.AtUtc.ToLocalTime().ToString("HH:mm:ss", System.Globalization.CultureInfo.CurrentCulture);
         tbTitle.Text = entry.Title;

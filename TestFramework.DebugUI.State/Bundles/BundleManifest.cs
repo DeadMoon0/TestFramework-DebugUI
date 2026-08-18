@@ -41,6 +41,9 @@ public sealed record BundleManifest
     /// <summary>Gets a value indicating whether artifact files were included.</summary>
     public bool IncludesArtifacts { get; init; }
 
+    /// <summary>Gets a value indicating whether the marks drawn on the runs were included.</summary>
+    public bool IncludesAnnotations { get; init; }
+
     /// <summary>Gets the runs inside.</summary>
     public ImmutableList<BundleRun> Runs { get; init; } = [];
 }
@@ -78,6 +81,15 @@ public sealed record BundleRun
 
     /// <summary>Gets the artifact files carried with the run.</summary>
     public ImmutableList<BundleFile> Files { get; init; } = [];
+
+    /// <summary>
+    /// Gets a value indicating whether somebody had drawn on this run.
+    /// </summary>
+    /// <remarks>
+    /// Stated in the manifest so a reader can be told a bundle carries somebody's notes before unpacking it — the
+    /// marks are usually the reason it was sent.
+    /// </remarks>
+    public bool HasAnnotations { get; init; }
 }
 
 /// <summary>One artifact file carried with a run.</summary>

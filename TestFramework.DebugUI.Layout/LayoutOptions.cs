@@ -16,6 +16,17 @@ public sealed record LayoutOptions
     public static LayoutOptions Default { get; } = new();
 
     /// <summary>Gets the spacing every coordinate is snapped to.</summary>
+    /// <summary>
+    /// The version of the arrangement these options and the routing produce.
+    /// </summary>
+    /// <remarks>
+    /// Bumped whenever a change moves where things end up for the same run — card sizes, routing, connector
+    /// placement. Annotations are stored in board coordinates and are only meaningful against the arrangement
+    /// they were drawn on, so this is what lets a later build say "the board has moved under these marks"
+    /// instead of quietly pointing an arrow at the wrong step.
+    /// </remarks>
+    public const int Version = 1;
+
     public double Grid { get; init; } = 10;
 
     /// <summary>

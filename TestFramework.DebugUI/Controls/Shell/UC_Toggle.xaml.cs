@@ -94,7 +94,7 @@ public partial class UC_Toggle : UserControl
 
     private void Paint()
     {
-        bTrack.Background = (Brush)FindResource(isOn ? "AccentSelection" : "SurfaceRaised");
+        bTrack.Background = (Brush)FindResource(isOn ? "Accent" : "SurfaceRaised");
         eKnob.Background = (Brush)FindResource(isOn ? "TextPrimary" : "TextFaint");
         eKnob.HorizontalAlignment = isOn ? HorizontalAlignment.Right : HorizontalAlignment.Left;
         eKnob.Margin = isOn ? new Thickness(0, 0, 3, 0) : new Thickness(3, 0, 0, 0);

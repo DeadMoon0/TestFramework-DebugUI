@@ -1,4 +1,4 @@
-<Window x:Name="window" x:Class="TestFramework.DebugUI.MainWindow"
+﻿<Window x:Name="window" x:Class="TestFramework.DebugUI.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -10,6 +10,7 @@
         xmlns:home="clr-namespace:TestFramework.DebugUI.Controls.Home"
         xmlns:settings="clr-namespace:TestFramework.DebugUI.Controls.Settings"
         xmlns:share="clr-namespace:TestFramework.DebugUI.Controls.Share"
+        xmlns:annotate="clr-namespace:TestFramework.DebugUI.Controls.Annotate"
         xmlns:feed="clr-namespace:TestFramework.DebugUI.Controls.Feed"
         mc:Ignorable="d"
         Title="TestFrameworkDebugger" Height="800" Width="1400" WindowStyle="None" Background="#01000000"
@@ -73,6 +74,13 @@
                             WindowChrome.IsHitTestVisibleInChrome="True">
                         <Path Data="{StaticResource IconHome}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
                               StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+                    </Button>
+
+                    <Button x:Name="btAnnotate" Style="{StaticResource CaptionIconButton}" Click="btAnnotate_Click"
+                            WindowChrome.IsHitTestVisibleInChrome="True">
+                        <Path x:Name="pathAnnotate" Data="{StaticResource IconAnnotate}" Stroke="{StaticResource TextSecondary}"
+                              StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                              Width="18" Height="18" Stretch="None"/>
                     </Button>
 
                     <Button x:Name="btWatch" Style="{StaticResource CaptionIconButton}"
@@ -160,8 +168,10 @@
                 <detail:UC_ValueRail x:Name="ucValues" HorizontalAlignment="Left" VerticalAlignment="Bottom"
                                      Width="290" MaxHeight="360"/>
 
-                <detail:UC_StepDetail HorizontalAlignment="Right" VerticalAlignment="Stretch" Width="390"
-                                      Margin="0 0 0 44"/>
+                <!-- The width here is only what the designer shows; the remembered one is applied at
+                     startup, and the reader can drag the panel's left edge to change it. -->
+                <detail:UC_StepDetail x:Name="ucStep" HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                                      Width="390" Margin="0 0 0 44"/>
 
                 <!-- Centred and on top: the summary is a question you ask about the whole run, so
                      it takes the foreground while it is open and gets out of the way when it is not. -->
@@ -172,6 +182,10 @@
                      foreground, out of the way once answered. -->
                 <detail:UC_ValueInspector x:Name="ucValueInspector" HorizontalAlignment="Center" VerticalAlignment="Center"
                                           MaxHeight="720" Visibility="Collapsed" Panel.ZIndex="2"/>
+
+                <!-- Along the bottom of the canvas, the way a drawing tool puts its instruments. Above the
+                     board it draws on, below the pages that cover the board entirely. -->
+                <annotate:UC_AnnotationBar x:Name="ucAnnotate" Panel.ZIndex="2" Visibility="Collapsed"/>
 
                 <!-- Tucked into the corner: it speaks for runs that are not on screen, so it should
                      be reachable without ever being in the way. -->

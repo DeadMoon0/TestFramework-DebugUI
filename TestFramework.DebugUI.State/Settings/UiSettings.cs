@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 
 namespace TestFramework.DebugUI.State;
 
@@ -48,6 +48,30 @@ public sealed record UiSettings
 
     /// <summary>How the tool behaves while it is watching rather than being looked at.</summary>
     public WatchSettings Watch { get; init; } = new();
+
+    /// <summary>How the reader has sized the panels that float over the board.</summary>
+    public PanelSettings Panels { get; init; } = new();
+}
+
+/// <summary>
+/// The panels' own geometry.
+/// </summary>
+/// <remarks>
+/// Remembered because it is a preference, not a mode: how much of the window someone gives to a stack trace
+/// depends on their screen and on the kind of work they do, and having to drag it back after every start would
+/// teach them not to drag it at all.
+/// </remarks>
+public sealed record PanelSettings
+{
+    /// <summary>
+    /// How wide the step panel was left.
+    /// </summary>
+    /// <remarks>
+    /// Zero means "never dragged", which reads as the default width. The bounds are the application's, not
+    /// this record's: a width is checked against the window it is being applied to, which is not necessarily
+    /// the window it was saved from.
+    /// </remarks>
+    public double StepDetailWidth { get; init; }
 }
 
 /// <summary>Where the window was last left.</summary>

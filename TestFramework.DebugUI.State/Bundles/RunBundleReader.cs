@@ -49,6 +49,9 @@ public static class RunBundleReader
         /// <summary>Gets the artifact files the sender named but never sent.</summary>
         public ImmutableList<string> Missing { get; init; } = [];
 
+        /// <summary>Gets the number of imported runs that arrived with marks drawn on them.</summary>
+        public int Annotated => Imported.Count(run => run.HasAnnotations);
+
         /// <summary>Gets the session identifier worth selecting once the import is done.</summary>
         public string? FirstSessionId => Imported.FirstOrDefault()?.SessionId ?? AlreadyPresent.FirstOrDefault()?.SessionId;
     }
@@ -127,6 +130,11 @@ public static class RunBundleReader
                 if (!Matches(destination, file.ContentHash))
                     corrupt.Add(file.RelativePath);
             }
+
+            // Before the journal is listed, like the artifacts: a run that appears with its marks arriving a
+            // moment later would open showing an empty board somebody had annotated.
+            if (Entry(archive, $"{folder}/{BundleFormat.AnnotationsFile}") is { } annotationsEntry)
+                annotationsEntry.ExtractToFile(Annotations.AnnotationStore.PathFor(journalPath), overwrite: true);
 
             metadataEntry.ExtractToFile(metadataPath, overwrite: true);
             journalEntry.ExtractToFile(journalPath, overwrite: true);

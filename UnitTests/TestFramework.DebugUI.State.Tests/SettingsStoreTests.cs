@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Immutable;
 using System.IO;
 using TestFramework.DebugUI.State;
@@ -41,6 +41,10 @@ public class SettingsStoreTests : IDisposable
         Assert.Null(settings.Window);
         Assert.Empty(settings.Breakpoints);
         Assert.False(settings.Watch.Enabled);
+
+        // Zero, not a width: the application decides what an undragged panel opens at, and it knows how big
+        // the window is when it decides.
+        Assert.Equal(0, settings.Panels.StepDetailWidth);
     }
 
     [Fact]
@@ -52,7 +56,8 @@ public class SettingsStoreTests : IDisposable
         {
             Window = new WindowPlacement { Left = 100, Top = 50, Width = 1600, Height = 900, IsMaximized = true },
             Breakpoints = [new BreakpointMark { Stage = "Main", StepId = 3 }],
-            Watch = new WatchSettings { Enabled = true, NotifyOnlyOnFailure = true }
+            Watch = new WatchSettings { Enabled = true, NotifyOnlyOnFailure = true },
+            Panels = new PanelSettings { StepDetailWidth = 620 }
         });
 
         UiSettings read = store.Load();
@@ -63,6 +68,7 @@ public class SettingsStoreTests : IDisposable
         Assert.Equal(3, read.Breakpoints[0].StepId);
         Assert.True(read.Watch.Enabled);
         Assert.True(read.Watch.NotifyOnlyOnFailure);
+        Assert.Equal(620, read.Panels.StepDetailWidth);
     }
 
     [Fact]

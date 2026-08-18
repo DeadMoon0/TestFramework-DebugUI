@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -47,9 +47,10 @@ public partial class UC_ValueInspector : UserControl
     {
         InitializeComponent();
 
-        // The value itself, its one-line summary and the facts about it. The preview below them is
-        // already a read-only text box and can be selected the ordinary way.
-        Copyable.Enable(tbKey, tbSummary, tbBody);
+        // The file the rest of the value is in, and nothing else. Its path is long, exact, and wanted
+        // somewhere other than here; the panel's own title is not - it names the thing you are already
+        // looking at - and the preview below is a read-only text box that selects the ordinary way.
+        Copyable.Enable(tbBody);
 
         Unloaded += (_, _) => subscriptions.Dispose();
     }

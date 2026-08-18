@@ -27,7 +27,7 @@
                 <TextBlock Foreground="{StaticResource TextFaint}" FontSize="10" FontWeight="Bold"
                            VerticalAlignment="Center" Text="FEED"/>
 
-                <Border x:Name="bUnread" Grid.Column="1" CornerRadius="7" Background="{StaticResource AccentSelection}"
+                <Border x:Name="bUnread" Grid.Column="1" CornerRadius="7" Background="{StaticResource Accent}"
                         Padding="5 0" Height="14" VerticalAlignment="Center" Margin="6 0 0 0" Visibility="Collapsed">
                     <TextBlock x:Name="tbUnread" FontSize="9" FontWeight="Bold" Foreground="White"
                                VerticalAlignment="Center"/>

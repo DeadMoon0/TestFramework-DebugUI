@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Disposables;
@@ -13,6 +13,8 @@ using Axiom.State;
 using Axiom.Wpf.Extensions;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.Layout;
+using TestFramework.DebugUI.Controls.Annotate;
+using TestFramework.DebugUI.State.Annotations;
 using TestFramework.DebugUI.State;
 
 
@@ -74,6 +76,10 @@ public partial class UC_Board : UserControl
     /// <summary>Set once a press has moved far enough to be a drag rather than a click.</summary>
     private bool dragging;
 
+    private AnnotationLayer? annotations;
+    private readonly AnnotationStore annotationStore = new();
+    private string? annotationsJournal;
+
     /// <summary>Set when a board is waiting for the surface to have a size it can be fitted to.</summary>
     private bool needsFit;
 
@@ -94,6 +100,19 @@ public partial class UC_Board : UserControl
             .Bind(state => state.ActiveRun.Stages.Count == 0)
             .Select(empty => empty ? Visibility.Visible : Visibility.Collapsed)
             .BindToDependencyProperty(tbEmpty, VisibilityProperty));
+
+        // The same transform object, not a copy of its values. Pan and zoom mutate stZoom and ttPan directly,
+        // so sharing the group is what keeps the marks locked to the run without anything having to notice.
+        cAnnotations.RenderTransform = cBoard.RenderTransform;
+
+        annotations = new AnnotationLayer(cAnnotations, this) { Author = System.Environment.UserName };
+        annotations.Changed += SaveAnnotations;
+
+        // Marks belong to a run, so they are loaded when the run changes rather than when the board redraws -
+        // which happens on every event a live run produces.
+        subscriptions.Add(StateStore<MainState>.Default
+            .Bind(state => state.SelectedSessionId)
+            .Subscribe(_ => LoadAnnotations()));
 
         // The surface is measured after the run arrives, so this is what actually fits the first
         // board; the attempt in Render is just the case where a size already exists.
@@ -187,13 +206,13 @@ public partial class UC_Board : UserControl
     private const double DormantOpacity = 0.4;
 
     /// <summary>
-    /// How visible an unset breakpoint dot is.
+    /// How visible an unset breakpoint marker is.
     /// </summary>
     /// <remarks>
-    /// Faint enough that a board of thirty steps is not a board of thirty dots, strong enough that the
+    /// Faint enough that a board of thirty steps is not a board of thirty marks, strong enough that the
     /// spot can be found without already knowing it is there.
     /// </remarks>
-    private const double RestingDotOpacity = 0.25;
+    private const double RestingMarkerOpacity = 0.25;
 
     /// <summary>Whether a step has started, which is what decides if it is drawn as live.</summary>
     private static bool HasRun(StepNode step)
@@ -414,19 +433,19 @@ public partial class UC_Board : UserControl
             MainWindow.Shell.SelectStep(stageName, stepId);
         };
 
-        // Right-click still sets a breakpoint anywhere on the card. The dot is the discoverable way in;
-        // this is the fast one, and it costs nothing to keep both.
+        // Right-click still sets a breakpoint anywhere on the card. The marker is the discoverable way
+        // in; this is the fast one, and it costs nothing to keep both.
         box.MouseRightButtonUp += (_, e) =>
         {
             e.Handled = true;
             Breakpoints.Toggle(stageName, stepId);
         };
 
-        Border breakpoint = BuildBreakpointDot(stageName, stepId);
+        Border breakpoint = BuildBreakpointMarker(stageName, stepId);
 
-        // The dot sits beside the card rather than inside it, because a card that has not run yet is
+        // The marker sits beside the card rather than inside it, because a card that has not run yet is
         // dimmed to four-tenths — and a breakpoint set on a step that has not run is precisely the case
-        // worth being able to see. Dimming is applied to the box; the dot is not in it.
+        // worth being able to see. Dimming is applied to the box; the marker is not in it.
         Grid host = new() { Width = node.Width, Height = node.Height };
 
         host.Children.Add(box);
@@ -437,29 +456,37 @@ public partial class UC_Board : UserControl
     }
 
     /// <summary>
-    /// Builds the breakpoint dot for one step.
+    /// Builds the breakpoint marker for one step.
     /// </summary>
     /// <remarks>
-    /// In the card's top-right corner, filled red when set, and a faint ring when not — the ring is what
-    /// makes the spot discoverable at all. Before this, a breakpoint was an amber card border set by a
+    /// <para>
+    /// In the card's top-right corner, filled red when set, and a faint outline when not — the outline is
+    /// what makes the spot discoverable at all. Before this, a breakpoint was an amber card border set by a
     /// right-click nobody would guess at, which made the tool's most useful feature its least findable.
+    /// </para>
+    /// <para>
+    /// A rounded rectangle rather than a circle. Every other round mark on this board is a connector, and a
+    /// red circle in the corner of a card read as one more port; a stub of a rectangle reads as a marker
+    /// laid on the card. It is also the only way to set a breakpoint from the board now — the panel's
+    /// "Toggle breakpoint" button said the same thing in words, a long way from the step it applied to.
+    /// </para>
     /// </remarks>
-    private Border BuildBreakpointDot(string stageName, int stepId)
+    private Border BuildBreakpointMarker(string stageName, int stepId)
     {
-        Border dot = new()
+        Border marker = new()
         {
-            Width = 13,
-            Height = 13,
-            CornerRadius = new CornerRadius(6.5),
+            Width = 16,
+            Height = 11,
+            CornerRadius = new CornerRadius(3),
             BorderThickness = new Thickness(1.5),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 8, 8, 0),
+            Margin = new Thickness(0, 9, 8, 0),
             Cursor = Cursors.Hand,
             ToolTip = "Stop the run here."
         };
 
-        dot.MouseLeftButtonUp += (_, e) =>
+        marker.MouseLeftButtonUp += (_, e) =>
         {
             // Handled, so toggling a breakpoint does not also select the step underneath. The surface
             // ends its pan on the tunnelling event, so marking this one handled cannot strand it.
@@ -467,10 +494,10 @@ public partial class UC_Board : UserControl
             Breakpoints.Toggle(stageName, stepId);
         };
 
-        dot.MouseEnter += (_, _) => dot.Opacity = 1;
-        dot.MouseLeave += (_, _) => dot.Opacity = Breakpoints.IsSet(stageName, stepId) ? 1 : RestingDotOpacity;
+        marker.MouseEnter += (_, _) => marker.Opacity = 1;
+        marker.MouseLeave += (_, _) => marker.Opacity = Breakpoints.IsSet(stageName, stepId) ? 1 : RestingMarkerOpacity;
 
-        return dot;
+        return marker;
     }
 
     /// <summary>
@@ -645,12 +672,12 @@ public partial class UC_Board : UserControl
 
                 // The halt outranks the selection. A run stopped somewhere is the most important thing on
                 // the board and lasts only until it is released, whereas which step a reader last clicked
-                // is on the panel to the right anyway. A breakpoint that is merely set is the dot's job
+                // is on the panel to the right anyway. A breakpoint that is merely set is the marker's job
                 // now, which is what frees the border to mean "stopped, here".
                 visual.Box.BorderBrush = step.IsWaitingAtBreakpoint
                     ? (Brush)FindResource("StateError")
                     : isSelected
-                        ? (Brush)FindResource("AccentSelection")
+                        ? (Brush)FindResource("Accent")
                         : Brushes.Transparent;
             }
         }
@@ -775,6 +802,95 @@ public partial class UC_Board : UserControl
     /// <summary>Scales and centres the board so all of it is on screen.</summary>
     public void FitToWindow() => Fit();
 
+    /// <summary>Chooses what a drag on the board draws, or nothing to give the mouse back to the board.</summary>
+    public void SetAnnotationTool(AnnotationKind? tool)
+    {
+        if (annotations is null)
+            return;
+
+        // Anything half-drawn is abandoned when the tool changes, rather than finished as the wrong kind.
+        annotations.CancelInProgress();
+        annotations.CommitTyping();
+        annotations.Tool = tool;
+
+        Cursor = tool is null ? Cursors.Arrow : Cursors.Cross;
+    }
+
+    /// <summary>Chooses the ink new marks are made in.</summary>
+    public void SetAnnotationInk(string ink)
+    {
+        if (annotations is not null)
+            annotations.Ink = ink;
+    }
+
+    /// <summary>Chooses how thick new marks are.</summary>
+    public void SetAnnotationWeight(double weight)
+    {
+        if (annotations is not null)
+            annotations.Weight = weight;
+    }
+
+    /// <summary>Takes the most recent mark back.</summary>
+    public void UndoAnnotation() => annotations?.Undo();
+
+    /// <summary>Shows or hides the marks without forgetting them.</summary>
+    public void SetAnnotationsVisible(bool visible) => annotations?.SetVisible(visible);
+
+    /// <summary>
+    /// Whether the marks on this run were drawn against a different arrangement of the board.
+    /// </summary>
+    /// <remarks>
+    /// Marks are board coordinates, and the arrangement is a pure function of the run and a set of constants — so
+    /// it is stable for a given build and can move between builds. When it has moved, the marks are still shown:
+    /// a drawing slightly out of place is worth more than no drawing, as long as nobody is left wondering why an
+    /// arrow points at nothing.
+    /// </remarks>
+    public bool AnnotationsPredateThisLayout()
+        => annotations is { Marks.IsEmpty: false } layer && layer.Marks.LayoutVersion != LayoutOptions.Version;
+
+    /// <summary>
+    /// Reads the marks for whichever run is selected.
+    /// </summary>
+    /// <remarks>
+    /// A live run has no journal to sit beside, so it cannot be annotated yet — its marks would have nowhere to be
+    /// saved, and inventing a place for them would put a drawing somewhere the run never was.
+    /// </remarks>
+    private void LoadAnnotations()
+    {
+        if (annotations is null)
+            return;
+
+        RunSummary? run = StateStore<MainState>.Default.GetValue(state =>
+            state.Runs.Find(candidate => string.Equals(candidate.SessionId, state.SelectedSessionId, StringComparison.Ordinal)));
+
+        annotationsJournal = run?.JournalPath;
+
+        if (run is null || string.IsNullOrWhiteSpace(annotationsJournal))
+        {
+            annotations.Load(new RunAnnotations { SessionId = run?.SessionId ?? string.Empty });
+            return;
+        }
+
+        annotations.Load(annotationStore.Load(annotationsJournal, run.SessionId));
+    }
+
+    /// <summary>
+    /// Writes the marks after every change.
+    /// </summary>
+    /// <remarks>
+    /// On each mark rather than on closing the panel. This tool attaches to test hosts that get killed and is
+    /// itself sometimes closed abruptly; a drawing held in memory until later is a drawing that gets lost.
+    /// </remarks>
+    private void SaveAnnotations()
+    {
+        if (annotations is null || string.IsNullOrWhiteSpace(annotationsJournal))
+            return;
+
+        // Stamped with the arrangement it was drawn against, which is the only way a later build can know the
+        // board has moved under these coordinates.
+        annotationStore.Save(annotationsJournal, annotations.Marks with { LayoutVersion = LayoutOptions.Version });
+    }
+
     /// <summary>Selects the first failed step and pans to it.</summary>
     public void GoToFirstFailure()
     {
@@ -838,6 +954,16 @@ public partial class UC_Board : UserControl
     /// </remarks>
     private void Surface_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        // Drawing wins, and the event stops here. This is the tunnelling handler, so marking it handled is what
+        // stops a card underneath treating the same press as "select me" while a stroke is being drawn over it.
+        if (annotations?.Begin(e.GetPosition(cBoard)) == true)
+        {
+            e.Handled = true;
+            bSurface.CaptureMouse();
+
+            return;
+        }
+
         panOrigin = e.GetPosition(this);
         panning = true;
     }
@@ -850,7 +976,20 @@ public partial class UC_Board : UserControl
     /// that fails to reach it leaves the board following the pointer with no button held — which is what
     /// happened while this was a bubbling handler and a card marked the click as its own.
     /// </remarks>
-    private void Surface_MouseLeftButtonUp(object sender, MouseButtonEventArgs e) => EndPan();
+    private void Surface_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (annotations?.IsDrawing == true)
+        {
+            e.Handled = true;
+
+            annotations.Commit(e.GetPosition(cBoard));
+            bSurface.ReleaseMouseCapture();
+
+            return;
+        }
+
+        EndPan();
+    }
 
     /// <summary>
     /// Ends a pan when the capture is taken away rather than released.
@@ -874,6 +1013,12 @@ public partial class UC_Board : UserControl
 
     private void Surface_MouseMove(object sender, MouseEventArgs e)
     {
+        if (annotations?.IsDrawing == true)
+        {
+            annotations.Extend(e.GetPosition(cBoard));
+            return;
+        }
+
         if (!panning)
             return;
 
@@ -897,12 +1042,12 @@ public partial class UC_Board : UserControl
         panOrigin = now;
     }
 
-    /// <summary>Makes a breakpoint dot read as set or as an invitation to set one.</summary>
-    private void ShowBreakpoint(Border dot, bool isSet)
+    /// <summary>Makes a breakpoint marker read as set or as an invitation to set one.</summary>
+    private void ShowBreakpoint(Border marker, bool isSet)
     {
-        dot.Background = isSet ? (Brush)FindResource("StateError") : Brushes.Transparent;
-        dot.BorderBrush = isSet ? Brushes.Transparent : (Brush)FindResource("TextSecondary");
-        dot.Opacity = isSet ? 1 : RestingDotOpacity;
+        marker.Background = isSet ? (Brush)FindResource("StateError") : Brushes.Transparent;
+        marker.BorderBrush = isSet ? Brushes.Transparent : (Brush)FindResource("TextSecondary");
+        marker.Opacity = isSet ? 1 : RestingMarkerOpacity;
     }
 
     private sealed record StepVisual(

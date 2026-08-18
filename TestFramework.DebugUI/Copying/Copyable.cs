@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -26,6 +26,13 @@ namespace TestFramework.DebugUI.Copying;
 /// <para>
 /// Shown on hover. A button permanently beside forty fields is forty buttons; on hover it is one, over the
 /// thing the pointer is already on.
+/// </para>
+/// <para>
+/// <b>Where it belongs.</b> Two kinds of field, and no others: a name or path that is wanted somewhere else
+/// - a qualified test name, a file reference - and a body of text too long to retype. Not headings, not
+/// counts, not one-word verdicts, and not the title of a panel: naming the thing a reader is already looking
+/// at is not content. Switching every field on was cheap, which is exactly how a tool ends up with a button
+/// hovering over every line of every card.
 /// </para>
 /// </remarks>
 public static class Copyable
@@ -154,8 +161,6 @@ public static class Copyable
 /// </remarks>
 internal sealed class CopyAdorner : Adorner
 {
-    private static readonly TimeSpan Acknowledgement = TimeSpan.FromSeconds(1.2);
-
     /// <summary>
     /// How long the button survives the pointer leaving.
     /// </summary>
@@ -170,8 +175,6 @@ internal sealed class CopyAdorner : Adorner
     private readonly Path glyph;
     private readonly FrameworkElement field;
     private readonly DispatcherTimer close;
-
-    private DispatcherTimer? revert;
 
     internal CopyAdorner(FrameworkElement adorned)
         : base(adorned)
@@ -265,7 +268,7 @@ internal sealed class CopyAdorner : Adorner
     private void Detach()
     {
         close.Stop();
-        revert?.Stop();
+        CopyGlyph.Cancel(glyph);
 
         field.MouseEnter -= OnEnter;
         field.MouseLeave -= OnLeave;
@@ -281,19 +284,8 @@ internal sealed class CopyAdorner : Adorner
         if (!Clipboards.Set(Copyable.TextOf(field)))
             return;
 
-        glyph.Data = (Geometry)field.FindResource("IconTick");
-        glyph.Stroke = (Brush)field.FindResource("StateComplete");
-
-        revert?.Stop();
-        revert = new DispatcherTimer { Interval = Acknowledgement };
-        revert.Tick += (_, _) =>
-        {
-            revert?.Stop();
-            revert = null;
-
-            glyph.Data = (Geometry)field.FindResource("IconCopy");
-            glyph.Stroke = (Brush)field.FindResource("TextSecondary");
-        };
-        revert.Start();
+        // The field rather than the glyph is asked for the icons: an adorner's content is not in the
+        // visual tree that carries the theme.
+        CopyGlyph.Confirm(glyph, field);
     }
 }

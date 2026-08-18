@@ -14,6 +14,8 @@ using System.Windows.Interop;
 using System.Windows.Threading;
 using Axiom.State;
 using TestFramework.Core.Debugger;
+using System.Collections.Immutable;
+using TestFramework.DebugUI.State.Bundles;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Transport;
 using static TestFramework.DebugUI.NativeMethods;
@@ -78,6 +80,10 @@ public partial class MainWindow : Window
         // The title bar acts on the run directly, but anything that moves the board is forwarded, because
         // the board owns its own zoom and selection.
         ucRunBar.SummaryRequested += ShowSummary;
+        ucRunBar.ShareRequested += ShareSelectedRun;
+        ucHome.ShareRequested += ShowExport;
+        ucExport.Closed += () => ucExport.Visibility = Visibility.Collapsed;
+        ucExport.Exported += ReportExport;
         ucRunBar.FitRequested += ucBoard.FitToWindow;
         ucRunBar.FirstFailureRequested += ucBoard.GoToFirstFailure;
 
@@ -274,6 +280,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (ucExport.Visibility == Visibility.Visible)
+        {
+            ucExport.Visibility = Visibility.Collapsed;
+            return;
+        }
+
         if (ucSummary.Visibility == Visibility.Visible)
         {
             ucSummary.Visibility = Visibility.Collapsed;
@@ -426,16 +438,14 @@ public partial class MainWindow : Window
     {
         Show();
         WindowState = saved.Window?.IsMaximized == true ? WindowState.Maximized : WindowState.Normal;
-        Activate();
+
+        Surface();
 
         if (pendingRun is { } sessionId)
         {
             pendingRun = null;
             shell?.SelectRun(sessionId);
         }
-
-        if (notifier is not null)
-            notifier.IsHidden = false;
     }
 
     /// <summary>
@@ -573,7 +583,101 @@ public partial class MainWindow : Window
         Marshal.StructureToPtr(lMmi, lParam, true);
     }
 
+    /// <summary>
+    /// Deals with a second launch that handed its work over.
+    /// </summary>
+    /// <remarks>
+    /// Two things arrive this way. A launch with a bundle - somebody double-clicked a shared run - and a launch
+    /// with nothing, which is somebody starting the tool while it is already running and expecting to be shown
+    /// the window they already have.
+    /// </remarks>
+    public void OpenFromAnotherLaunch(string? bundlePath)
+    {
+        Surface();
+
+        if (bundlePath is null)
+            return;
+
+        if (BundleImport.Open(bundlePath))
+            ucHome.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Brings the window out of wherever it was put.
+    /// </summary>
+    /// <remarks>
+    /// The topmost nudge is deliberate. A process cannot take the foreground from another one, so raising a
+    /// window on request means briefly asking to be above everything and then giving that up again - which is
+    /// what every application that can be summoned by a second launch ends up doing.
+    /// </remarks>
+    private void Surface()
+    {
+        if (!IsVisible)
+            Show();
+
+        if (WindowState == WindowState.Minimized)
+            WindowState = saved.Window?.IsMaximized == true ? WindowState.Maximized : WindowState.Normal;
+
+        Activate();
+
+        Topmost = true;
+        Topmost = false;
+
+        if (notifier is not null)
+            notifier.IsHidden = false;
+    }
+
     private void ShowSummary() => ucSummary.Visibility = Visibility.Visible;
+
+    /// <summary>Offers to share the run being watched.</summary>
+    private void ShareSelectedRun()
+    {
+        RunSummary? run = StateStore<MainState>.Default.GetValue(state =>
+            state.Runs.Find(candidate => string.Equals(candidate.SessionId, state.SelectedSessionId, StringComparison.Ordinal)));
+
+        // A live run has nothing on disk yet. Sharing it would send a journal that is still being written.
+        if (run?.JournalPath is not { Length: > 0 } journal)
+        {
+            Shell.Report(new FeedEntry
+            {
+                AtUtc = DateTimeOffset.UtcNow,
+                Severity = FeedSeverity.Warning,
+                Source = FeedSource.App,
+                Title = "This run cannot be shared yet.",
+                Detail = "Only a run that has been recorded can be sent; this one is still being written."
+            });
+
+            return;
+        }
+
+        ShowExport([journal], run.ShortName);
+    }
+
+    private void ShowExport(ImmutableList<string> journals, string subject)
+        => ucExport.Show(journals, subject, BundleFormat.SuggestedFileName(subject, journals.Count, DateTimeOffset.Now));
+
+    /// <summary>
+    /// Says what an export did, in the feed rather than in a box that has to be dismissed.
+    /// </summary>
+    private void ReportExport(RunBundleWriter.Result result)
+    {
+        List<string> parts = [$"{result.RunCount} run(s) and {result.FileCount} file(s) written to {System.IO.Path.GetFileName(result.Path)}."];
+
+        if (result.MissingFiles.Count > 0)
+            parts.Add($"{result.MissingFiles.Count} file(s) the runs referred to were no longer on disk.");
+
+        if (result.Manifest.IsAnonymous)
+            parts.Add("Exported anonymously.");
+
+        Shell.Report(new FeedEntry
+        {
+            AtUtc = DateTimeOffset.UtcNow,
+            Severity = result.MissingFiles.Count > 0 ? FeedSeverity.Warning : FeedSeverity.Info,
+            Source = FeedSource.App,
+            Title = "Runs shared.",
+            Detail = string.Join(" ", parts)
+        });
+    }
 
     private void ShowHome() => ucHome.Visibility = Visibility.Visible;
 

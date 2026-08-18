@@ -9,6 +9,7 @@
         xmlns:detail="clr-namespace:TestFramework.DebugUI.Controls.Detail"
         xmlns:home="clr-namespace:TestFramework.DebugUI.Controls.Home"
         xmlns:settings="clr-namespace:TestFramework.DebugUI.Controls.Settings"
+        xmlns:share="clr-namespace:TestFramework.DebugUI.Controls.Share"
         xmlns:feed="clr-namespace:TestFramework.DebugUI.Controls.Feed"
         mc:Ignorable="d"
         Title="TestFrameworkDebugger" Height="800" Width="1400" WindowStyle="None" Background="#01000000"
@@ -181,6 +182,10 @@
                 <settings:UC_Settings x:Name="ucSettings" Panel.ZIndex="4" Visibility="Collapsed"/>
 
                 <home:UC_Home x:Name="ucHome" Panel.ZIndex="3"/>
+
+                <!-- Above the runs page, because sharing is asked for from it and the answer belongs in front
+                     of the question. Below settings, which is above everything. -->
+                <share:UC_Export x:Name="ucExport" Panel.ZIndex="4" Visibility="Collapsed"/>
             </Grid>
         </Grid>
     </Grid>

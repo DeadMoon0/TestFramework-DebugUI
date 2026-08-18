@@ -55,6 +55,15 @@ public sealed class ShellController : IDisposable
     /// <param name="runsDirectory">Where recorded runs live. Defaults to the framework's journal.</param>
     /// <param name="pipeName">The pipe to listen on. Defaults to the framework's well-known name.</param>
     /// <param name="ingestWindow">How long to coalesce events before dispatching.</param>
+    /// <summary>
+    /// Gets where recorded runs are read from, when there is somewhere.
+    /// </summary>
+    /// <remarks>
+    /// Exposed so importing a bundle can put its runs where the listing already looks, rather than inventing a
+    /// second place for runs to live and a second way to find them.
+    /// </remarks>
+    public string? RunsDirectory => runsDirectory;
+
     public ShellController(StateStore<MainState> store, string? runsDirectory = null, string? pipeName = null, TimeSpan? ingestWindow = null)
     {
         this.store = store ?? throw new ArgumentNullException(nameof(store));
@@ -129,17 +138,43 @@ public sealed class ShellController : IDisposable
                     // list. Waiting for someone to open it first made the button's availability
                     // depend on what they had happened to click.
                     ProjectFilePath = run.ProjectFilePath,
-                    CanRerun = run.CanRerun
+                    CanRerun = run.CanRerun,
+                    JournalPath = run.JournalPath
                 })
             ];
 
-            store.Dispatch(RunActions.AddRecordedRuns, recorded);
+            store.Dispatch(RunActions.AddRecordedRuns, Located(recorded));
         }
         catch (Exception e)
         {
             Debug.WriteLine(e);
             Report(Notice(FeedSeverity.Error, "Recorded runs could not be listed.", e.Message, FeedSource.Journal));
         }
+    }
+
+
+    /// <summary>
+    /// Points each run at a project that exists on this machine, where the recorded one does not.
+    /// </summary>
+    /// <remarks>
+    /// A run that arrived in a bundle records the sender's paths, so re-run and the editor buttons would both be
+    /// unavailable on it even though everything needed to find the project locally is present. Translated here,
+    /// once, at the point the picker is built, so nothing downstream has to know a run came from elsewhere.
+    /// The journal itself is untouched: this is the projection, not the record.
+    /// </remarks>
+    private static ImmutableList<RunSummary> Located(ImmutableList<RunSummary> runs)
+    {
+        ImmutableDictionary<string, string> resolved = ProjectResolution.ResolveAll(runs);
+
+        if (resolved.Count == 0)
+            return runs;
+
+        return
+        [
+            .. runs.Select(run => resolved.TryGetValue(run.SessionId, out string? local)
+                ? run with { ProjectFilePath = local }
+                : run)
+        ];
     }
 
     /// <summary>

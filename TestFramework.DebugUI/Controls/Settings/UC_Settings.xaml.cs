@@ -35,6 +35,8 @@ public partial class UC_Settings : UserControl
         tgNotify.Toggled += value => Raise(Current with { NotifyOnFinish = value });
         tgFailuresOnly.Toggled += value => Raise(Current with { NotifyOnlyOnFailure = value });
 
+        tgAssociate.Toggled += OnAssociateToggled;
+
         Breakpoints.Changed += ShowBreakpointCount;
         Unloaded += (_, _) => Breakpoints.Changed -= ShowBreakpointCount;
     }
@@ -64,6 +66,8 @@ public partial class UC_Settings : UserControl
         tgNotify.SetQuietly(watch.NotifyOnFinish);
         tgFailuresOnly.SetQuietly(watch.NotifyOnlyOnFailure);
 
+        ShowAssociation();
+
         tbSettingsPath.Text = settingsPath;
         tbRunsPath.Text = SafeRunsDirectory() ?? "Not available on this machine yet — it appears once the launcher has run.";
 
@@ -71,6 +75,42 @@ public partial class UC_Settings : UserControl
 
         ShowShortcuts();
         Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Shows whether this tool opens shared runs.
+    /// </summary>
+    /// <remarks>
+    /// Read from the registry rather than from a saved setting. The association lives there and can be changed
+    /// from outside this application entirely, so a copy of the answer here would eventually be a wrong one.
+    /// </remarks>
+    private void ShowAssociation()
+    {
+        tgAssociate.SetQuietly(FileAssociation.IsRegistered());
+
+        tbAssociateNote.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Claims or gives back the file type.
+    /// </summary>
+    /// <remarks>
+    /// The switch is put back to what the registry actually says afterwards, so a refusal - a locked-down
+    /// account can decline even its own classes key - leaves the panel telling the truth rather than showing an
+    /// association that was never made.
+    /// </remarks>
+    private void OnAssociateToggled(bool wanted)
+    {
+        bool done = wanted
+            ? Environment.ProcessPath is { Length: > 0 } path && FileAssociation.Register(path)
+            : FileAssociation.Unregister();
+
+        tgAssociate.SetQuietly(FileAssociation.IsRegistered());
+
+        tbAssociateNote.Visibility = done ? Visibility.Collapsed : Visibility.Visible;
+        tbAssociateNote.Text = done
+            ? string.Empty
+            : "Windows would not let this be changed for your account.";
     }
 
     private void Raise(WatchSettings next)

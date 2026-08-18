@@ -102,6 +102,7 @@ public partial class UC_RunBar : UserControl
         btFirstFailure.ToolTip = Shortcuts.Describe("Jump to the first failure", Shortcuts.FirstFailure);
         btSummary.ToolTip = Shortcuts.Describe("Can I trust this run", Shortcuts.Summary);
         btFit.ToolTip = Shortcuts.Describe("Fit the whole run on screen", Shortcuts.Fit);
+        btShare.ToolTip = "Share this run as a file";
 
         Unloaded += (_, _) => subscriptions.Dispose();
     }
@@ -114,6 +115,9 @@ public partial class UC_RunBar : UserControl
 
     /// <summary>Raised when the reader asks to be taken to the first failed step.</summary>
     public event Action? FirstFailureRequested;
+
+    /// <summary>Raised when the reader asks to share the selected run.</summary>
+    public event Action? ShareRequested;
 
     private static RunSummary? Selected(MainState state)
         => state.Runs.Find(run => string.Equals(run.SessionId, state.SelectedSessionId, StringComparison.Ordinal));
@@ -237,4 +241,6 @@ public partial class UC_RunBar : UserControl
     private void btSummary_Click(object sender, RoutedEventArgs e) => SummaryRequested?.Invoke();
 
     private void btFit_Click(object sender, RoutedEventArgs e) => FitRequested?.Invoke();
+
+    private void btShare_Click(object sender, RoutedEventArgs e) => ShareRequested?.Invoke();
 }

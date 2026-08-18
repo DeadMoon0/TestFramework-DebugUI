@@ -153,6 +153,16 @@ public sealed record RunSummary
     public string? ProjectPath { get; init; }
 
     /// <summary>
+    /// Gets the journal this run was replayed from, when it came from disk.
+    /// </summary>
+    /// <remarks>
+    /// Carried so a value's file can be found. An imported run's files sit in a folder beside its journal, and
+    /// the recorded absolute path in the journal is the sender's — so the journal's own location is what turns
+    /// a relative path back into a file that exists here.
+    /// </remarks>
+    public string? JournalPath { get; init; }
+
+    /// <summary>
     /// Gets the project a reader would name, taken from the end of the path.
     /// </summary>
     /// <remarks>

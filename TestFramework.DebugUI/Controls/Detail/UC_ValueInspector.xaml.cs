@@ -13,6 +13,7 @@ using System.Windows.Media;
 using Axiom.State;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.Copying;
+using TestFramework.DebugUI.State.Bundles;
 using TestFramework.DebugUI.State;
 
 namespace TestFramework.DebugUI.Controls.Detail;
@@ -482,7 +483,7 @@ public partial class UC_ValueInspector : UserControl
 
         tbBody.Text = ValueInspection.BodyLine(body);
         tbBody.ToolTip = body.Path;
-        btOpen.IsEnabled = File.Exists(body.Path);
+        btOpen.IsEnabled = BodyFile() is not null;
     }
 
     /// <summary>Opens the file the whole value was written to.</summary>
@@ -492,11 +493,29 @@ public partial class UC_ValueInspector : UserControl
     /// </remarks>
     private void btOpen_Click(object sender, RoutedEventArgs e)
     {
-        if (body is null || !File.Exists(body.Path))
+        if (BodyFile() is not { } path)
             return;
 
-        Process.Start(new ProcessStartInfo(body.Path) { UseShellExecute = true })?.Dispose();
+        Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })?.Dispose();
     }
+
+    /// <summary>
+    /// The file this value was written to, wherever it is now.
+    /// </summary>
+    /// <remarks>
+    /// Asked of <see cref="ValueFiles"/> rather than tested with <c>File.Exists</c> on the recorded path, so a
+    /// run that arrived from another machine finds its files beside its journal instead of looking empty.
+    /// </remarks>
+    private string? BodyFile()
+        => body is null
+            ? null
+            : ValueFiles.Resolve(body.Path, body.RelativePath, JournalPath());
+
+    /// <summary>The journal the selected run was replayed from, when it came from disk.</summary>
+    private static string? JournalPath()
+        => StateStore<MainState>.Default
+            .GetValue(state => state.Runs
+                .Find(run => string.Equals(run.SessionId, state.SelectedSessionId, StringComparison.Ordinal))?.JournalPath);
 
     private void btClose_Click(object sender, RoutedEventArgs e) => Closed?.Invoke();
 }

@@ -11,8 +11,10 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Microsoft.Win32;
 using Axiom.State;
 using Axiom.Wpf.Extensions;
+using TestFramework.DebugUI.State.Bundles;
 using TestFramework.DebugUI.State;
 
 namespace TestFramework.DebugUI.Controls.Home;
@@ -91,6 +93,15 @@ public partial class UC_Home : UserControl
 
     /// <summary>Raised when the reader leaves the page, either by closing it or by opening a run.</summary>
     public event Action? Closed;
+
+    /// <summary>
+    /// Raised when the reader asks to share what the page is currently showing.
+    /// </summary>
+    /// <remarks>
+    /// Carries the journals rather than the runs, because a bundle is made of files and the page is the only
+    /// thing that knows which runs the rail has narrowed to.
+    /// </remarks>
+    public event Action<ImmutableList<string>, string>? ShareRequested;
 
     /// <summary>
     /// The line under the heading: the whole set in one sentence.
@@ -422,6 +433,68 @@ public partial class UC_Home : UserControl
         row.Opened += () => Closed?.Invoke();
 
         return row;
+    }
+
+    /// <summary>
+    /// Offers to share every run the rail has narrowed to.
+    /// </summary>
+    /// <remarks>
+    /// Scope rather than selection: narrowing to a class and sharing it is the same gesture as reading it, and
+    /// it means "send them this test's runs" needs no separate way to pick them. Live runs are left out — a run
+    /// still being written has no journal to send.
+    /// </remarks>
+    private void btShare_Click(object sender, RoutedEventArgs e)
+    {
+        RunScope narrowed = scope.Value;
+
+        ImmutableList<RunSummary> runs =
+        [
+            .. StateStore<MainState>.Default
+                .GetValue(state => state.Runs)
+                .Where(run => narrowed.Covers(run) && !string.IsNullOrWhiteSpace(run.JournalPath))
+        ];
+
+        if (runs.Count == 0)
+        {
+            MainWindow.Shell.Report(new FeedEntry
+            {
+                AtUtc = DateTimeOffset.UtcNow,
+                Severity = FeedSeverity.Warning,
+                Source = FeedSource.App,
+                Title = "There is nothing here to share.",
+                Detail = "A run has to have been recorded before it can be sent."
+            });
+
+            return;
+        }
+
+        ShareRequested?.Invoke(
+            [.. runs.Select(run => run.JournalPath!)],
+            runs.Count == 1 ? runs[0].ShortName : $"{runs.Count} runs");
+    }
+
+    /// <summary>
+    /// Takes in a bundle someone else exported.
+    /// </summary>
+    /// <remarks>
+    /// Only the asking happens here. What an import means - duplicates, files that never arrived, which run to
+    /// select - is shared with the path a double-click takes, so the two cannot drift apart.
+    /// </remarks>
+    private void btImport_Click(object sender, RoutedEventArgs e)
+    {
+        OpenFileDialog dialog = new()
+        {
+            Filter = BundleFormat.DialogFilter,
+            DefaultExt = BundleFormat.Extension,
+            Multiselect = false,
+            Title = "Open a shared run"
+        };
+
+        if (dialog.ShowDialog() != true)
+            return;
+
+        if (BundleImport.Open(dialog.FileName))
+            Closed?.Invoke();
     }
 
     private void btRefresh_Click(object sender, RoutedEventArgs e) => MainWindow.Shell.RefreshRecordedRuns();

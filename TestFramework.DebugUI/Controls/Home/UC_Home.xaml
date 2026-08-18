@@ -39,6 +39,18 @@
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="btShare" Style="{StaticResource IconButton}" Margin="0 0 6 0"
+                            Background="{StaticResource SurfaceCard}" Click="btShare_Click"
+                            ToolTip="Share the runs listed here as a file">
+                        <Path Data="{StaticResource IconExport}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+                    </Button>
+                    <Button x:Name="btImport" Style="{StaticResource IconButton}" Margin="0 0 6 0"
+                            Background="{StaticResource SurfaceCard}" Click="btImport_Click"
+                            ToolTip="Open a run someone shared">
+                        <Path Data="{StaticResource IconImport}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+                    </Button>
                     <Button x:Name="btRefresh" Style="{StaticResource IconButton}" Margin="0 0 6 0"
                             Background="{StaticResource SurfaceCard}" Click="btRefresh_Click"
                             ToolTip="Look again on disk">

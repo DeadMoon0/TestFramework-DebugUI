@@ -59,6 +59,17 @@
 
                     <Border Height="1" Background="{StaticResource SurfaceDivider}" Margin="0 6 0 12"/>
 
+                    <TextBlock Style="{StaticResource PanelHeading}" Text="SHARED RUNS" Margin="0 0 0 6"/>
+
+                    <shell:UC_Toggle x:Name="tgAssociate" Margin="0 0 0 4"
+                                     Label="Open .tfrun files with this tool"
+                                     Note="Double-clicking a shared run opens it here. Affects this user only."/>
+
+                    <TextBlock x:Name="tbAssociateNote" Style="{StaticResource MutedText}" FontSize="10"
+                               Foreground="{StaticResource TextFaint}" Margin="0 0 0 12" Visibility="Collapsed"/>
+
+                    <Border Height="1" Background="{StaticResource SurfaceDivider}" Margin="0 6 0 12"/>
+
                     <TextBlock Style="{StaticResource PanelHeading}" Text="BREAKPOINTS" Margin="0 0 0 6"/>
 
                     <Grid Margin="0 0 0 12">

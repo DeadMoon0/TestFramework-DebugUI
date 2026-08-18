@@ -55,6 +55,11 @@
             <Path Data="{StaticResource IconSummary}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
         </Button>
+        <Button x:Name="btShare" Style="{StaticResource CaptionIconButton}" Click="btShare_Click"
+                shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <Path Data="{StaticResource IconExport}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+        </Button>
         <Button x:Name="btFit" Style="{StaticResource CaptionIconButton}" Click="btFit_Click"
                 shell:WindowChrome.IsHitTestVisibleInChrome="True">
             <Path Data="{StaticResource IconFit}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"

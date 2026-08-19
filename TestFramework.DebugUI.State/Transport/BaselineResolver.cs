@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -25,7 +25,7 @@ namespace TestFramework.DebugUI.State.Transport;
 /// </remarks>
 public sealed class BaselineResolver(string? runsDirectory)
 {
-    private readonly ConcurrentDictionary<string, ValueDiff> cache = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, RunComparison> cache = new(StringComparer.Ordinal);
 
     /// <summary>Forgets what was computed, so a test can observe a changed journal.</summary>
     public void Clear() => cache.Clear();
@@ -37,19 +37,19 @@ public sealed class BaselineResolver(string? runsDirectory)
     /// <param name="currentGraph">Its projected graph, which is where its values come from.</param>
     /// <param name="runs">Every run the picker knows about.</param>
     /// <returns>
-    /// The comparison, or a <see cref="ValueDiff"/> carrying the reason there is none. Never null and
-    /// never throws: a failure to compare must not take the board down with it.
+    /// The comparison, or one carrying the reason there is none. Never null and never throws: a failure to
+    /// compare must not take the board down with it.
     /// </returns>
-    public ValueDiff Resolve(RunSummary current, RunGraph currentGraph, IReadOnlyList<RunSummary> runs)
+    public RunComparison Resolve(RunSummary current, RunGraph currentGraph, IReadOnlyList<RunSummary> runs)
     {
         ArgumentNullException.ThrowIfNull(current);
         ArgumentNullException.ThrowIfNull(currentGraph);
         ArgumentNullException.ThrowIfNull(runs);
 
-        if (!current.IsLive && cache.TryGetValue(current.SessionId, out ValueDiff? cached))
+        if (!current.IsLive && cache.TryGetValue(current.SessionId, out RunComparison? cached))
             return cached;
 
-        ValueDiff diff = Compute(current, currentGraph, runs);
+        RunComparison diff = Compute(current, currentGraph, runs);
 
         if (!current.IsLive)
             cache[current.SessionId] = diff;
@@ -57,21 +57,21 @@ public sealed class BaselineResolver(string? runsDirectory)
         return diff;
     }
 
-    private ValueDiff Compute(RunSummary current, RunGraph currentGraph, IReadOnlyList<RunSummary> runs)
+    private RunComparison Compute(RunSummary current, RunGraph currentGraph, IReadOnlyList<RunSummary> runs)
     {
         if (runsDirectory is null)
-            return RunBaselineSelector.Unavailable("No journal directory is configured, so earlier runs cannot be read.");
+            return RunComparison.Unavailable("No journal directory is configured, so earlier runs cannot be read.");
 
         if (string.IsNullOrWhiteSpace(current.FullyQualifiedName))
         {
-            return RunBaselineSelector.Unavailable(
+            return RunComparison.Unavailable(
                 "This run did not record which test produced it, so there is no way to tell which earlier runs are the same test.");
         }
 
         ImmutableList<RunSummary> candidates = RunBaselineSelector.CandidatesFor(runs, current);
 
         if (candidates.Count == 0)
-            return RunBaselineSelector.Unavailable("No earlier run of this test has been recorded yet.");
+            return RunComparison.Unavailable("No earlier run of this test has been recorded yet.");
 
         ImmutableList<AvailableRun> recorded;
 
@@ -82,7 +82,7 @@ public sealed class BaselineResolver(string? runsDirectory)
         catch (Exception e)
         {
             Debug.WriteLine(e);
-            return RunBaselineSelector.Unavailable("The recorded runs could not be listed, so no baseline could be read.");
+            return RunComparison.Unavailable("The recorded runs could not be listed, so no baseline could be read.");
         }
 
         Dictionary<string, string> journals = new(StringComparer.Ordinal);
@@ -114,12 +114,22 @@ public sealed class BaselineResolver(string? runsDirectory)
             if (!RunBaselineSelector.IsUsableBaseline(replayed))
                 continue;
 
-            return RunBaselineSelector.Compare(currentGraph, RunBaselineSelector.BaselineFrom(candidate, replayed));
+            RunBaseline baseline = RunBaselineSelector.BaselineFrom(candidate, replayed);
+
+            return new RunComparison
+            {
+                Values = RunBaselineSelector.Compare(currentGraph, baseline),
+
+                // The run's own elapsed time comes from the picker rather than from the graph: it is the
+                // wall clock the sidecar recorded, and the sum of a run's steps is not the run's duration
+                // when its steps ran in parallel layers.
+                Timing = TimingComparison.Compare(currentGraph, baseline, current.Duration, baseline.RanFor)
+            };
         }
 
         // Said with the number actually examined, so "no baseline" cannot be confused with "this test
         // has never run before".
-        return RunBaselineSelector.Unavailable(read switch
+        return RunComparison.Unavailable(read switch
         {
             0 => "The earlier runs of this test are listed but their journals could not be read.",
             1 => "The previous run of this test did not pass, so there is no known-good state to compare against.",

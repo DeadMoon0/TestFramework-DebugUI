@@ -22,6 +22,25 @@ public sealed record RunBaseline
 
     public ImmutableDictionary<string, ValueDescription> Artifacts { get; init; }
         = ImmutableDictionary<string, ValueDescription>.Empty;
+
+    /// <summary>
+    /// How long each of that run's steps took, keyed by <see cref="TimingComparison.KeyOf"/>.
+    /// </summary>
+    /// <remarks>
+    /// Taken from the same replay as the values, because the expensive part of a baseline is reading and
+    /// projecting the journal and there is no reason to do it twice to answer two questions about one run.
+    /// </remarks>
+    public ImmutableDictionary<string, StepDuration> Steps { get; init; }
+        = ImmutableDictionary<string, StepDuration>.Empty;
+
+    /// <summary>
+    /// Gets how long that run took end to end, when both of its ends were recorded.
+    /// </summary>
+    /// <remarks>
+    /// The run's own wall clock rather than the sum of its steps: steps run in parallel layers, so adding
+    /// them up reports a number the run never took.
+    /// </remarks>
+    public TimeSpan? RanFor { get; init; }
 }
 
 /// <summary>
@@ -71,6 +90,33 @@ public sealed record ValueDiff
 
     private static ValueChange? Locate(ImmutableList<ValueChange> changes, string key)
         => changes.FirstOrDefault(change => string.Equals(change.Key, key, StringComparison.Ordinal));
+}
+
+/// <summary>
+/// Everything one run has to say about itself next to an earlier one.
+/// </summary>
+/// <remarks>
+/// The two questions travel together because the expensive half of answering either is the same: find the
+/// last run of this test that passed, read its journal, project it. Splitting them into two calls would read
+/// the same file twice to compare the same pair of runs.
+/// </remarks>
+public sealed record RunComparison
+{
+    /// <summary>Nothing compared yet.</summary>
+    public static RunComparison None { get; } = new();
+
+    /// <summary>What the run's values did.</summary>
+    public ValueDiff Values { get; init; } = ValueDiff.None;
+
+    /// <summary>What the run's clock did.</summary>
+    public TimingDiff Timing { get; init; } = TimingDiff.None;
+
+    /// <summary>States why neither comparison could be made.</summary>
+    public static RunComparison Unavailable(string reason) => new()
+    {
+        Values = RunBaselineSelector.Unavailable(reason),
+        Timing = TimingComparison.Unavailable(reason)
+    };
 }
 
 /// <summary>
@@ -205,7 +251,12 @@ public static class RunBaselineSelector
             SessionId = run.SessionId,
             StartedAtUtc = run.StartedAtUtc,
             Variables = graph.Variables.ToImmutableDictionary(pair => pair.Key, pair => pair.Value.Description, StringComparer.Ordinal),
-            Artifacts = graph.Artifacts.ToImmutableDictionary(pair => pair.Key, pair => pair.Value.Description, StringComparer.Ordinal)
+            Artifacts = graph.Artifacts.ToImmutableDictionary(pair => pair.Key, pair => pair.Value.Description, StringComparer.Ordinal),
+
+            // What the run cost, taken from the same replay. The picker's own duration is used for the run
+            // total because it comes from the sidecar and is there even for a run nobody has opened.
+            Steps = TimingComparison.DurationsOf(graph),
+            RanFor = run.Duration
         };
     }
 

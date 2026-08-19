@@ -72,6 +72,16 @@
 
                     <TextBlock Style="{StaticResource PanelHeading}" Text="BREAKPOINTS" Margin="0 0 0 6"/>
 
+                    <!--
+                        A step is only ever asked whether to stop before it starts, so this holds the run at
+                        its next step rather than at the moment of the failure. After a failure that next step
+                        is the first one of teardown, which is the useful place to be held: the failed step has
+                        settled and can be read in full, and nothing has been torn down yet.
+                    -->
+                    <shell:UC_Toggle x:Name="tgBreakOnFailure" Margin="0 0 0 12"
+                                     Label="Hold a run when a step fails"
+                                     Note="Stops before teardown, so what the test built is still there to look at."/>
+
                     <Grid Margin="0 0 0 12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -81,7 +91,7 @@
                         <StackPanel Margin="0 0 12 0">
                             <TextBlock x:Name="tbBreakpoints" Style="{StaticResource BodyText}"/>
                             <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0 2 0 0"
-                                       Text="Right-click a step to set one. Kept between runs."/>
+                                       Text="Right-click a step to set one. Belongs to that one test, and kept between runs of it."/>
                         </StackPanel>
 
                         <Button x:Name="btClearBreakpoints" Grid.Column="1" VerticalAlignment="Top" Style="{StaticResource IconButton}" Click="btClearBreakpoints_Click" ToolTip="Clear all breakpoints">

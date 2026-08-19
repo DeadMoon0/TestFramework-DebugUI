@@ -43,6 +43,15 @@ public sealed class ShellController : IDisposable
     private readonly PipeRunEventSource pipe;
     private readonly string? runsDirectory;
     private readonly ConcurrentDictionary<string, RunHistory> histories = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// What test each attached run is an execution of, as the run announced itself.
+    /// </summary>
+    /// <remarks>
+    /// Kept here rather than read from the store because it is needed on the reader thread, synchronously,
+    /// to answer a step that is holding a run open — and the store is a coalesced dispatch behind the pipe.
+    /// </remarks>
+    private readonly ConcurrentDictionary<string, string> tests = new(StringComparer.Ordinal);
     private readonly TestRerunner rerunner;
     private readonly BaselineResolver baselines;
 
@@ -92,7 +101,17 @@ public sealed class ShellController : IDisposable
     /// is the safe one: a consumer that paused by default would stall each step of every attached
     /// run until the producer gave up waiting.
     /// </remarks>
-    public Func<PipeBreakpointHitRequestSignal, bool>? PauseAtBreakpoint { get; set; }
+    public Func<BreakpointQuestion, bool>? PauseAtBreakpoint { get; set; }
+
+    /// <summary>
+    /// Gets or sets what to do when a step of any attached run fails for the last time.
+    /// </summary>
+    /// <remarks>
+    /// Raised from the reader thread as the transition passes, so a consumer can arm a pause before the run
+    /// reaches its next step. Only for a failure with no retry behind it: a step that is about to be tried
+    /// again has not failed yet, and stopping the run there would interrupt its own recovery.
+    /// </remarks>
+    public Action<StepFailureNotice>? StepEndedBadly { get; set; }
 
     /// <summary>
     /// Starts listening for live runs and lists the ones already recorded.
@@ -395,6 +414,10 @@ public sealed class ShellController : IDisposable
         // picker until someone opens it, and these events are what the board is rebuilt from.
         histories.GetOrAdd(envelope.SessionId, _ => new RunHistory()).Add(envelope);
 
+        // Before the events are handed on, because both things this reads have to be known by the time the
+        // run's next step asks whether to stop — which is sooner than the store will have heard about it.
+        WatchForBreakpointContext(envelope);
+
         if (store.GetValue(state => state.Shell.Transport) != TransportStatus.Attached)
             store.Dispatch(RunActions.SetTransportStatus, TransportStatus.Attached);
 
@@ -456,7 +479,7 @@ public sealed class ShellController : IDisposable
     }
 
     /// <summary>
-    /// Works out how the selected run's values compare with the last run of the same test that passed.
+    /// Works out how the selected run's values and timings compare with the last run of the same test that passed.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -488,16 +511,16 @@ public sealed class ShellController : IDisposable
 
         _ = Task.Run(() =>
         {
-            ValueDiff diff;
+            RunComparison comparison;
 
             try
             {
-                diff = baselines.Resolve(run, graph, runs);
+                comparison = baselines.Resolve(run, graph, runs);
             }
             catch (Exception e)
             {
                 Debug.WriteLine(e);
-                diff = RunBaselineSelector.Unavailable("The comparison against an earlier run could not be computed.");
+                comparison = RunComparison.Unavailable("The comparison against an earlier run could not be computed.");
             }
 
             if (disposed)
@@ -506,14 +529,94 @@ public sealed class ShellController : IDisposable
             if (!string.Equals(store.GetValue(state => state.SelectedSessionId), sessionId, StringComparison.Ordinal))
                 return;
 
-            store.Dispatch(RunActions.SetValueDiff, diff);
+            store.Dispatch(RunActions.SetComparison, comparison);
         });
     }
 
+    /// <summary>
+    /// Answers a waiting step, naming the test it belongs to.
+    /// </summary>
+    /// <remarks>
+    /// The test comes from <see cref="tests"/> rather than from the store. Both are filled from the same
+    /// announcement, but the store's copy arrives through a coalescing dispatch — so for the first step of a
+    /// run the store may not have it yet, and a mark on that step would be missed exactly once per run.
+    /// </remarks>
     private bool ShouldPause(PipeBreakpointHitRequestSignal request)
     {
-        Func<PipeBreakpointHitRequestSignal, bool>? test = PauseAtBreakpoint;
-        return test is not null && test(request);
+        Func<BreakpointQuestion, bool>? test = PauseAtBreakpoint;
+
+        if (test is null)
+            return false;
+
+        return test(new BreakpointQuestion
+        {
+            Request = request,
+            Test = tests.TryGetValue(request.SessionId, out string? named) ? named : null
+        });
+    }
+
+    /// <summary>
+    /// Notes what test a run is an execution of, and tells anyone waiting when one of its steps breaks.
+    /// </summary>
+    /// <remarks>
+    /// Read straight off the envelope stream, in order and on the reader thread, which is what makes both
+    /// answers available before the next step of that run asks anything.
+    /// </remarks>
+    private void WatchForBreakpointContext(DebugEnvelope envelope)
+    {
+        try
+        {
+            switch (envelope.Kind)
+            {
+                case PipeSignalKind.InitTimelineRun:
+                    if (DebugEnvelopeCodec.Unwrap(envelope) is PipeInitTimelineRunSignal init)
+                    {
+                        // The fully qualified name when the run could identify itself, and its display name
+                        // otherwise — the same fallback the picker shows, so a mark is filed under the name
+                        // the reader saw when they set it.
+                        tests[envelope.SessionId] = RunSummary.TestNameOf(init.Identity?.FullyQualifiedName, init.Name);
+                    }
+
+                    break;
+
+                case PipeSignalKind.TimelineRunFinished:
+                    // The last message a session ever sends, so nothing will ask about this run again. Left
+                    // in place it would accumulate for the life of the process, which under watch mode is
+                    // measured in days and thousands of runs.
+                    tests.TryRemove(envelope.SessionId, out _);
+                    break;
+
+                // A step about to be retried transitions to WaitingForRetry rather than to Error, so
+                // matching on the state is what excludes a failure the run is going to recover from.
+                case PipeSignalKind.EntityTransition when StepEndedBadly is not null:
+                    if (DebugEnvelopeCodec.Unwrap(envelope) is PipeEntityTransitionSignal
+                        {
+                            EntityKind: DebugEntityKind.Step,
+                            State: DebugLifecycleState.Error or DebugLifecycleState.Timeout,
+                            Stage: { Length: > 0 } stage,
+                            StepId: int stepId
+                        })
+                    {
+                        StepEndedBadly(new StepFailureNotice
+                        {
+                            SessionId = envelope.SessionId,
+                            Stage = stage,
+                            StepId = stepId
+                        });
+                    }
+
+                    break;
+
+                default:
+                    break;
+            }
+        }
+        catch (Exception e)
+        {
+            // A frame this build cannot read must not take the transport down with it. Losing the test name
+            // costs the run its breakpoints; throwing here would cost it the whole connection.
+            Debug.WriteLine(e);
+        }
     }
 
     /// <summary>

@@ -68,6 +68,14 @@ public partial class UC_Board : UserControl
     private readonly Dictionary<string, Path> pipeVisuals = new(StringComparer.Ordinal);
 
     private LayoutResult board = LayoutResult.Empty;
+
+    /// <summary>How this run's steps timed against the last run of the test that passed.</summary>
+    /// <remarks>
+    /// Held rather than read on demand because it arrives late — a journal has to be read for it — and the
+    /// board is already drawn by then. Kept out of the geometry deliberately: a step getting slower moves
+    /// nothing, so this repaints the card rather than relaying out the run.
+    /// </remarks>
+    private TimingDiff timing = TimingDiff.None;
     private HashSet<string> brokenChecks = new(StringComparer.Ordinal);
     private VerdictVisual? verdictVisual;
     private Point panOrigin;
@@ -97,6 +105,14 @@ public partial class UC_Board : UserControl
             .Subscribe(_ => RefreshAppearance()));
 
         subscriptions.Add(StateStore<MainState>.Default
+            .Bind(state => state.ActiveTiming)
+            .Subscribe(compared =>
+            {
+                timing = compared;
+                RefreshAppearance();
+            }));
+
+        subscriptions.Add(StateStore<MainState>.Default
             .Bind(state => state.ActiveRun.Stages.Count == 0)
             .Select(empty => empty ? Visibility.Visible : Visibility.Collapsed)
             .BindToDependencyProperty(tbEmpty, VisibilityProperty));
@@ -113,6 +129,15 @@ public partial class UC_Board : UserControl
         subscriptions.Add(StateStore<MainState>.Default
             .Bind(state => state.SelectedSessionId)
             .Subscribe(_ => LoadAnnotations()));
+
+        // Breakpoints belong to a test rather than to a session, so the board says which test it is
+        // showing and sets its marks against that. A run this window cannot name cannot be marked, which
+        // is honest: a mark filed under no name would apply to every other unnamed run.
+        subscriptions.Add(StateStore<MainState>.Default
+            .Bind(state => state.Runs
+                .Find(run => string.Equals(run.SessionId, state.SelectedSessionId, StringComparison.Ordinal))
+                ?.Test ?? string.Empty)
+            .Subscribe(Breakpoints.NowLookingAt));
 
         // The surface is measured after the run arrives, so this is what actually fits the first
         // board; the attempt in Render is just the case where a size already exists.
@@ -665,7 +690,7 @@ public partial class UC_Board : UserControl
 
                 visual.Name.Text = step.DisplayName;
                 visual.Note.Text = Note(step);
-                visual.Elapsed.Text = step.Duration is { } duration ? Elapsed(duration) : string.Empty;
+                ShowElapsed(visual.Elapsed, stage.Name, step);
                 visual.Status.Background = BrushFor(step);
                 visual.Outputs.Text = Describe(step);
                 visual.Log.Text = LastLine(step);
@@ -740,6 +765,55 @@ public partial class UC_Board : UserControl
             return $"{state} · attempt {step.Attempts.Count}";
 
         return state;
+    }
+
+    /// <summary>
+    /// Puts a step's time on its card, and says how that compares with the last time this test passed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The comparison is spent on the number that is already there rather than on a badge of its own. A
+    /// reader scanning the column for the step that cost the run its time is reading these numbers anyway;
+    /// colouring one amber and writing <c>+2.1 s</c> after it answers "is that normal", which is the question
+    /// the bare number cannot.
+    /// </para>
+    /// <para>
+    /// The delta rather than the ratio, because the delta is the actionable half: eight seconds appearing in
+    /// one step is where the run went, whether that step was twice or twenty times slower. The ratio and the
+    /// old number are on the pointer for whoever wants them.
+    /// </para>
+    /// </remarks>
+    private void ShowElapsed(TextBlock elapsed, string stageName, StepNode step)
+    {
+        if (step.Duration is not { } duration)
+        {
+            elapsed.Text = string.Empty;
+            elapsed.ToolTip = null;
+            elapsed.Foreground = (Brush)FindResource("TextFaint");
+            return;
+        }
+
+        StepTiming? compared = timing.ForStep(stageName, step.StepId);
+
+        if (compared is null || !compared.IsInteresting)
+        {
+            elapsed.Text = Elapsed(duration);
+            elapsed.ToolTip = compared?.Then is { } unchanged ? $"About the same as last time: {Elapsed(unchanged)}" : null;
+            elapsed.Foreground = (Brush)FindResource("TextFaint");
+            return;
+        }
+
+        bool slower = compared.Change == StepTimingChange.Slower;
+
+        elapsed.Text = $"{Elapsed(duration)}  {(slower ? "+" : "−")}{Elapsed(compared.Delta.Duration())}";
+
+        // Amber rather than red. A slower step is worth noticing and is not a failure, and red on this board
+        // already means the step broke.
+        elapsed.Foreground = (Brush)FindResource(slower ? "StateTimeout" : "StateComplete");
+
+        elapsed.ToolTip = compared.Ratio is { } ratio
+            ? $"Was {Elapsed(compared.Then ?? TimeSpan.Zero)} when this test last passed — {ratio:0.#}× that now."
+            : $"Was {Elapsed(compared.Then ?? TimeSpan.Zero)} when this test last passed.";
     }
 
     /// <summary>

@@ -61,6 +61,16 @@ public record struct MainState()
     /// </remarks>
     public ValueDiff ActiveDiff = ValueDiff.None;
 
+    /// <summary>
+    /// How long the selected run's steps took against the last run of the same test that passed.
+    /// </summary>
+    /// <remarks>
+    /// Beside <see cref="ActiveDiff"/> and cleared with it, for the same reasons: it is a statement about two
+    /// runs rather than about this one, it arrives after the board because it needs a journal read, and a
+    /// timing left over from the previous selection would badge the wrong steps as slow.
+    /// </remarks>
+    public TimingDiff ActiveTiming = TimingDiff.None;
+
     /// <summary>The step whose detail is shown, or null when none is.</summary>
     public StepSelection? SelectedStep = null;
 
@@ -181,7 +191,18 @@ public sealed record RunSummary
     /// The identity a run groups under: one test run five times is five runs of one test, and a list
     /// that cannot say that is a list of twenty rows with four distinct names in it.
     /// </remarks>
-    public string Test => string.IsNullOrWhiteSpace(FullyQualifiedName) ? Name : FullyQualifiedName;
+    public string Test => TestNameOf(FullyQualifiedName, Name);
+
+    /// <summary>
+    /// The name a run is filed under wherever something is keyed on the test rather than the run.
+    /// </summary>
+    /// <remarks>
+    /// Stated once because two sides compute it and they must agree. The board sets a breakpoint against the
+    /// selected run; the transport answers a step of a run that need not be selected, from what that run
+    /// announced. Two spellings of this rule is a mark that gets set and never hit.
+    /// </remarks>
+    public static string TestNameOf(string? fullyQualifiedName, string? runName)
+        => string.IsNullOrWhiteSpace(fullyQualifiedName) ? runName ?? string.Empty : fullyQualifiedName;
 
     /// <summary>
     /// Gets the shortest label that still identifies the run to a reader.

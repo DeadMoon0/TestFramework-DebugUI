@@ -18,7 +18,11 @@ namespace TestFramework.DebugUI.State;
 public sealed record UiSettings
 {
     /// <summary>The shape this build writes.</summary>
-    public const int CurrentVersion = 1;
+    /// <remarks>
+    /// Two since a breakpoint began naming the test it belongs to. A version-one file's marks name no test
+    /// and are dropped on load — see <c>Breakpoints.Restore</c> for why they cannot be migrated.
+    /// </remarks>
+    public const int CurrentVersion = 2;
 
     /// <summary>Settings as they are before anything has been saved.</summary>
     public static UiSettings Defaults { get; } = new();
@@ -40,11 +44,23 @@ public sealed record UiSettings
     /// The breakpoints the user set, so they survive a restart.
     /// </summary>
     /// <remarks>
-    /// A breakpoint is keyed by stage and step precisely so it still applies the next time that test
-    /// runs. Holding them only in memory meant that was true within a session and false across one,
-    /// which is the half that matters least — you close the tool, fix the code, run again.
+    /// A breakpoint is keyed by test, stage and step precisely so it still applies the next time that
+    /// test runs — and only that test. Holding them only in memory meant the first half was true within
+    /// a session and false across one, which is the half that matters least: you close the tool, fix the
+    /// code, run again.
     /// </remarks>
     public ImmutableList<BreakpointMark> Breakpoints { get; init; } = ImmutableList<BreakpointMark>.Empty;
+
+    /// <summary>
+    /// Whether a step that fails should stop its run where it is.
+    /// </summary>
+    /// <remarks>
+    /// Remembered because it is how somebody works rather than something they do once: a person debugging a
+    /// flaky suite wants every run that breaks held open, and having to arm it again after each restart
+    /// teaches them to stop relying on it. Off by default — it holds a test host open, which is not
+    /// something to start doing to somebody without being asked.
+    /// </remarks>
+    public bool BreakOnFailure { get; init; }
 
     /// <summary>How the tool behaves while it is watching rather than being looked at.</summary>
     public WatchSettings Watch { get; init; } = new();
@@ -93,8 +109,19 @@ public sealed record WindowPlacement
 }
 
 /// <summary>One step the user asked to stop at.</summary>
+/// <remarks>
+/// The test is part of the identity, not decoration. Without it a mark is "step 2 of Act", which describes a
+/// step in most tests ever written.
+/// </remarks>
 public sealed record BreakpointMark
 {
+    /// <summary>Gets the test the mark belongs to, as the run identified itself.</summary>
+    /// <remarks>
+    /// Null in a file written before version 2, which is why it is not <c>required</c>. Those marks are
+    /// dropped rather than guessed at.
+    /// </remarks>
+    public string? Test { get; init; }
+
     public required string Stage { get; init; }
 
     public required int StepId { get; init; }

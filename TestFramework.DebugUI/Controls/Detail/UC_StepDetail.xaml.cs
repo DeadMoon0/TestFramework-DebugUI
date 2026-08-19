@@ -34,6 +34,9 @@ public partial class UC_StepDetail : UserControl
 
     private StepNode? step;
     private string? stageName;
+
+    /// <summary>How this run's steps timed against the last run of the test that passed.</summary>
+    private TimingDiff timing = TimingDiff.None;
     private LogNode[] entries = [];
 
     private bool sizing;
@@ -54,6 +57,16 @@ public partial class UC_StepDetail : UserControl
         subscriptions.Add(StateStore<MainState>.Default
             .Bind(Resolve)
             .Subscribe(Show));
+
+        // Arrives later than the step does, because a baseline means reading an earlier run's journal. Kept
+        // so the line can be filled in when it lands rather than only on the next selection.
+        subscriptions.Add(StateStore<MainState>.Default
+            .Bind(state => state.ActiveTiming)
+            .Subscribe(compared =>
+            {
+                timing = compared;
+                ShowTiming();
+            }));
 
         Unloaded += (_, _) => subscriptions.Dispose();
     }
@@ -128,10 +141,55 @@ public partial class UC_StepDetail : UserControl
         tbInputs.Text = Describe(step.Inputs);
         tbOutputs.Text = Describe(step.Outputs);
 
+        ShowTiming();
         ShowPolicy();
         ShowAttempts();
         ShowLog();
         ShowFailure();
+    }
+
+    /// <summary>
+    /// Says what the step cost, and whether that is what it normally costs.
+    /// </summary>
+    /// <remarks>
+    /// One line rather than a section. A step that took as long as it always takes still says how long that
+    /// was, because the number is worth having; the comparison is only added when there is one, so the line
+    /// does not grow a clause reading "no earlier run to compare against" on every step of every first run.
+    /// </remarks>
+    private void ShowTiming()
+    {
+        if (step?.Duration is not { } took)
+        {
+            tbTiming.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        tbTiming.Visibility = Visibility.Visible;
+
+        StepTiming? compared = stageName is null ? null : timing.ForStep(stageName, step.StepId);
+
+        if (compared?.Then is not { } before)
+        {
+            tbTiming.Text = $"took {Duration(took)}";
+            tbTiming.Foreground = (Brush)FindResource("TextSecondary");
+            return;
+        }
+
+        string ratio = compared.Ratio is { } times ? $", {times:0.#}×" : string.Empty;
+
+        tbTiming.Text = compared.Change switch
+        {
+            StepTimingChange.Slower => $"took {Duration(took)} — {Duration(compared.Delta)} longer than when this test last passed{ratio}",
+            StepTimingChange.Faster => $"took {Duration(took)} — {Duration(compared.Delta.Duration())} quicker than when this test last passed{ratio}",
+            _ => $"took {Duration(took)}, about the same as the {Duration(before)} it took when this test last passed"
+        };
+
+        tbTiming.Foreground = (Brush)FindResource(compared.Change switch
+        {
+            StepTimingChange.Slower => "StateTimeout",
+            StepTimingChange.Faster => "StateComplete",
+            _ => "TextSecondary"
+        });
     }
 
     /// <summary>

@@ -90,6 +90,29 @@ public static class RunTree
     public const string NoIdentity = "No test identity";
 
     /// <summary>
+    /// Whether a run answers a name typed into the tree's filter.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Matched against every name the tree files a run under — its project, its class, its test and its own
+    /// display name — so naming any level narrows to that branch. Someone typing a class name and someone
+    /// typing a test name are both asking the same question of the same box.
+    /// </para>
+    /// <para>
+    /// This filters the runs, not the tree. The grouping is derived from whatever survives, so a project
+    /// keeps appearing exactly as long as one of its runs matches and there is no separate pruning pass to
+    /// get wrong.
+    /// </para>
+    /// </remarks>
+    public static bool Matches(RunSummary run, SearchPattern pattern)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(pattern);
+
+        return pattern.MatchesAny(run.Project, ClassOf(run.Test), run.Test, run.Name);
+    }
+
+    /// <summary>
     /// Whether a run is one of the few worth putting in front of the reader.
     /// </summary>
     /// <remarks>

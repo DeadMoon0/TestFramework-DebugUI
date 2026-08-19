@@ -177,6 +177,11 @@
         brushes as everything else. Kept here so the same glyph cannot drift between two panels.
     -->
     <Geometry x:Key="IconClose">M 4,4 L 14,14 M 14,4 L 4,14</Geometry>
+    <Geometry x:Key="IconSearch">M 7.8,3 A 4.8,4.8 0 1 1 7.8,12.6 A 4.8,4.8 0 1 1 7.8,3 Z M 11.4,11.4 L 15.2,15.2</Geometry>
+
+    <!-- Drawn pointing right and rotated a quarter turn when its branch is open, so one geometry covers
+         both states and the two can never be drawn at different weights. -->
+    <Geometry x:Key="IconChevron">M 7,5 L 11.5,9 L 7,13</Geometry>
     <Geometry x:Key="IconFolder">M 2,4.5 L 7,4.5 L 8.6,6.5 L 16,6.5 L 16,14 L 2,14 Z</Geometry>
     <Geometry x:Key="IconTrash">M 3,5.5 L 15,5.5 M 7,5.5 L 7,3.5 L 11,3.5 L 11,5.5 M 4.5,5.5 L 5.4,15 L 12.6,15 L 13.5,5.5</Geometry>
     <Geometry x:Key="IconRefresh">M 15,9 A 6,6 0 1 1 12.8,4.4 M 15,3.2 L 15,4.6 L 13.6,4.6</Geometry>

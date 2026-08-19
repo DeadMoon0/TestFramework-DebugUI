@@ -1,4 +1,4 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using Axiom.State.Actions;
 using TestFramework.Core.Debugger;
 
@@ -67,4 +67,13 @@ public static class RunActions
     /// can say why instead of looking broken.
     /// </remarks>
     public static readonly StateAction<ValueDiff> SetValueDiff = new(nameof(RunActions), nameof(SetValueDiff));
+
+    /// <summary>
+    /// Records both comparisons against the last run of the same test that passed.
+    /// </summary>
+    /// <remarks>
+    /// One action for the pair because they are computed together off one journal read, and dispatching them
+    /// separately would put the board in a state where the values had been compared and the clock had not.
+    /// </remarks>
+    public static readonly StateAction<RunComparison> SetComparison = new(nameof(RunActions), nameof(SetComparison));
 }

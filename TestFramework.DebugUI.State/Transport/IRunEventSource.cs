@@ -32,6 +32,43 @@ public interface IRunEventSource
 }
 
 /// <summary>
+/// A step asking whether it should be held, and enough about its run to answer.
+/// </summary>
+/// <remarks>
+/// The request names a stage and a step index, which together do not identify anything: stage names are
+/// conventional and an index is a number. The test is what makes the question answerable, and it is resolved
+/// here — on the reader thread, from what the run announced — rather than read out of the store, which lags
+/// behind the pipe by however long the last dispatch took.
+/// </remarks>
+public sealed record BreakpointQuestion
+{
+    /// <summary>Gets the step that is waiting for an answer.</summary>
+    public required PipeBreakpointHitRequestSignal Request { get; init; }
+
+    /// <summary>Gets the test the run is an execution of, or null when the run did not say.</summary>
+    public string? Test { get; init; }
+}
+
+/// <summary>
+/// A step of some attached run that has just ended badly, and is not going to be retried.
+/// </summary>
+/// <remarks>
+/// Raised for every session rather than the selected one: catching the run that broke while you were
+/// looking at another is the whole reason anyone arms break-on-failure.
+/// </remarks>
+public sealed record StepFailureNotice
+{
+    /// <summary>Gets the run the step belongs to.</summary>
+    public required string SessionId { get; init; }
+
+    /// <summary>Gets the stage the step belongs to.</summary>
+    public required string Stage { get; init; }
+
+    /// <summary>Gets the step's index within its stage.</summary>
+    public required int StepId { get; init; }
+}
+
+/// <summary>
 /// A run the UI can open, as listed for the run picker.
 /// </summary>
 public sealed record AvailableRun

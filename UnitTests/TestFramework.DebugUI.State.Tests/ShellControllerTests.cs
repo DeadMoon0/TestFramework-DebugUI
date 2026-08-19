@@ -139,6 +139,97 @@ public sealed class ShellControllerTests(JournalFixture fixture)
     }
 
     [Fact]
+    public async Task AStepAskingAboutABreakpointIsToldWhichTestItBelongsTo()
+    {
+        // A breakpoint is keyed by test, and this is where the test comes from: read off the run's own
+        // announcement on the reader thread. Taking it from the store instead would miss the first step of
+        // every run, because the store is a coalesced dispatch behind the pipe.
+        using PipeScope scope = new();
+
+        List<BreakpointQuestion> asked = [];
+
+        using Harness harness = new(RunsDirectory, scope.PipeName);
+        harness.Controller.PauseAtBreakpoint = question =>
+        {
+            lock (asked)
+                asked.Add(question);
+
+            return false;
+        };
+
+        harness.Controller.Start();
+
+        await RunTimelineAsync("named");
+
+        await WaitForAsync(
+            () => { lock (asked) { return asked.Count > 0; } },
+            "Every step asks before it runs, so at least one question should have arrived.");
+
+        lock (asked)
+            Assert.All(asked, question => Assert.False(string.IsNullOrWhiteSpace(question.Test)));
+    }
+
+    [Fact]
+    public async Task AStepThatFailsIsReportedSoTheRunCanBeHeldBeforeTeardown()
+    {
+        // A run is only ever asked whether to pause before a step, so break-on-failure works by arming a
+        // stop when this fires. Without it the failure is only visible in the store, which is too late and
+        // only for the selected run.
+        using PipeScope scope = new();
+
+        List<StepFailureNotice> broken = [];
+
+        using Harness harness = new(RunsDirectory, scope.PipeName);
+        harness.Controller.StepEndedBadly = notice =>
+        {
+            lock (broken)
+                broken.Add(notice);
+        };
+
+        harness.Controller.Start();
+
+        await RunFailingTimelineAsync("broken");
+
+        await WaitForAsync(
+            () => { lock (broken) { return broken.Count > 0; } },
+            "The failing step should have been reported.");
+
+        lock (broken)
+        {
+            StepFailureNotice notice = broken[0];
+
+            Assert.False(string.IsNullOrWhiteSpace(notice.SessionId));
+            Assert.False(string.IsNullOrWhiteSpace(notice.Stage));
+        }
+    }
+
+    [Fact]
+    public async Task AStepThatPassesIsNotReportedAsBroken()
+    {
+        using PipeScope scope = new();
+
+        List<StepFailureNotice> broken = [];
+
+        using Harness harness = new(RunsDirectory, scope.PipeName);
+        harness.Controller.StepEndedBadly = notice =>
+        {
+            lock (broken)
+                broken.Add(notice);
+        };
+
+        harness.Controller.Start();
+
+        await RunTimelineAsync("fine");
+
+        await WaitForAsync(
+            () => harness.Store.GetValue(state => state.Runs).Count > 0,
+            "The run should have attached.");
+
+        lock (broken)
+            Assert.Empty(broken);
+    }
+
+    [Fact]
     public void SelectingAStepIsRememberedAndClearedWhenTheRunChanges()
     {
         using Harness harness = new(RunsDirectory);
@@ -216,6 +307,41 @@ public sealed class ShellControllerTests(JournalFixture fixture)
             .Build();
 
         await timeline.SetupRun().RunAsync();
+    }
+
+    /// <summary>
+    /// Runs a timeline whose step throws, and lets the failure be the outcome rather than an error here.
+    /// </summary>
+    private static async Task RunFailingTimelineAsync(string label)
+    {
+        Timeline timeline = Timeline.Create()
+            .Trigger(new ThrowingStep())
+            .Name(label)
+            .Build();
+
+        try
+        {
+            await timeline.SetupRun().RunAsync();
+        }
+        catch (Exception)
+        {
+            // The point of the run is that it breaks. Whether the failure also surfaces to the caller is
+            // Core's business and not what is under test.
+        }
+    }
+
+    private sealed class ThrowingStep : Step<EmptyStepResultContext>
+    {
+        public override string Name => "throws";
+        public override string Description => "Fails on purpose.";
+        public override bool DoesReturn => false;
+
+        public override Task<EmptyStepResultContext?> Execute(IServiceProvider serviceProvider, VariableStore variableStore, ArtifactStore artifactStore, ScopedLogger logger, CancellationToken cancellationToken)
+            => throw new InvalidOperationException("the step broke");
+
+        public override Step<EmptyStepResultContext> Clone() => new ThrowingStep().WithClonedOptions(this);
+        public override void DeclareIO(StepIOContract contract) { }
+        public override StepInstance<Step<EmptyStepResultContext>, EmptyStepResultContext> GetInstance() => new(this);
     }
 
     private sealed class Harness : IDisposable

@@ -23,6 +23,15 @@ namespace TestFramework.DebugUI.Controls.Detail;
 /// </remarks>
 public partial class UC_RunSummary : UserControl
 {
+    /// <summary>
+    /// How many moved steps this page names.
+    /// </summary>
+    /// <remarks>
+    /// The answer to "why was this run slow" is two or three steps. A table of every step that drifted is a
+    /// table nobody finishes reading, and the board colours all of them anyway.
+    /// </remarks>
+    private const int MostMoversShown = 5;
+
     private readonly CompositeDisposable subscriptions = [];
 
     private RunTally tally = RunTally.Empty;
@@ -46,6 +55,12 @@ public partial class UC_RunSummary : UserControl
         subscriptions.Add(StateStore<MainState>.Default
             .Bind(state => state.ActiveRun.Assertions)
             .Subscribe(ShowChecks));
+
+        // Arrives after the board, because a baseline means reading an earlier run's journal. Bound on its
+        // own so the page fills in when it lands rather than waiting for it.
+        subscriptions.Add(StateStore<MainState>.Default
+            .Bind(state => state.ActiveTiming)
+            .Subscribe(ShowTiming));
 
         // How big the recording is, which the tally cannot know: it counts what the graph holds, and this is
         // what the producer wrote. Counted into the sidecar as the run went, so reading it costs nothing.
@@ -237,6 +252,120 @@ public partial class UC_RunSummary : UserControl
             });
         }
     }
+
+    /// <summary>
+    /// Says where the run's time went, against the last run of this test that passed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Shown only when something actually moved. A run that took the time it always takes has nothing to say
+    /// here, and a section reading "the same as last time" on every passing run is a section people learn to
+    /// skip — which costs it their attention on the run where it matters.
+    /// </para>
+    /// <para>
+    /// Steps ordered by how much time moved rather than by ratio, and capped: the answer to "why was this run
+    /// slow" is two or three steps, not a table of forty.
+    /// </para>
+    /// </remarks>
+    private void ShowTiming(TimingDiff compared)
+    {
+        spTiming.Children.Clear();
+
+        ImmutableList<StepTiming> movers = compared.BiggestMovers(MostMoversShown);
+        bool worthShowing = compared.HasBaseline && (movers.Count > 0 || compared.RunMovedMaterially);
+
+        tbTimingLabel.Visibility = worthShowing ? Visibility.Visible : Visibility.Collapsed;
+        tbTimingHeadline.Visibility = worthShowing ? Visibility.Visible : Visibility.Collapsed;
+
+        if (!worthShowing)
+            return;
+
+        tbTimingHeadline.Text = Headline(compared);
+
+        foreach (StepTiming step in movers)
+        {
+            bool slower = step.Change == StepTimingChange.Slower;
+
+            TextBlock heading = new()
+            {
+                Text = step.DisplayName,
+                Foreground = (Brush)FindResource("TextPrimary"),
+                FontSize = 12,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+
+            TextBlock detail = new()
+            {
+                Text = step.Ratio is { } ratio
+                    ? $"{Took(step.Then ?? TimeSpan.Zero)} → {Took(step.Now ?? TimeSpan.Zero)}   ({ratio:0.#}×)"
+                    : $"{Took(step.Then ?? TimeSpan.Zero)} → {Took(step.Now ?? TimeSpan.Zero)}",
+
+                // Amber for slower, green for quicker. Never red: a step taking longer is worth seeing and
+                // is not a failure, and red on this page means something broke.
+                Foreground = (Brush)FindResource(slower ? "StateTimeout" : "StateComplete"),
+                FontSize = 11,
+                Margin = new Thickness(0, 2, 0, 0)
+            };
+
+            Border row = new()
+            {
+                CornerRadius = new CornerRadius(4),
+                Background = (Brush)FindResource("SurfaceRaised"),
+                Padding = new Thickness(8, 6, 8, 6),
+                Margin = new Thickness(0, 0, 0, 4),
+                Cursor = Cursors.Hand,
+                ToolTip = "Open this step on the board.",
+                Child = new StackPanel { Children = { heading, detail } }
+            };
+
+            string stage = step.StageName;
+            int stepId = step.StepId;
+
+            row.MouseLeftButtonUp += (_, _) => MainWindow.Shell.SelectStep(stage, stepId);
+
+            spTiming.Children.Add(row);
+        }
+    }
+
+    /// <summary>
+    /// The one sentence about the run as a whole.
+    /// </summary>
+    /// <remarks>
+    /// The run's own wall clock, not the sum of the steps that moved: steps run in parallel layers, so adding
+    /// up the movers would claim a number the run never took.
+    /// </remarks>
+    private static string Headline(TimingDiff compared)
+    {
+        string against = compared.Baseline is { } baseline
+            ? $"when it last passed, on {baseline.StartedAtUtc.ToLocalTime():d MMM HH:mm}"
+            : "when it last passed";
+
+        // A live run has no end yet, so there is no total to compare — but its finished steps do have times,
+        // and saying how many of them moved is still an answer.
+        if (compared.Now is null || compared.Then is null)
+        {
+            return compared.SlowerCount > 0
+                ? $"{compared.SlowerCount} step(s) took longer than {against}."
+                : $"{compared.FasterCount} step(s) were quicker than {against}.";
+        }
+
+        string span = $"{Took(compared.Then.Value)} → {Took(compared.Now.Value)}";
+
+        if (!compared.RunMovedMaterially)
+            return $"Overall the run took about the same ({span}), but some of it moved.";
+
+        string detail = compared.Ratio is { } ratio ? $"({ratio:0.#}×, {span})" : $"({span})";
+
+        return compared.Delta > TimeSpan.Zero
+            ? $"This run took {Took(compared.Delta)} longer than {against} {detail}."
+            : $"This run was {Took(compared.Delta.Duration())} quicker than {against} {detail}.";
+    }
+
+    /// <summary>A duration as a reader says it, in the same shape the run list uses.</summary>
+    private static string Took(TimeSpan took)
+        => took < TimeSpan.FromSeconds(1) ? $"{took.TotalMilliseconds:F0} ms"
+            : took < TimeSpan.FromMinutes(1) ? $"{took.TotalSeconds:F1} s"
+            : $"{(int)took.TotalMinutes}m {took.Seconds}s";
 
     private void btClose_Click(object sender, RoutedEventArgs e) => Closed?.Invoke();
 }

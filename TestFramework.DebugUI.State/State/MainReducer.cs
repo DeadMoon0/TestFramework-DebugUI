@@ -33,6 +33,12 @@ public sealed class MainReducer : Reducer<MainState>
         On(RunActions.AddRecordedRuns, (state, runs) => AddRecorded(state, runs));
         On(RunActions.AwaitRerun, (state, test) => state with { Shell = state.Shell with { AwaitedRerun = test } });
         On(RunActions.SetValueDiff, (state, diff) => state with { ActiveDiff = diff });
+
+        On(RunActions.SetComparison, (state, comparison) => state with
+        {
+            ActiveDiff = comparison.Values,
+            ActiveTiming = comparison.Timing
+        });
     }
 
     /// <summary>
@@ -256,6 +262,7 @@ public sealed class MainReducer : Reducer<MainState>
             SelectedSessionId = sessionId,
             ActiveRun = RunGraph.Empty,
             ActiveDiff = ValueDiff.None,
+            ActiveTiming = TimingDiff.None,
             SelectedStep = null
         };
     }

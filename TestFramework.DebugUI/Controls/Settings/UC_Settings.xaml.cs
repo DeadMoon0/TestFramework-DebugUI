@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
@@ -37,6 +37,10 @@ public partial class UC_Settings : UserControl
 
         tgAssociate.Toggled += OnAssociateToggled;
 
+        // Its own event rather than a member of the watch settings: this governs what a run does when it
+        // breaks, which has nothing to do with where the window goes when it is put away.
+        tgBreakOnFailure.Toggled += value => BreakOnFailureChanged?.Invoke(value);
+
         Breakpoints.Changed += ShowBreakpointCount;
         Unloaded += (_, _) => Breakpoints.Changed -= ShowBreakpointCount;
     }
@@ -47,6 +51,9 @@ public partial class UC_Settings : UserControl
     /// <summary>Raised when the panel should go away.</summary>
     public event Action? Closed;
 
+    /// <summary>Raised when the user changes whether a failing step holds its run.</summary>
+    public event Action<bool>? BreakOnFailureChanged;
+
     private WatchSettings Current { get; set; } = new();
 
     /// <summary>
@@ -56,7 +63,7 @@ public partial class UC_Settings : UserControl
     /// Called every time the panel is shown rather than once, because the title bar's eye changes the
     /// same setting: a panel populated only on construction would open showing a stale switch.
     /// </remarks>
-    public void Show(WatchSettings watch, string settingsPath)
+    public void Show(WatchSettings watch, string settingsPath, bool breakOnFailure)
     {
         ArgumentNullException.ThrowIfNull(watch);
 
@@ -65,6 +72,7 @@ public partial class UC_Settings : UserControl
         tgWatch.SetQuietly(watch.Enabled);
         tgNotify.SetQuietly(watch.NotifyOnFinish);
         tgFailuresOnly.SetQuietly(watch.NotifyOnlyOnFailure);
+        tgBreakOnFailure.SetQuietly(breakOnFailure);
 
         ShowAssociation();
 

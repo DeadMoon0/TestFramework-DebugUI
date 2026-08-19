@@ -27,6 +27,12 @@
                     <StackPanel Margin="10 0 10 10">
                         <TextBlock x:Name="tbName" Style="{StaticResource BodyText}" FontSize="15"/>
                         <TextBlock x:Name="tbKind" Style="{StaticResource MutedText}" Margin="0 1 0 0"/>
+
+                        <!-- What it cost, and whether that is what it usually costs. Hidden until the step
+                             has finished and an earlier passing run has been found to compare it against. -->
+                        <TextBlock x:Name="tbTiming" Style="{StaticResource MutedText}" Margin="0 4 0 0"
+                                   TextWrapping="Wrap" Visibility="Collapsed"/>
+
                         <TextBlock x:Name="tbDescription" Style="{StaticResource MutedText}" Margin="0 6 0 0"/>
 
                         <!-- Setting a breakpoint used to be offered here too. It belongs on the step, and it is

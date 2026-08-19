@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Immutable;
 using System.Linq;
 
@@ -192,6 +192,72 @@ public class RunTreeTests
 
         Assert.False(RunTree.NeedsAttention(RunHealth.Passed));
         Assert.False(RunTree.NeedsAttention(RunHealth.Unknown));
+    }
+
+    [Fact]
+    public void AFilterMatchesAtWhicheverLevelTheReaderNamed()
+    {
+        // One box, four names. Someone thinking of a class and someone thinking of a test are asking the
+        // same question of the same field, and neither should have to know which level they are naming.
+        RunSummary run = Run("a", fullyQualifiedName: "Acme.Orders.Tests.OrderTests.PlacesAnOrder");
+
+        Assert.True(Matches(run, "PlacesAnOrder"));
+        Assert.True(Matches(run, "OrderTests"));
+        Assert.True(Matches(run, "Alpha.Tests"));
+        Assert.True(Matches(run, "run"));
+
+        Assert.False(Matches(run, "Billing"));
+    }
+
+    [Fact]
+    public void AFilterIgnoresCaseAndTakesAWildcard()
+    {
+        // The same pattern rules the run search uses, so nobody has to learn two kinds of typing.
+        RunSummary run = Run("a", fullyQualifiedName: "Acme.Orders.Tests.OrderTests.PlacesAnOrder");
+
+        Assert.True(Matches(run, "placesanorder"));
+        Assert.True(Matches(run, "Places*Order"));
+        Assert.True(Matches(run, "/Places(An)?Order/"));
+
+        Assert.False(Matches(run, "Places?Order"));
+    }
+
+    [Fact]
+    public void ARunWithNoIdentityIsStillFindableUnderTheNameItGroupsBy()
+    {
+        // The tool is often pointed at a host that never said which test it was running. Those runs group
+        // under a name of their own, so that name has to be one the filter answers to.
+        RunSummary run = Run("a", fullyQualifiedName: null, name: "orphan");
+
+        Assert.True(Matches(run, RunTree.NoIdentity));
+        Assert.True(Matches(run, "orphan"));
+    }
+
+    [Fact]
+    public void FilteringTheRunsIsWhatPrunesTheTree()
+    {
+        // No separate pruning pass: the grouping is derived, so a branch survives exactly as long as one of
+        // its runs does. This is the test that fails if anyone adds one.
+        ImmutableList<RunSummary> runs =
+        [
+            Run("a", fullyQualifiedName: "Suite.Tests.Login"),
+            Run("b", fullyQualifiedName: "Suite.Tests.Logout")
+        ];
+
+        Assert.True(SearchPattern.TryParse("Login", out SearchPattern? pattern, out _));
+
+        ImmutableList<ProjectGroup> tree = RunTree.Of([.. runs.Where(run => RunTree.Matches(run, pattern!))]);
+
+        ClassGroup type = Assert.Single(Assert.Single(tree).Classes);
+
+        Assert.Equal("Login", Assert.Single(type.Tests).DisplayName);
+    }
+
+    private static bool Matches(RunSummary run, string filter)
+    {
+        Assert.True(SearchPattern.TryParse(filter, out SearchPattern? pattern, out _));
+
+        return RunTree.Matches(run, pattern!);
     }
 
     private static RunSummary Run(

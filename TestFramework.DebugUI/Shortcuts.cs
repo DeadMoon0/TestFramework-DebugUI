@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Windows.Input;
@@ -52,8 +52,25 @@ public static class Shortcuts
     public static readonly RoutedUICommand StepForward =
         Make(nameof(StepForward), "Step to the next step", Key.F10, ModifierKeys.None);
 
+    /// <summary>
+    /// Searches the run on screen.
+    /// </summary>
+    /// <remarks>
+    /// Ctrl+F, because that is what it is everywhere and a reader will try it before reading anything. It cost
+    /// Fit its gesture: fitting the board is something you do once when a run arrives, and searching it is
+    /// something you do all afternoon. Ctrl+Shift+F was not available either — that is the first failure.
+    /// </remarks>
+    public static readonly RoutedUICommand Search =
+        Make(nameof(Search), "Search this run", Key.F, ModifierKeys.Control);
+
+    /// <summary>
+    /// Fits the whole run on screen.
+    /// </summary>
+    /// <remarks>
+    /// Ctrl+0, which is reset-the-zoom in every browser and editor — and fitting the board is exactly that.
+    /// </remarks>
     public static readonly RoutedUICommand Fit =
-        Make(nameof(Fit), "Fit the board", Key.F, ModifierKeys.Control);
+        Make(nameof(Fit), "Fit the board", Key.D0, ModifierKeys.Control);
 
     public static readonly RoutedUICommand Summary =
         Make(nameof(Summary), "Summary", Key.I, ModifierKeys.Control);
@@ -79,7 +96,7 @@ public static class Shortcuts
     [
         Runs, Settings, ToggleWatch, CloseTopmost,
         Rerun, Stop, Continue, StepForward, Refresh,
-        Fit, Summary, FirstFailure
+        Search, Fit, Summary, FirstFailure
     ];
 
     /// <summary>
@@ -142,6 +159,7 @@ public static class Shortcuts
 
     private static string Name(Key key) => key switch
     {
+        Key.D0 => "0",
         Key.OemComma => ",",
         Key.OemPeriod => ".",
         Key.Escape => "Esc",

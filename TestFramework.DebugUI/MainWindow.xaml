@@ -12,6 +12,7 @@
         xmlns:share="clr-namespace:TestFramework.DebugUI.Controls.Share"
         xmlns:annotate="clr-namespace:TestFramework.DebugUI.Controls.Annotate"
         xmlns:feed="clr-namespace:TestFramework.DebugUI.Controls.Feed"
+        xmlns:search="clr-namespace:TestFramework.DebugUI.Controls.Search"
         mc:Ignorable="d"
         Title="TestFrameworkDebugger" Height="800" Width="1400" WindowStyle="None" Background="#01000000"
         MinHeight="650" MinWidth="1100" AllowsTransparency="True"
@@ -187,7 +188,11 @@
             <Grid Grid.Row="1">
                 <board:UC_Board x:Name="ucBoard"/>
 
-                <runs:UC_RunList HorizontalAlignment="Left" VerticalAlignment="Top" Width="290" MaxHeight="300"/>
+                <!-- Project, class, test, then the executions of it. Taller than the flat list it replaced,
+                     because a tree needs the room and because this is the surface the whole journal exists
+                     for. Its root row opens the runs page, which is the half that needs the width. -->
+                <runs:UC_Runs x:Name="ucRuns" HorizontalAlignment="Left" VerticalAlignment="Top"
+                              Width="300" MaxHeight="460"/>
 
                 <detail:UC_ValueRail x:Name="ucValues" HorizontalAlignment="Left" VerticalAlignment="Bottom"
                                      Width="290" MaxHeight="360"/>
@@ -215,6 +220,14 @@
                      reachable, so what it opens has to be able to cover whatever page is up. -->
                 <feed:UC_Feed x:Name="ucFeed" HorizontalAlignment="Right" VerticalAlignment="Top"
                               Panel.ZIndex="5" Visibility="Collapsed"/>
+
+                <!--
+                    Dropped from the top of the canvas, the way a find bar does everywhere. Above the pages
+                    as well as the board: searching is asked for while looking at something, and the answer
+                    has to be readable without first putting away whatever was being looked at.
+                -->
+                <search:UC_Search x:Name="ucSearch" HorizontalAlignment="Center" VerticalAlignment="Top"
+                                  Panel.ZIndex="5" Visibility="Collapsed"/>
 
                 <!-- Where the window opens. Which run to look at is the question you have before you
                      have any question about a run, so it is answered first and covers everything. -->

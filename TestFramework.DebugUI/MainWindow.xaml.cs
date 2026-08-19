@@ -68,7 +68,17 @@ public partial class MainWindow : Window
         {
             // Every step asks before it runs, so this is consulted constantly. It answers from the
             // breakpoints the user has set, and with none set nothing is ever held.
-            PauseAtBreakpoint = Breakpoints.ShouldPause
+            PauseAtBreakpoint = Breakpoints.ShouldPause,
+
+            // A run cannot be paused at the moment a step fails — a step is only ever asked before it
+            // starts — so the failure arms a stop at whatever comes next. After a failure that is the
+            // first step of the following stage, which is normally teardown: the run holds there with
+            // everything the test built still standing, instead of tearing it down and finishing.
+            StepEndedBadly = notice =>
+            {
+                if (Breakpoints.BreakOnFailure)
+                    Breakpoints.StepOnce(notice.SessionId);
+            }
         };
 
         // A crash must not take the window down. This tool exists to show things going wrong, and
@@ -110,6 +120,10 @@ public partial class MainWindow : Window
         // under the reader because a test started elsewhere would be the tool moving on its own.
         ucHome.Closed += () => ucHome.Visibility = Visibility.Collapsed;
 
+        // The rail answers "which run"; the page answers "how is everything doing". Its root row is the way
+        // across, because the whole journal is what the page is about.
+        ucRuns.OverviewRequested += ShowHome;
+
         // A halt is the one exception. The step that stopped the run is marked on the board, the buttons
         // that answer it are in the title bar, and a run held up is waiting on the reader rather than
         // merely informing them — so this gets out of the way rather than leaving the mark behind a page.
@@ -126,6 +140,7 @@ public partial class MainWindow : Window
         // Read before the window is shown, so restoring geometry does not visibly move it.
         saved = settings.Load();
         Breakpoints.Restore(saved.Breakpoints);
+        Breakpoints.BreakOnFailure = saved.BreakOnFailure;
         ApplyPlacement(saved.Window);
 
         // The step panel's width is the reader's, and it is theirs on the next start too. Written when the
@@ -140,6 +155,10 @@ public partial class MainWindow : Window
         Breakpoints.Changed += SaveBreakpoints;
 
         ucSettings.Closed += () => ucSettings.Visibility = Visibility.Collapsed;
+
+        // A value found by searching opens where a value opened from the rail does. The bar stays up, so a
+        // reader can work through several hits without retyping the query.
+        ucSearch.Opened += (key, isArtifact) => ucValueInspector.Show(key, isArtifact);
 
         // The bell reports what is unread and how bad it is; the panel it opens is only the list.
         ucFeed.Closed += () => ShowNotificationState();
@@ -169,6 +188,14 @@ public partial class MainWindow : Window
                 notifier.Settings = watch;
 
             ApplyWatchMode(watch.Enabled, announce: false);
+        };
+
+        // Held in the static so the reader thread can consult it without a dispatch, and in the file so a
+        // person who works this way finds it still armed next time.
+        ucSettings.BreakOnFailureChanged += value =>
+        {
+            Breakpoints.BreakOnFailure = value;
+            Persist(saved with { BreakOnFailure = value });
         };
 
         BindShortcuts();
@@ -231,7 +258,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        ucSettings.Show(saved.Watch, settings.FilePath);
+        ucSettings.Show(saved.Watch, settings.FilePath, saved.BreakOnFailure);
     }
 
     /// <summary>What each shortcut runs.</summary>
@@ -268,6 +295,7 @@ public partial class MainWindow : Window
         Bind(Shortcuts.StepForward, () => _ = Controls.Shell.UC_RunBar.StepAsync());
         Bind(Shortcuts.Refresh, Shell.RefreshRecordedRuns);
 
+        Bind(Shortcuts.Search, ShowSearch);
         Bind(Shortcuts.Fit, ucBoard.FitToWindow);
         Bind(Shortcuts.Summary, ucBoard.RequestSummary);
         Bind(Shortcuts.FirstFailure, ucBoard.GoToFirstFailure);
@@ -315,6 +343,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (ucSearch.IsOpen)
+        {
+            ucSearch.Close();
+            return;
+        }
+
         if (ucSettings.Visibility == Visibility.Visible)
         {
             ucSettings.Visibility = Visibility.Collapsed;
@@ -347,6 +381,19 @@ public partial class MainWindow : Window
 
         if (ucHome.Visibility == Visibility.Visible)
             ucHome.Visibility = Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// Opens the search bar over the run.
+    /// </summary>
+    /// <remarks>
+    /// The runs page is put away first. Someone searching a run has decided which run they are looking at, and
+    /// leaving the picker covering the board would mean every result opened something they could not see.
+    /// </remarks>
+    private void ShowSearch()
+    {
+        ucHome.Visibility = Visibility.Collapsed;
+        ucSearch.Open();
     }
 
     private void btWatch_Click(object sender, RoutedEventArgs e)
@@ -391,7 +438,7 @@ public partial class MainWindow : Window
         ShowWatchState(enabled);
 
         if (ucSettings.Visibility == Visibility.Visible)
-            ucSettings.Show(saved.Watch, settings.FilePath);
+            ucSettings.Show(saved.Watch, settings.FilePath, saved.BreakOnFailure);
 
         if (announce && enabled)
         {

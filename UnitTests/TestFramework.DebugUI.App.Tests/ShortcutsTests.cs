@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Input;
 using TestFramework.DebugUI;
@@ -40,7 +40,8 @@ public class ShortcutsTests
     [InlineData(Key.F5, ModifierKeys.None, nameof(Shortcuts.Rerun))]
     [InlineData(Key.F5, ModifierKeys.Shift, nameof(Shortcuts.Stop))]
     [InlineData(Key.F5, ModifierKeys.Control, nameof(Shortcuts.Refresh))]
-    [InlineData(Key.F, ModifierKeys.Control, nameof(Shortcuts.Fit))]
+    [InlineData(Key.F, ModifierKeys.Control, nameof(Shortcuts.Search))]
+    [InlineData(Key.D0, ModifierKeys.Control, nameof(Shortcuts.Fit))]
     [InlineData(Key.F, ModifierKeys.Control | ModifierKeys.Shift, nameof(Shortcuts.FirstFailure))]
     [InlineData(Key.W, ModifierKeys.Control | ModifierKeys.Shift, nameof(Shortcuts.ToggleWatch))]
     [InlineData(Key.OemComma, ModifierKeys.Control, nameof(Shortcuts.Settings))]
@@ -61,6 +62,7 @@ public class ShortcutsTests
     [InlineData(Key.F5, ModifierKeys.Alt)]
     [InlineData(Key.F5, ModifierKeys.Control | ModifierKeys.Shift)]
     [InlineData(Key.F, ModifierKeys.None)]
+    [InlineData(Key.D0, ModifierKeys.None)]
     [InlineData(Key.W, ModifierKeys.Control)]
     [InlineData(Key.Escape, ModifierKeys.Control)]
     public void AnUnclaimedCombinationMatchesNothing(Key key, ModifierKeys modifiers)
@@ -83,6 +85,7 @@ public class ShortcutsTests
     [Fact]
     public void ATooltipCarriesItsShortcut()
     {
-        Assert.Equal("Fit the board  (Ctrl+F)", Shortcuts.Describe("Fit the board", Shortcuts.Fit));
+        Assert.Equal("Fit the board  (Ctrl+0)", Shortcuts.Describe("Fit the board", Shortcuts.Fit));
+        Assert.Equal("Search this run  (Ctrl+F)", Shortcuts.Describe("Search this run", Shortcuts.Search));
     }
 }

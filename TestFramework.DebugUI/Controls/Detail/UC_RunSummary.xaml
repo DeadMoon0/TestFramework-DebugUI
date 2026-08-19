@@ -55,6 +55,17 @@
                     <TextBlock x:Name="tbChecksLabel" Style="{StaticResource PanelHeading}" Margin="0 12 0 4"
                                Text="CHECKS THAT DID NOT HOLD" Visibility="Collapsed"/>
                     <StackPanel x:Name="spChecks"/>
+
+                    <!--
+                        Where the run's time went, against the last run of this test that passed. Below the
+                        failures because a broken run is read for what broke; for a run that passed and took
+                        four times as long, this is the only section with anything to say.
+                    -->
+                    <TextBlock x:Name="tbTimingLabel" Style="{StaticResource PanelHeading}" Margin="0 12 0 4"
+                               Text="WHERE THE TIME WENT" Visibility="Collapsed"/>
+                    <TextBlock x:Name="tbTimingHeadline" Style="{StaticResource BodyText}" TextWrapping="Wrap"
+                               Margin="0 0 0 6" Visibility="Collapsed"/>
+                    <StackPanel x:Name="spTiming"/>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

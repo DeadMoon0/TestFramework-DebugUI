@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -112,7 +112,7 @@ public class RunProjectionAgainstRealRunTests(JournalFixture fixture)
 
         // Values set during the run arrived with real display text, not defaults.
         Assert.Contains("orderId", graph.Variables.Keys);
-        Assert.Equal("42", graph.Variables["orderId"].DisplayText);
+        Assert.Equal("42", graph.Variables["orderId"].Description.Summary);
         Assert.False(string.IsNullOrEmpty(graph.Variables["orderId"].SchemaKey));
 
         Assert.True(graph.IsFinished);

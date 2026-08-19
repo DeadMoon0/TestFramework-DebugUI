@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -59,7 +59,7 @@ public static class LogLines
     {
         ArgumentNullException.ThrowIfNull(entry);
 
-        return $"{Time(entry)}  {Tag(entry.Level)}  {entry.Message}";
+        return $"{Time(entry)}  {Tag(entry.Level)}  {entry.Render()}";
     }
 
     /// <summary>A whole log as text, ready for the clipboard.</summary>

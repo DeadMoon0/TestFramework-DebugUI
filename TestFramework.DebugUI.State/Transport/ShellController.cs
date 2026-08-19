@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
@@ -105,6 +105,42 @@ public sealed class ShellController : IDisposable
         store.Dispatch(RunActions.SetTransportStatus, TransportStatus.Listening);
 
         RefreshRecordedRuns();
+        ReportRecordingsFromOtherBuilds();
+    }
+
+    /// <summary>
+    /// Says once, at startup, that some recordings on disk are not this build's to read.
+    /// </summary>
+    /// <remarks>
+    /// The debug protocol is versioned and this build reads one version of it. A recording from another is
+    /// left out of the picker rather than opened as an empty board — and saying so once is the difference
+    /// between a deliberate omission and a tool that appears to have lost somebody's runs. The files are not
+    /// touched.
+    /// </remarks>
+    private void ReportRecordingsFromOtherBuilds()
+    {
+        if (runsDirectory is null)
+            return;
+
+        try
+        {
+            int count = JournalRunEventSource.CountFromOtherBuilds(runsDirectory);
+
+            if (count == 0)
+                return;
+
+            Report(Notice(
+                FeedSeverity.Info,
+                count == 1
+                    ? "One recorded run was made by another build and is not listed."
+                    : $"{count} recorded runs were made by another build and are not listed.",
+                $"This build reads debug protocol v{DebugProtocol.Version}. The recordings are still in {runsDirectory}.",
+                FeedSource.Journal));
+        }
+        catch (Exception e)
+        {
+            Report(Notice(FeedSeverity.Error, "Recorded runs could not be counted.", e.Message, FeedSource.Journal));
+        }
     }
 
     /// <summary>

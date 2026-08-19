@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using TestFramework.Core.Artifacts;
 using TestFramework.Core.Debugger;
@@ -72,7 +72,7 @@ public class RunProjectionTests
         RunGraph graph = RunProjection.ApplyInit(CreateInit());
 
         ValueNode variable = graph.Variables["orderId"];
-        Assert.Equal("42", variable.DisplayText);
+        Assert.Equal("42", variable.Description.Summary);
         Assert.Equal("tf.variable:System.Int32", variable.SchemaKey);
 
         // The schema key, not the CLR type, is what selects the artifact's icon and inspector.
@@ -108,12 +108,8 @@ public class RunProjectionTests
 
     private static PipeInitTimelineRunSignal CreateInit()
     {
-        StepIOContract producerContract = new();
-        producerContract.Outputs.Add(new StepIOEntry("orderId", StepIOKind.Variable));
-
-        StepIOContract consumerContract = new();
-        consumerContract.Inputs.Add(new StepIOEntry("orderId", StepIOKind.Variable));
-        consumerContract.Outputs.Add(new StepIOEntry("receipt", StepIOKind.Artifact));
+        DebugStepIo orderId = new() { Key = "orderId", Kind = StepIOKind.Variable };
+        DebugStepIo receipt = new() { Key = "receipt", Kind = StepIOKind.Artifact };
 
         return new PipeInitTimelineRunSignal
         {
@@ -130,15 +126,15 @@ public class RunProjectionTests
                         Description = "main",
                         Steps =
                         [
-                            CreateStep("Produce", producerContract),
-                            CreateStep("Consume", consumerContract)
+                            CreateStep("Produce") with { Outputs = [orderId] },
+                            CreateStep("Consume") with { Inputs = [orderId], Outputs = [receipt] }
                         ]
                     },
                     new DebugStageState
                     {
                         Name = "Cleanup Stage",
                         Description = "cleanup",
-                        Steps = [CreateStep("Tidy", new StepIOContract())]
+                        Steps = [CreateStep("Tidy")]
                     }
                 ],
                 Variables = new Dictionary<VariableIdentifier, DebugValue>
@@ -150,7 +146,7 @@ public class RunProjectionTests
                         {
                             Kind = DebugValueKind.Variable,
                             TypeName = "System.Int32",
-                            DisplayText = "42",
+                            Description = new DebugValueDescription { Summary = "42" },
                             SchemaKey = "tf.variable:System.Int32"
                         }
                     }
@@ -164,7 +160,7 @@ public class RunProjectionTests
                         {
                             Kind = DebugValueKind.Artifact,
                             TypeName = "SqlRow",
-                            DisplayText = "receipt row",
+                            Description = new DebugValueDescription { Summary = "receipt row" },
                             SchemaKey = "tf.artifact.sql.row"
                         }
                     }
@@ -173,17 +169,12 @@ public class RunProjectionTests
         };
     }
 
-    private static DebugStepState CreateStep(string name, StepIOContract contract) => new()
+    private static DebugStepState CreateStep(string name) => new()
     {
         Name = name,
         Description = name,
         DoesReturn = false,
-        ErrorHandlingOptions = new ErrorHandlingOptions(),
-        ExecutionOptions = new ExecutionOptions(),
-        IOContract = contract,
         Phase = StepExecutionPhase.Act,
-        LabelOptions = new LabelOptions(),
-        RetryOptions = new RetryOptions(),
-        TimeOutOptions = new TimeOutOptions()
+        Parallelization = StepParallelizationMode.Parallelizable
     };
 }

@@ -358,7 +358,7 @@ public partial class UC_ValueInspector : UserControl
         if (value is null)
             return;
 
-        Render(value.Key, value.SchemaKey, value.DisplayText, value.Description, []);
+        Render(value.Key, value.SchemaKey, value.Description, []);
     }
 
     private void ShowArtifact(ArtifactNode? artifact)
@@ -366,13 +366,13 @@ public partial class UC_ValueInspector : UserControl
         if (artifact is null)
             return;
 
-        Render(artifact.Key, artifact.SchemaKey, artifact.DisplayText, artifact.Description, artifact.Versions);
+        Render(artifact.Key, artifact.SchemaKey, artifact.Description, artifact.Versions);
     }
 
-    private void Render(string key, string schemaKey, string displayText, ValueDescription described, ImmutableList<string> versions)
+    private void Render(string key, string schemaKey, ValueDescription described, ImmutableList<string> versions)
     {
         tbKey.Text = key;
-        tbSummary.Text = ValueInspection.Headline(described, displayText);
+        tbSummary.Text = described.Summary;
 
         ValueIcon icon = ValueIcons.For(schemaKey);
         pIcon.Data = Geometry.Parse(icon.Glyph);
@@ -391,7 +391,7 @@ public partial class UC_ValueInspector : UserControl
         gFacts.RowDefinitions.Clear();
 
         foreach (ValueFact fact in ValueInspection.FactsOf(described, schemaKey))
-            AddFact(fact.Name, fact.Value);
+            AddFact(fact.Name, fact.Text);
     }
 
     private void AddFact(string name, string value)

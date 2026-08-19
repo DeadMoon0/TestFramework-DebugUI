@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Linq;
@@ -94,7 +94,7 @@ public class ValueInspectionTests
             },
             "tf.artifact.sql.row");
 
-        Assert.EndsWith(" (cut)", facts[0].Value, StringComparison.Ordinal);
+        Assert.EndsWith(" (cut)", facts[0].Text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -103,20 +103,6 @@ public class ValueInspectionTests
         ImmutableList<ValueFact> facts = ValueInspection.FactsOf(new ValueDescription { Summary = "42" }, string.Empty);
 
         Assert.Empty(facts);
-    }
-
-    [Fact]
-    public void TheHeadlineFallsBackToTheOlderDisplayTextWhenThereIsNoSummary()
-    {
-        // A value replayed from a recording made before values described themselves. The fallback is
-        // the difference between an old run reading normally and reading as a blank panel.
-        Assert.Equal("42", ValueInspection.Headline(ValueDescription.Empty, "42"));
-    }
-
-    [Fact]
-    public void TheHeadlinePrefersTheSummaryWhenThereIsOne()
-    {
-        Assert.Equal("[412 items]", ValueInspection.Headline(new ValueDescription { Summary = "[412 items]" }, "ignored"));
     }
 
     [Fact]

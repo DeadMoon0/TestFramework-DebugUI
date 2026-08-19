@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Threading;
@@ -172,12 +172,7 @@ public class RunIngestServiceTests : IDisposable
         Name = "A",
         Description = "A",
         DoesReturn = false,
-        ErrorHandlingOptions = new ErrorHandlingOptions(),
-        ExecutionOptions = new ExecutionOptions(),
-        IOContract = new StepIOContract(),
         Phase = StepExecutionPhase.Act,
-        LabelOptions = new LabelOptions(),
-        RetryOptions = new RetryOptions(),
-        TimeOutOptions = new TimeOutOptions()
+        Parallelization = StepParallelizationMode.Parallelizable
     };
 }

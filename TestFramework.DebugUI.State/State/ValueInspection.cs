@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Globalization;
@@ -26,21 +26,6 @@ namespace TestFramework.DebugUI.State;
 public static class ValueInspection
 {
     /// <summary>
-    /// The one line at the top: the summary, or the older display text when there is no summary.
-    /// </summary>
-    /// <remarks>
-    /// A value replayed from a recording made before values described themselves has a display text
-    /// and nothing else. Falling back to it is the difference between an old run reading normally and
-    /// reading as a blank panel.
-    /// </remarks>
-    public static string Headline(ValueDescription described, string displayText)
-    {
-        ArgumentNullException.ThrowIfNull(described);
-
-        return string.IsNullOrWhiteSpace(described.Summary) ? displayText : described.Summary;
-    }
-
-    /// <summary>
     /// The facts to lay out, in the order they are worth reading.
     /// </summary>
     /// <remarks>
@@ -59,7 +44,7 @@ public static class ValueInspection
         {
             // Restated rather than shown bare: a fact cut to fit and a fact that happens to end in an
             // ellipsis look identical, and only one of them has more behind it.
-            facts.Add(fact.IsTruncated ? fact with { Value = fact.Value + " (cut)" } : fact);
+            facts.Add(fact.IsTruncated ? fact with { Value = fact.Text + " (cut)" } : fact);
         }
 
         foreach (string badge in described.Badges)

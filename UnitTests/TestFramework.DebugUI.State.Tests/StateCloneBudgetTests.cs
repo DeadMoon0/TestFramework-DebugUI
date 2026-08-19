@@ -1,4 +1,4 @@
-using Axiom.State;
+﻿using Axiom.State;
 using Axiom.State.Actions;
 using Axiom.State.Reducers;
 using System;
@@ -158,7 +158,7 @@ public class StateCloneBudgetTests(ITestOutputHelper output) : IDisposable
             {
                 ImmutableList<LogNode>.Builder logBuilder = ImmutableList.CreateBuilder<LogNode>();
                 for (int l = 0; l < logsPerStep; l++)
-                    logBuilder.Add(new LogNode { Message = $"log {l}", Level = DebugLogLevel.Information });
+                    logBuilder.Add(new LogNode { Template = $"log {l}", Level = DebugLogLevel.Information });
 
                 stepBuilder.Add(new StepNode
                 {

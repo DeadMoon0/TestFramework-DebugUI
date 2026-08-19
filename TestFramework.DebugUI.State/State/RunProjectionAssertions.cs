@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using TestFramework.Core.Debugger;
+using System.Linq;
 
 namespace TestFramework.DebugUI.State;
 
@@ -31,12 +32,11 @@ public static partial class RunProjection
         AssertionNode node = new()
         {
             OccurredAtUtc = entry.OccurredAtUtc,
-            Display = entry.AssertionDisplay,
+            AssertionName = entry.AssertionName,
+            Arguments = [.. entry.Arguments.Select(argument => new LogFact { Name = argument.Name, Value = argument.Value })],
             Target = entry.Target,
             Succeeded = entry.Succeeded,
-            Expected = entry.Expected,
-            Actual = entry.Actual,
-            FailureReason = entry.FailureReason,
+            Actual = ValueDescription.From(entry.Actual),
             Scope = entry.AssertionScope
         };
 

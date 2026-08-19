@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
@@ -91,6 +91,31 @@ public class JournalRunEventSourceTests(JournalFixture fixture)
         ImmutableList<AvailableRun> runs = JournalRunEventSource.ListRuns(RunsDirectory);
 
         Assert.DoesNotContain(runs, run => run.SessionId == "corrupt");
+    }
+
+    [Fact]
+    public void ARecordingFromAnotherProtocolVersionIsNotOfferedButIsCounted()
+    {
+        // The alternative is worse than hiding it: every event in it fails to decode, so the run opens as a
+        // board with a name and nothing on it, and nothing says why.
+        Directory.CreateDirectory(RunsDirectory);
+
+        File.WriteAllText(
+            Path.Combine(RunsDirectory, "20200101-000000000-fromanotherbuild.meta.json"),
+            $$"""
+            {
+              "ProtocolVersion": {{DebugProtocol.Version - 1}},
+              "SessionId": "fromanotherbuild",
+              "Name": "OlderRun",
+              "StartedAtUtc": "2020-01-01T00:00:00+00:00",
+              "JournalFileName": "20200101-000000000-fromanotherbuild.ndjson",
+              "ProjectPath": "old.csproj",
+              "Outcome": 1
+            }
+            """);
+
+        Assert.DoesNotContain(JournalRunEventSource.ListRuns(RunsDirectory), run => run.SessionId == "fromanotherbuild");
+        Assert.True(JournalRunEventSource.CountFromOtherBuilds(RunsDirectory) >= 1);
     }
 
     [Fact]

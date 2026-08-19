@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -336,12 +336,7 @@ public class RunProgressTests : IDisposable
         Name = name,
         Description = name,
         DoesReturn = false,
-        ErrorHandlingOptions = new ErrorHandlingOptions(),
-        ExecutionOptions = new ExecutionOptions(),
-        IOContract = new StepIOContract(),
         Phase = StepExecutionPhase.Act,
-        LabelOptions = new LabelOptions(),
-        RetryOptions = new RetryOptions(),
-        TimeOutOptions = new TimeOutOptions()
+        Parallelization = StepParallelizationMode.Parallelizable
     };
 }

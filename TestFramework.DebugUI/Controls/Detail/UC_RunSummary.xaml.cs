@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Linq;
 using System.Globalization;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
@@ -35,6 +37,12 @@ public partial class UC_RunSummary : UserControl
         subscriptions.Add(StateStore<MainState>.Default
             .Bind(state => RunTally.Of(state.ActiveRun))
             .Subscribe(Show));
+
+        // Bound separately from the tally: the tally counts checks, and this page also has room to name the
+        // ones that did not hold.
+        subscriptions.Add(StateStore<MainState>.Default
+            .Bind(state => state.ActiveRun.Assertions)
+            .Subscribe(ShowChecks));
 
         Unloaded += (_, _) => subscriptions.Dispose();
     }
@@ -143,6 +151,52 @@ public partial class UC_RunSummary : UserControl
             row.MouseLeftButtonUp += (_, _) => MainWindow.Shell.SelectStep(stage, stepId);
 
             spFailures.Children.Add(row);
+        }
+    }
+
+    /// <summary>
+    /// Names the checks that did not hold.
+    /// </summary>
+    /// <remarks>
+    /// The check as it was written, then the value that was actually there. Both come from the run as facts —
+    /// the name with its typed arguments, and the observed value described — so this is a rendering of data
+    /// rather than a sentence the framework assembled and this page reprinted.
+    /// </remarks>
+    private void ShowChecks(ImmutableList<AssertionNode> assertions)
+    {
+        spChecks.Children.Clear();
+
+        AssertionNode[] broken = [.. assertions.Where(assertion => !assertion.Succeeded)];
+
+        tbChecksLabel.Visibility = broken.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+
+        foreach (AssertionNode assertion in broken)
+        {
+            TextBlock heading = new()
+            {
+                Text = $"{assertion.Target} · {assertion.Render()}",
+                Foreground = (Brush)FindResource("TextPrimary"),
+                FontSize = 12,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+
+            TextBlock detail = new()
+            {
+                Text = $"was {assertion.Actual.Summary}",
+                Foreground = (Brush)FindResource("TextSecondary"),
+                FontSize = 11,
+                Margin = new Thickness(0, 2, 0, 0),
+                TextWrapping = TextWrapping.Wrap
+            };
+
+            spChecks.Children.Add(new Border
+            {
+                CornerRadius = new CornerRadius(4),
+                Background = (Brush)FindResource("SurfaceRaised"),
+                Padding = new Thickness(8, 6, 8, 6),
+                Margin = new Thickness(0, 0, 0, 4),
+                Child = new StackPanel { Children = { heading, detail } }
+            });
         }
     }
 

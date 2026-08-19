@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 using TestFramework.Core.Debugger;
@@ -79,31 +79,15 @@ public class ValueDescriptionProjectionTests
     }
 
     [Fact]
-    public void AnArtifactReadsItsLifecycleFromTheFieldsRatherThanTheJsonPayload()
+    public void AnArtifactReadsItsLifecycleFromTheFieldsStatingIt()
     {
         RunGraph graph = RunProjection.ApplyValueUpdate(new RunGraph(), Artifact(
-            lifecycle: new DebugValueLifecycle { State = "Cleaned", Versions = ["v1", "v2"], CurrentVersion = "v2" },
-            core: null));
+            new DebugValueLifecycle { State = "Cleaned", Versions = ["v1", "v2"], CurrentVersion = "v2" }));
 
         ArtifactNode artifact = graph.Artifacts["receipt"];
 
         Assert.Equal("Cleaned", artifact.State);
         Assert.Equal(["v1", "v2"], artifact.Versions);
-    }
-
-    [Fact]
-    public void AnArtifactFromAnOlderJournalStillReadsItsLifecycleFromTheJsonPayload()
-    {
-        // Recordings made before Core stated these as fields have to keep replaying, and the fallback
-        // is the only thing standing between them and an artifact with no state and no history.
-        RunGraph graph = RunProjection.ApplyValueUpdate(new RunGraph(), Artifact(
-            lifecycle: null,
-            core: new JObject { ["state"] = "Setup", ["versions"] = new JArray("v1") }));
-
-        ArtifactNode artifact = graph.Artifacts["receipt"];
-
-        Assert.Equal("Setup", artifact.State);
-        Assert.Equal(["v1"], artifact.Versions);
     }
 
     [Fact]
@@ -113,13 +97,13 @@ public class ValueDescriptionProjectionTests
         // would make every update look like a change to everything watching it.
         DebugValueLifecycle lifecycle = new() { State = "Setup", Versions = ["v1", "v2"], CurrentVersion = "v2" };
 
-        RunGraph first = RunProjection.ApplyValueUpdate(new RunGraph(), Artifact(lifecycle, core: null));
-        RunGraph second = RunProjection.ApplyValueUpdate(first, Artifact(lifecycle, core: null));
+        RunGraph first = RunProjection.ApplyValueUpdate(new RunGraph(), Artifact(lifecycle));
+        RunGraph second = RunProjection.ApplyValueUpdate(first, Artifact(lifecycle));
 
         Assert.Same(first.Artifacts["receipt"].Versions, second.Artifacts["receipt"].Versions);
     }
 
-    private static PipeValueUpdateSignal Artifact(DebugValueLifecycle? lifecycle, JObject? core) => new()
+    private static PipeValueUpdateSignal Artifact(DebugValueLifecycle? lifecycle) => new()
     {
         SessionId = "session-1",
         Name = "receipt",
@@ -128,10 +112,9 @@ public class ValueDescriptionProjectionTests
         {
             Kind = DebugValueKind.Artifact,
             TypeName = "FileArtifactDescriber",
-            DisplayText = "receipt",
+
             SchemaKey = DebugValueSchemaKeys.File,
-            Lifecycle = lifecycle,
-            Core = core
+            Lifecycle = lifecycle
         }
     };
 
@@ -162,7 +145,7 @@ public class ValueDescriptionProjectionTests
         {
             Kind = DebugValueKind.Variable,
             TypeName = "System.Collections.Generic.List`1[System.Int32]",
-            DisplayText = description.Summary,
+
             Description = description,
             SchemaKey = DebugValueSchemaKeys.Of(description.Shape)
         }

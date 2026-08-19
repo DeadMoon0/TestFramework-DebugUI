@@ -768,7 +768,7 @@ public partial class UC_Board : UserControl
     private static string LastLine(StepNode step)
     {
         LogNode? last = step.Attempts.LastOrDefault()?.Logs.LastOrDefault();
-        return last is null ? "> …" : "> " + last.Message;
+        return last is null ? "> …" : "> " + last.Render();
     }
 
     private Brush BrushFor(StepNode step)

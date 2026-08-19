@@ -117,7 +117,7 @@ public partial class UC_ValueItem : UserControl
         if (value is null)
             return;
 
-        Show(value.Key, value.DisplayText, value.SchemaKey, value.TypeName, value.Description, []);
+        Show(value.Key, value.SchemaKey, value.TypeName, value.Description, []);
     }
 
     private void ShowArtifact(ArtifactNode? artifact)
@@ -125,18 +125,18 @@ public partial class UC_ValueItem : UserControl
         if (artifact is null)
             return;
 
-        Show(artifact.Key, artifact.DisplayText, artifact.SchemaKey, artifact.SchemaKey, artifact.Description, artifact.Versions);
+        Show(artifact.Key, artifact.SchemaKey, artifact.SchemaKey, artifact.Description, artifact.Versions);
     }
 
-    private void Show(string key, string displayText, string schemaKey, string tooltip, ValueDescription described, ImmutableList<string> versions)
+    private void Show(string key, string schemaKey, string tooltip, ValueDescription described, ImmutableList<string> versions)
     {
         tbKey.Text = key;
 
-        // The summary when there is one, and the old single line when replaying a journal recorded
-        // before descriptions existed. Neither case should leave the row blank.
-        tbSummary.Text = string.IsNullOrWhiteSpace(described.Summary) ? displayText : described.Summary;
+        // The value's own one-line account of itself. There used to be a second one beside it, rendered by the
+        // framework, and this row preferred whichever was not empty.
+        tbSummary.Text = described.Summary;
 
-        ToolTip = string.IsNullOrWhiteSpace(tooltip) ? displayText : tooltip;
+        ToolTip = string.IsNullOrWhiteSpace(tooltip) ? described.Summary : tooltip;
 
         ValueIcon icon = ValueIcons.For(schemaKey);
         pIcon.Data = Geometry.Parse(icon.Glyph);

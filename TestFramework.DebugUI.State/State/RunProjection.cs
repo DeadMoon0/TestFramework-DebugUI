@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using TestFramework.Core.Artifacts;
@@ -102,7 +102,7 @@ public static partial class RunProjection
         {
             StepId = stepId,
             Name = step.Name,
-            Label = step.LabelOptions?.Label,
+            Label = step.Label,
             Description = step.Description,
 
             // Taken from the run rather than worked out here: the planner's answer depends on things
@@ -111,19 +111,30 @@ public static partial class RunProjection
 
             // The declared contract, not observed values: this is what lets the board draw edges
             // before a run produces anything, and what answers "why did this run in this order".
-            Inputs = ProjectContract(step.IOContract?.Inputs),
-            Outputs = ProjectContract(step.IOContract?.Outputs)
+            Inputs = ProjectContract(step.Inputs),
+            Outputs = ProjectContract(step.Outputs),
+
+            // What the step is allowed to do, which the run has always known and only now says.
+            Policy = new StepPolicy
+            {
+                MaxRetries = step.MaxRetries,
+                MaxRetriesVariable = step.MaxRetriesVariable,
+                TimeOut = step.TimeOut,
+                TimeOutVariable = step.TimeOutVariable,
+                IgnoredExceptions = [.. step.IgnoredExceptions],
+                RunsAlone = step.Parallelization == StepParallelizationMode.DoNotParallelize
+            }
         };
     }
 
-    private static ImmutableList<StepIO> ProjectContract(IEnumerable<StepIOEntry>? entries)
+    private static ImmutableList<StepIO> ProjectContract(IEnumerable<DebugStepIo>? entries)
     {
         if (entries is null)
             return ImmutableList<StepIO>.Empty;
 
         ImmutableList<StepIO>.Builder declared = ImmutableList.CreateBuilder<StepIO>();
 
-        foreach (StepIOEntry entry in entries)
+        foreach (DebugStepIo entry in entries)
         {
             declared.Add(new StepIO
             {
@@ -147,7 +158,6 @@ public static partial class RunProjection
             projected[entry.Key.Identifier] = new ValueNode
             {
                 Key = entry.Key.Identifier,
-                DisplayText = entry.Value.Envelope.DisplayText,
                 TypeName = entry.Value.Envelope.TypeName,
                 SchemaKey = entry.Value.Envelope.SchemaKey,
                 Description = ValueDescription.From(entry.Value.Envelope.Description)
@@ -166,7 +176,6 @@ public static partial class RunProjection
             projected[entry.Key.Identifier] = new ArtifactNode
             {
                 Key = entry.Key.Identifier,
-                DisplayText = entry.Value.Envelope.DisplayText,
                 SchemaKey = entry.Value.Envelope.SchemaKey,
                 Description = ValueDescription.From(entry.Value.Envelope.Description)
             };

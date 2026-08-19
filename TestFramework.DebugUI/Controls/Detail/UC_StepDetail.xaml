@@ -68,6 +68,12 @@
                             </StackPanel>
                         </Border>
 
+                        <!-- What the step is allowed to do. Stated by the run since protocol 4; before that the
+                             numbers were not on the wire at all, so this panel could not have said any of it. -->
+                        <TextBlock x:Name="tbPolicyLabel" Style="{StaticResource PanelHeading}" Margin="0 14 0 3"
+                                   Text="POLICY" Visibility="Collapsed"/>
+                        <WrapPanel x:Name="wpPolicy" Margin="0 0 0 2"/>
+
                         <TextBlock Style="{StaticResource PanelHeading}" Margin="0 14 0 3" Text="INPUTS"/>
                         <TextBlock x:Name="tbInputs" Style="{StaticResource MutedText}"/>
 

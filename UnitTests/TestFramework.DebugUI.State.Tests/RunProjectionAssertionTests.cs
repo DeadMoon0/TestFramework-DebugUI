@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.State;
@@ -18,22 +18,27 @@ public class RunProjectionAssertionTests
         AssertionNode assertion = Assert.Single(graph.Assertions);
         Assert.True(assertion.Succeeded);
         Assert.Equal("user", assertion.Target);
-        Assert.Equal("Ada", assertion.Expected);
-        Assert.Equal("Ada", assertion.Actual);
+
+        // The check and its argument, which is what "expected" was before it became a sentence.
+        Assert.Equal("Be", assertion.AssertionName);
+        Assert.Equal("Ada", Assert.Single(assertion.Arguments).Text);
+        Assert.Equal("Ada", assertion.Actual.Summary);
+        Assert.Equal("Be(Ada)", assertion.Render());
     }
 
     [Fact]
-    public void AFailingAssertionKeepsTheFrameworksExplanation()
+    public void AFailingAssertionKeepsWhatItExpectedAndWhatItFound()
     {
-        // Expected and actual say what differed; the reason says why that counts as a failure, which
-        // is not always obvious from the two values alone.
+        // Which is what the framework's explanation was assembled from. Keeping the two apart means a reader
+        // can compare them; the sentence about them could only be read.
         RunGraph graph = RunProjection.ApplyAssertion(
             new RunGraph(),
-            Assertion("user", succeeded: false, expected: "Ada", actual: "Grace", reason: "values are not equal"));
+            Assertion("user", succeeded: false, expected: "Ada", actual: "Grace"));
 
         AssertionNode assertion = Assert.Single(graph.Assertions);
         Assert.False(assertion.Succeeded);
-        Assert.Equal("values are not equal", assertion.FailureReason);
+        Assert.Equal("Ada", Assert.Single(assertion.Arguments).Text);
+        Assert.Equal("Grace", assertion.Actual.Summary);
     }
 
     [Fact]
@@ -106,11 +111,9 @@ public class RunProjectionAssertionTests
                 TargetKind = DebugAssertionTargetKind.Variable,
                 Target = target,
                 AssertionName = "Be",
-                AssertionDisplay = $"Be(\"{expected}\")",
+                Arguments = [DebugLogField.Of("expected", expected)],
                 Succeeded = succeeded,
-                Expected = expected,
-                Actual = actual,
-                FailureReason = reason,
+                Actual = new DebugValueDescription { Summary = actual, Shape = DebugValueShape.Text },
                 AssertionScope = scope
             }
         };

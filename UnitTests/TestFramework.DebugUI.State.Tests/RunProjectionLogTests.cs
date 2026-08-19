@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using TestFramework.Core.Artifacts;
 using TestFramework.Core.Debugger;
@@ -21,7 +21,7 @@ public class RunProjectionLogTests
         graph = RunProjection.ApplyLogEntry(graph, Log("hello", iteration: 1));
 
         LogNode line = Assert.Single(graph.Stages[0].Steps[0].Attempts[0].Logs);
-        Assert.Equal("hello", line.Message);
+        Assert.Equal("hello", line.Render());
     }
 
     [Fact]
@@ -36,8 +36,8 @@ public class RunProjectionLogTests
 
         StepNode step = graph.Stages[0].Steps[0];
         Assert.Equal(2, step.Attempts.Count);
-        Assert.Equal("first try", Assert.Single(step.Attempts[0].Logs).Message);
-        Assert.Equal("second try", Assert.Single(step.Attempts[1].Logs).Message);
+        Assert.Equal("first try", Assert.Single(step.Attempts[0].Logs).Render());
+        Assert.Equal("second try", Assert.Single(step.Attempts[1].Logs).Render());
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public class RunProjectionLogTests
             {
                 OccurredAtUtc = DateTimeOffset.UnixEpoch.AddSeconds(at),
                 Level = level,
-                Message = message,
+                Template = message,
                 Stage = stage,
                 StepId = stepId,
                 Iteration = iteration
@@ -165,12 +165,7 @@ public class RunProjectionLogTests
         Name = name,
         Description = name,
         DoesReturn = false,
-        ErrorHandlingOptions = new ErrorHandlingOptions(),
-        ExecutionOptions = new ExecutionOptions(),
-        IOContract = new StepIOContract(),
         Phase = StepExecutionPhase.Act,
-        LabelOptions = new LabelOptions(),
-        RetryOptions = new RetryOptions(),
-        TimeOutOptions = new TimeOutOptions()
+        Parallelization = StepParallelizationMode.Parallelizable
     };
 }

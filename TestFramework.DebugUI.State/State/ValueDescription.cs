@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using TestFramework.Core.Debugger;
+using Newtonsoft.Json.Linq;
 
 namespace TestFramework.DebugUI.State;
 
@@ -131,11 +132,31 @@ public sealed record ValueFact
     /// <summary>Gets the fact's name, such as <c>reference</c> or <c>length</c>.</summary>
     public required string Name { get; init; }
 
-    /// <summary>Gets the fact, rendered as text.</summary>
-    public required string Value { get; init; }
+    /// <summary>Gets the fact, typed as it stands.</summary>
+    public required JToken Value { get; init; }
+
+    /// <summary>Gets the fact as text, for a row that only has to print it.</summary>
+    public string Text => DebugJson.Text(Value);
 
     /// <summary>Gets whether the text was cut to fit, so a consumer can say so rather than imply it.</summary>
     public bool IsTruncated { get; init; }
+
+    /// <summary>
+    /// Compares the value by content.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="JToken"/> compares by reference, and two tokens deserialized from the same bytes are never
+    /// the same instance. Without this, every value update would look like a change and re-emit to every
+    /// binding watching it — the same trap the version list above is guarded against.
+    /// </remarks>
+    public bool Equals(ValueFact? other)
+        => other is not null
+           && string.Equals(Name, other.Name, StringComparison.Ordinal)
+           && IsTruncated == other.IsTruncated
+           && JToken.DeepEquals(Value, other.Value);
+
+    /// <inheritdoc />
+    public override int GetHashCode() => Name.GetHashCode(StringComparison.Ordinal);
 }
 
 /// <summary>A bounded look at a value's content.</summary>

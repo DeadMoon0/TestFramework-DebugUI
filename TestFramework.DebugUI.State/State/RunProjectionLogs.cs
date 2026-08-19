@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Immutable;
+using System.Linq;
 using TestFramework.Core.Debugger;
 
 namespace TestFramework.DebugUI.State;
@@ -55,7 +56,9 @@ public static partial class RunProjection
         {
             OccurredAtUtc = entry.OccurredAtUtc,
             Level = entry.Level,
-            Message = entry.Message
+            EventName = entry.EventName,
+            Template = entry.Template,
+            Facts = [.. entry.Fields.Select(field => new LogFact { Name = field.Name, Value = field.Value })]
         };
 
         if (IsDuplicate(attempt, line))
@@ -85,6 +88,7 @@ public static partial class RunProjection
 
         return last.OccurredAtUtc == line.OccurredAtUtc
             && last.Level == line.Level
-            && string.Equals(last.Message, line.Message, StringComparison.Ordinal);
+            && string.Equals(last.Template, line.Template, StringComparison.Ordinal)
+            && last.Facts.SequenceEqual(line.Facts);
     }
 }

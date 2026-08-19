@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using TestFramework.Core.Debugger;
 using TestFramework.Core.Steps.Options;
@@ -118,13 +118,8 @@ public class StepTimingTests
                         {
                             Name = "Work",
                             Description = string.Empty,
-                            RetryOptions = new RetryOptions(),
-                            ErrorHandlingOptions = new ErrorHandlingOptions(),
-                            TimeOutOptions = new TimeOutOptions(),
-                            LabelOptions = new LabelOptions(),
-                            ExecutionOptions = new ExecutionOptions(),
-                            IOContract = new StepIOContract(),
                             Phase = StepExecutionPhase.Act,
+                            Parallelization = StepParallelizationMode.Parallelizable,
                             DoesReturn = false
                         }
                     ]

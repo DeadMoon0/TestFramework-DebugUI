@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using TestFramework.Core.Artifacts;
 using TestFramework.Core.Debugger;
@@ -13,12 +13,12 @@ namespace TestFramework.DebugUI.State.Tests;
 public class RunProjectionValueTests
 {
     [Fact]
-    public void AVariableUpdateRecordsItsDisplayTextAndRendererKey()
+    public void AVariableUpdateRecordsItsSummaryAndRendererKey()
     {
         RunGraph graph = RunProjection.ApplyValueUpdate(Empty(), Variable("orderId", "42", "tf.variable:System.Int32"));
 
         ValueNode value = graph.Variables["orderId"];
-        Assert.Equal("42", value.DisplayText);
+        Assert.Equal("42", value.Description.Summary);
         Assert.Equal("tf.variable:System.Int32", value.SchemaKey);
     }
 
@@ -30,7 +30,7 @@ public class RunProjectionValueTests
         graph = RunProjection.ApplyValueUpdate(graph, Variable("orderId", "43", "tf.variable:System.Int32"));
 
         Assert.Single(graph.Variables);
-        Assert.Equal("43", graph.Variables["orderId"].DisplayText);
+        Assert.Equal("43", graph.Variables["orderId"].Description.Summary);
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public class RunProjectionValueTests
             {
                 Kind = DebugValueKind.Artifact,
                 TypeName = "SqlRow",
-                DisplayText = "receipt row",
+                Description = new DebugValueDescription { Summary = "receipt row" },
                 SchemaKey = "tf.artifact.sql.row"
             }
         };
@@ -108,7 +108,7 @@ public class RunProjectionValueTests
 
         Assert.Single(graph.Variables);
         Assert.Single(graph.Artifacts);
-        Assert.Equal("value", graph.Variables["shared"].DisplayText);
+        Assert.Equal("value", graph.Variables["shared"].Description.Summary);
     }
 
     private static RunGraph Empty() => new();
@@ -122,38 +122,28 @@ public class RunProjectionValueTests
         {
             Kind = DebugValueKind.Variable,
             TypeName = "System.String",
-            DisplayText = display,
-            SchemaKey = schemaKey,
-            Core = new JObject { ["key"] = name, ["value"] = display }
+            Description = new DebugValueDescription { Summary = display },
+            SchemaKey = schemaKey
         }
     };
 
-    private static PipeValueUpdateSignal Artifact(string name, string schemaKey, string state, string[] versions)
+    private static PipeValueUpdateSignal Artifact(string name, string schemaKey, string state, string[] versions) => new()
     {
-        JArray versionArray = [];
-        foreach (string version in versions)
-            versionArray.Add(version);
-
-        return new PipeValueUpdateSignal
+        SessionId = "session-1",
+        Name = name,
+        ValueKind = DebugValueKind.Artifact,
+        Envelope = new DebugValueEnvelope
         {
-            SessionId = "session-1",
-            Name = name,
-            ValueKind = DebugValueKind.Artifact,
-            Envelope = new DebugValueEnvelope
+            Kind = DebugValueKind.Artifact,
+            TypeName = "SqlRow",
+            Description = new DebugValueDescription { Summary = name + " row" },
+            SchemaKey = schemaKey,
+            Lifecycle = new DebugValueLifecycle
             {
-                Kind = DebugValueKind.Artifact,
-                TypeName = "SqlRow",
-                DisplayText = name + " row",
-                SchemaKey = schemaKey,
-                Core = new JObject
-                {
-                    ["key"] = name,
-                    ["state"] = state,
-                    ["versionCount"] = versions.Length,
-                    ["versionIndex"] = versions.Length - 1,
-                    ["versions"] = versionArray
-                }
+                State = state,
+                Versions = versions,
+                CurrentVersion = versions.Length == 0 ? null : versions[^1]
             }
-        };
-    }
+        }
+    };
 }

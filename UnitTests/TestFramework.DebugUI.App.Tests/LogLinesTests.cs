@@ -40,7 +40,7 @@ public class LogLinesTests
         // The record is UTC and stays UTC. The reader is comparing it against the clock on their wall.
         DateTimeOffset moment = new(2026, 8, 18, 14, 44, 9, TimeSpan.Zero);
 
-        LogNode entry = new() { OccurredAtUtc = moment, Level = DebugLogLevel.Information, Message = "Executing Step" };
+        LogNode entry = new() { OccurredAtUtc = moment, Level = DebugLogLevel.Information, Template = "Executing Step" };
 
         Assert.Equal(moment.ToLocalTime().ToString("HH:mm:ss"), LogLines.Time(entry));
     }
@@ -52,7 +52,7 @@ public class LogLinesTests
         {
             OccurredAtUtc = new DateTimeOffset(2026, 8, 18, 14, 44, 9, TimeSpan.Zero),
             Level = DebugLogLevel.Error,
-            Message = "Transform failed"
+            Template = "Transform failed"
         };
 
         Assert.Equal($"{LogLines.Time(entry)}  FAIL  Transform failed", LogLines.Of(entry));
@@ -65,8 +65,8 @@ public class LogLinesTests
         // into a ticket as one run-on paragraph is the thing that was wrong with it on screen.
         LogNode[] entries =
         [
-            new() { OccurredAtUtc = DateTimeOffset.UnixEpoch, Level = DebugLogLevel.Information, Message = "first" },
-            new() { OccurredAtUtc = DateTimeOffset.UnixEpoch, Level = DebugLogLevel.Warning, Message = "second" }
+            new() { OccurredAtUtc = DateTimeOffset.UnixEpoch, Level = DebugLogLevel.Information, Template = "first" },
+            new() { OccurredAtUtc = DateTimeOffset.UnixEpoch, Level = DebugLogLevel.Warning, Template = "second" }
         ];
 
         string text = LogLines.Text(entries);

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -32,7 +32,6 @@ public static partial class RunProjection
     private static ValueNode ProjectValue(PipeValueUpdateSignal signal) => new()
     {
         Key = signal.Name,
-        DisplayText = signal.Envelope.DisplayText,
         TypeName = signal.Envelope.TypeName,
         SchemaKey = signal.Envelope.SchemaKey,
         Description = ValueDescription.From(signal.Envelope.Description)
@@ -44,31 +43,22 @@ public static partial class RunProjection
             ? found
             : new ArtifactNode { Key = signal.Name };
 
-        JObject? core = signal.Envelope.Core as JObject;
-
         return existing with
         {
-            DisplayText = signal.Envelope.DisplayText,
             SchemaKey = signal.Envelope.SchemaKey,
             Description = ValueDescription.From(signal.Envelope.Description),
 
             // Lifecycle comes from the value rather than a transition: an artifact moves through
             // NotSetup -> Setup -> Cleaned by being mutated in place, which Core reports as a value
             // update rather than an entity transition.
-            //
-            // Read from the typed lifecycle when it is there and from the Core payload when it is
-            // not, because a journal recorded before Core stated these as fields still has to replay.
-            State = signal.Envelope.Lifecycle?.State ?? ReadString(core, "state") ?? existing.State,
+            State = signal.Envelope.Lifecycle?.State ?? existing.State,
 
             // The whole history, every time. Core sends the complete version list on each update, so
             // a consumer that attached late — or replayed a journal missing the earlier events —
             // still shows v1 -> v2 -> v3 rather than only what it happened to witness.
-            Versions = ReadVersions(signal.Envelope.Lifecycle, core, existing.Versions)
+            Versions = ReadVersions(signal.Envelope.Lifecycle, existing.Versions)
         };
     }
-
-    private static string? ReadString(JObject? core, string property)
-        => core?[property]?.Type == JTokenType.String ? core[property]!.Value<string>() : null;
 
     /// <summary>
     /// Reads the version history, returning the existing list unchanged when the content matches.
@@ -80,17 +70,12 @@ public static partial class RunProjection
     /// Core resends the full history on <em>every</em> artifact update, rebuilding unconditionally
     /// would make every update look like a change and re-emit to every binding watching it.
     /// </remarks>
-    private static ImmutableList<string> ReadVersions(DebugValueLifecycle? lifecycle, JObject? core, ImmutableList<string> existing)
+    private static ImmutableList<string> ReadVersions(DebugValueLifecycle? lifecycle, ImmutableList<string> existing)
     {
-        if (lifecycle is not null)
-            return Same(lifecycle.Versions, existing) ? existing : [.. lifecycle.Versions];
-
-        if (core?["versions"] is not JArray versions)
+        if (lifecycle is null)
             return existing;
 
-        string[] read = [.. versions.Select(version => version.Value<string>() ?? string.Empty)];
-
-        return Same(read, existing) ? existing : [.. read];
+        return Same(lifecycle.Versions, existing) ? existing : [.. lifecycle.Versions];
     }
 
     private static bool Same(IReadOnlyList<string> read, ImmutableList<string> existing)

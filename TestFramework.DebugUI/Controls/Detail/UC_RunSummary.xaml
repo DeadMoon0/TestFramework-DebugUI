@@ -1,4 +1,4 @@
-<UserControl x:Class="TestFramework.DebugUI.Controls.Detail.UC_RunSummary"
+﻿<UserControl x:Class="TestFramework.DebugUI.Controls.Detail.UC_RunSummary"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -48,6 +48,13 @@
                     <TextBlock x:Name="tbFailuresLabel" Style="{StaticResource PanelHeading}" Margin="0 0 0 4"
                                Text="WHAT FAILED" Visibility="Collapsed"/>
                     <StackPanel x:Name="spFailures"/>
+
+                    <!-- The checks themselves. Until protocol 4 an assertion was a count on this page and a
+                         sentence on the wire; now it is a check with its arguments, which is what a reader
+                         needs to see: what was expected of what, and what was there instead. -->
+                    <TextBlock x:Name="tbChecksLabel" Style="{StaticResource PanelHeading}" Margin="0 12 0 4"
+                               Text="CHECKS THAT DID NOT HOLD" Visibility="Collapsed"/>
+                    <StackPanel x:Name="spChecks"/>
                 </StackPanel>
             </ScrollViewer>
         </Grid>

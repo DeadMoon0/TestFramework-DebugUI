@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -244,10 +244,9 @@ public class RunBaselineSelectorTests
             TargetKind = DebugAssertionTargetKind.Variable,
             Target = "greeting",
             AssertionName = "Be",
-            AssertionDisplay = "Be(\"hello\")",
+            Arguments = [DebugLogField.Of("expected", "hello")],
             Succeeded = succeeded,
-            Expected = "hello",
-            Actual = succeeded ? "hello" : "goodbye"
+            Actual = new DebugValueDescription { Summary = succeeded ? "\"hello\"" : "\"goodbye\"", Shape = DebugValueShape.Text }
         }
     };
 
@@ -266,7 +265,6 @@ public class RunBaselineSelectorTests
         {
             Kind = DebugValueKind.Variable,
             TypeName = "System.String",
-            DisplayText = text,
             SchemaKey = "tf.value.text",
             Description = new DebugValueDescription
             {
@@ -310,13 +308,8 @@ public class RunBaselineSelectorTests
                     {
                         Name = "Work",
                         Description = string.Empty,
-                        RetryOptions = new RetryOptions(),
-                        ErrorHandlingOptions = new ErrorHandlingOptions(),
-                        TimeOutOptions = new TimeOutOptions(),
-                        LabelOptions = new LabelOptions(),
-                        ExecutionOptions = new ExecutionOptions(),
-                        IOContract = new StepIOContract(),
                         Phase = StepExecutionPhase.Act,
+                        Parallelization = StepParallelizationMode.Parallelizable,
                         DoesReturn = false
                     }
                 ]

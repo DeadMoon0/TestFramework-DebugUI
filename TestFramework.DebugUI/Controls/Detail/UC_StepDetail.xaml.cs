@@ -128,9 +128,75 @@ public partial class UC_StepDetail : UserControl
         tbInputs.Text = Describe(step.Inputs);
         tbOutputs.Text = Describe(step.Outputs);
 
+        ShowPolicy();
         ShowAttempts();
         ShowLog();
         ShowFailure();
+    }
+
+    /// <summary>
+    /// States the policies the step runs under, as chips.
+    /// </summary>
+    /// <remarks>
+    /// Hidden entirely for a step that declared none, which is most of them: a section reading "no retries, no
+    /// timeout" for every step would push the failure and the log further down for nothing. A policy a test
+    /// pinned to a variable names the variable, because that is what the run said.
+    /// </remarks>
+    private void ShowPolicy()
+    {
+        wpPolicy.Children.Clear();
+
+        StepPolicy policy = step?.Policy ?? StepPolicy.None;
+
+        tbPolicyLabel.Visibility = policy.IsStated ? Visibility.Visible : Visibility.Collapsed;
+
+        if (!policy.IsStated)
+            return;
+
+        if (policy.MaxRetries is int retries)
+            wpPolicy.Children.Add(Chip(retries == 1 ? "1 retry" : $"{retries} retries"));
+        else if (policy.MaxRetriesVariable is string retriesFrom)
+            wpPolicy.Children.Add(Chip($"retries from {retriesFrom}"));
+
+        if (policy.TimeOut is TimeSpan timeout)
+            wpPolicy.Children.Add(Chip($"times out after {Duration(timeout)}"));
+        else if (policy.TimeOutVariable is string timeoutFrom)
+            wpPolicy.Children.Add(Chip($"timeout from {timeoutFrom}"));
+
+        if (policy.RunsAlone)
+            wpPolicy.Children.Add(Chip("runs alone"));
+
+        foreach (string ignored in policy.IgnoredExceptions)
+            wpPolicy.Children.Add(Chip($"ignores {ignored}"));
+    }
+
+    /// <summary>A policy as a chip, which is how the value rail already states a fact about a value.</summary>
+    private Border Chip(string text) => new()
+    {
+        CornerRadius = new CornerRadius(3),
+        Background = (Brush)FindResource("SurfaceRaised"),
+        Margin = new Thickness(0, 0, 4, 4),
+        Padding = new Thickness(6, 2, 6, 2),
+        Child = new TextBlock
+        {
+            Style = (Style)FindResource("MutedText"),
+            FontSize = 10.5,
+            Text = text
+        }
+    };
+
+    /// <summary>A duration as a reader would say it, rather than as 00:00:30.</summary>
+    private static string Duration(TimeSpan value)
+    {
+        if (value.TotalSeconds < 1)
+            return $"{value.TotalMilliseconds:0} ms";
+
+        if (value.TotalMinutes < 1)
+            return $"{value.TotalSeconds:0.#} s";
+
+        return value.TotalHours < 1
+            ? $"{value.TotalMinutes:0.#} min"
+            : $"{value.TotalHours:0.#} h";
     }
 
     private void ShowAttempts()
@@ -229,7 +295,7 @@ public partial class UC_StepDetail : UserControl
             Style = (Style)FindResource("CodeText"),
             Foreground = (Brush)FindResource(entry.Level == DebugLogLevel.Information ? "TextSecondary" : "TextPrimary"),
             Margin = new Thickness(0, 1, 4, 1),
-            Text = entry.Message
+            Text = entry.Render()
         };
 
         Grid.SetColumn(level, 1);

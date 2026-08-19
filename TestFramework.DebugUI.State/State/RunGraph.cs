@@ -1,6 +1,8 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
+using Newtonsoft.Json.Linq;
 using TestFramework.Core.Debugger;
 
 namespace TestFramework.DebugUI.State;
@@ -98,6 +100,16 @@ public sealed record StepNode
     public string Description { get; init; } = string.Empty;
 
     /// <summary>
+    /// Gets the policies the step runs under, as the run declared them.
+    /// </summary>
+    /// <remarks>
+    /// New with protocol 4. The retry count and the timeout were previously unreachable — they travelled as an
+    /// empty reference wrapper — so this window could not say what a step's policy was even though every run
+    /// announced it.
+    /// </remarks>
+    public StepPolicy Policy { get; init; } = StepPolicy.None;
+
+    /// <summary>
     /// Gets the execution layer the run's planner put this step in.
     /// </summary>
     /// <remarks>
@@ -190,7 +202,68 @@ public sealed record AttemptNode
     public DebugFailureDetail? Failure { get; init; }
 }
 
-/// <summary>A single log line.</summary>
+/// <summary>
+/// What a step's declaration says about how it is allowed to run.
+/// </summary>
+/// <remarks>
+/// Every member is optional because a step need not set any of them, and a policy a test pinned to a variable
+/// is named rather than valued: at the moment the run announced its plan, that variable may not have been
+/// written yet.
+/// </remarks>
+public sealed record StepPolicy
+{
+    /// <summary>A step that declared nothing beyond the defaults.</summary>
+    public static StepPolicy None { get; } = new();
+
+    /// <summary>Gets how many times the step may be retried.</summary>
+    public int? MaxRetries { get; init; }
+
+    /// <summary>Gets the variable the retry count is read from, when a test pinned it to one.</summary>
+    public string? MaxRetriesVariable { get; init; }
+
+    /// <summary>Gets how long the step may run for.</summary>
+    public TimeSpan? TimeOut { get; init; }
+
+    /// <summary>Gets the variable the timeout is read from, when a test pinned it to one.</summary>
+    public string? TimeOutVariable { get; init; }
+
+    /// <summary>Gets the exception types the step may throw without failing the run.</summary>
+    public ImmutableList<string> IgnoredExceptions { get; init; } = [];
+
+    /// <summary>Gets whether the step refuses to run beside its neighbours.</summary>
+    public bool RunsAlone { get; init; }
+
+    /// <summary>Whether there is anything here worth showing.</summary>
+    public bool IsStated
+        => MaxRetries is not null
+           || MaxRetriesVariable is not null
+           || TimeOut is not null
+           || TimeOutVariable is not null
+           || RunsAlone
+           || IgnoredExceptions.Count > 0;
+
+    /// <summary>Compares the ignored types by content, which the generated members would not.</summary>
+    public bool Equals(StepPolicy? other)
+        => other is not null
+           && MaxRetries == other.MaxRetries
+           && TimeOut == other.TimeOut
+           && RunsAlone == other.RunsAlone
+           && string.Equals(MaxRetriesVariable, other.MaxRetriesVariable, StringComparison.Ordinal)
+           && string.Equals(TimeOutVariable, other.TimeOutVariable, StringComparison.Ordinal)
+           && IgnoredExceptions.SequenceEqual(other.IgnoredExceptions, StringComparer.Ordinal);
+
+    /// <inheritdoc />
+    public override int GetHashCode() => HashCode.Combine(MaxRetries, TimeOut, RunsAlone, IgnoredExceptions.Count);
+}
+
+/// <summary>
+/// A single log entry, as the run stated it.
+/// </summary>
+/// <remarks>
+/// The template and the values that fill it, not a sentence. Core stopped shipping the console's own output on
+/// the transport, and keeping the facts here means this window can render them as a line, line them up as
+/// columns, or one day group a hundred entries by the template they share.
+/// </remarks>
 public sealed record LogNode
 {
     /// <summary>Gets when the entry was emitted.</summary>
@@ -199,8 +272,51 @@ public sealed record LogNode
     /// <summary>Gets the severity.</summary>
     public DebugLogLevel Level { get; init; }
 
-    /// <summary>Gets the rendered message.</summary>
-    public string Message { get; init; } = string.Empty;
+    /// <summary>Gets the name of the log event that emitted this, which a user-defined event keeps.</summary>
+    public string EventName { get; init; } = string.Empty;
+
+    /// <summary>Gets the sentence, with its holes unfilled.</summary>
+    public string Template { get; init; } = string.Empty;
+
+    /// <summary>Gets the values that fill the holes, typed as they were logged.</summary>
+    public ImmutableList<LogFact> Facts { get; init; } = [];
+
+    /// <summary>The entry as one line, for a display with a row to put it in.</summary>
+    /// <remarks>
+    /// Rendered on demand rather than stored beside the facts. A rendering kept next to the data it came from
+    /// is the thing that has to be kept in step with it, which is how the protocol ended up carrying both.
+    /// </remarks>
+    public string Render()
+        => DebugLogTemplate.Render(Template, [.. Facts.Select(fact => new DebugLogField { Name = fact.Name, Value = fact.Value })]);
+}
+
+/// <summary>One named value behind a log entry.</summary>
+public sealed record LogFact
+{
+    /// <summary>Gets the name, which is the hole it fills in the template.</summary>
+    public required string Name { get; init; }
+
+    /// <summary>Gets the value, typed as it was logged.</summary>
+    public required JToken Value { get; init; }
+
+    /// <summary>Gets the value as text, for a display that only wants to print it.</summary>
+    public string Text => DebugJson.Text(Value);
+
+    /// <summary>
+    /// Compares the value by content.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="JToken"/> compares by reference, and two tokens deserialized from the same bytes are never
+    /// the same instance — so the generated equality would report every redelivered entry as a new one and
+    /// re-emit to every binding watching the run.
+    /// </remarks>
+    public bool Equals(LogFact? other)
+        => other is not null
+           && string.Equals(Name, other.Name, StringComparison.Ordinal)
+           && JToken.DeepEquals(Value, other.Value);
+
+    /// <inheritdoc />
+    public override int GetHashCode() => Name.GetHashCode(StringComparison.Ordinal);
 }
 
 /// <summary>A variable's most recently observed value.</summary>
@@ -208,9 +324,6 @@ public sealed record ValueNode
 {
     /// <summary>Gets the variable identifier.</summary>
     public required string Key { get; init; }
-
-    /// <summary>Gets the text a consumer displays for the value.</summary>
-    public string DisplayText { get; init; } = string.Empty;
 
     /// <summary>Gets the runtime type name that produced the value.</summary>
     public string TypeName { get; init; } = string.Empty;
@@ -222,9 +335,10 @@ public sealed record ValueNode
     /// Gets what the value is, stated as facts rather than as a formatted line.
     /// </summary>
     /// <remarks>
-    /// <see cref="DisplayText"/> is the producer's one-line fallback. This is everything it had to
-    /// throw away to produce that line — the shape, the named facts, the content, and where the rest
-    /// of it was written when it did not fit.
+    /// The whole account of the value: its shape, its named facts, its content, and where the rest of it was
+    /// written when it did not fit. There used to be a one-line rendering beside this, produced by the
+    /// framework and preferred by this window, which is how a panel with room for a table came to show a
+    /// sentence.
     /// </remarks>
     public ValueDescription Description { get; init; } = ValueDescription.Empty;
 }
@@ -234,9 +348,6 @@ public sealed record ArtifactNode
 {
     /// <summary>Gets the artifact identifier.</summary>
     public required string Key { get; init; }
-
-    /// <summary>Gets the text a consumer displays for the artifact.</summary>
-    public string DisplayText { get; init; } = string.Empty;
 
     /// <summary>
     /// Gets the renderer contract key, such as <c>tf.artifact.sql.row</c>.
@@ -276,8 +387,11 @@ public sealed record AssertionNode
     /// <summary>Gets when the assertion ran, which is also its ordering.</summary>
     public DateTimeOffset OccurredAtUtc { get; init; }
 
-    /// <summary>Gets the assertion's display form, such as <c>Be("Ada")</c>.</summary>
-    public string Display { get; init; } = string.Empty;
+    /// <summary>Gets the check's name, such as <c>Be</c> or <c>NotExist</c>.</summary>
+    public string AssertionName { get; init; } = string.Empty;
+
+    /// <summary>Gets the check's own parameters, typed as they were passed.</summary>
+    public ImmutableList<LogFact> Arguments { get; init; } = [];
 
     /// <summary>
     /// Gets what was asserted against — a variable or artifact identifier.
@@ -291,21 +405,42 @@ public sealed record AssertionNode
     /// <summary>Gets whether the assertion held.</summary>
     public bool Succeeded { get; init; }
 
-    /// <summary>Gets the expected value, as text.</summary>
-    public string Expected { get; init; } = string.Empty;
-
-    /// <summary>Gets the actual value, as text.</summary>
-    public string Actual { get; init; } = string.Empty;
-
-    /// <summary>
-    /// Gets the framework's explanation of the failure, when it failed.
-    /// </summary>
-    /// <remarks>
-    /// Expected and actual say what differed; this says why that counts as a failure, which is not
-    /// always obvious from the two values alone.
-    /// </remarks>
-    public string FailureReason { get; init; } = string.Empty;
+    /// <summary>Gets the value as it actually was, described.</summary>
+    public ValueDescription Actual { get; init; } = ValueDescription.Empty;
 
     /// <summary>Gets the enclosing assertion scope, when the assertion ran inside one.</summary>
     public string Scope { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Compares the arguments by content.
+    /// </summary>
+    /// <remarks>
+    /// The generated equality compares <see cref="ImmutableList{T}"/> by reference, and two lists built from the
+    /// same redelivered assertion are never the same instance — so a replayed journal would append every check
+    /// it already held. The suppression of an exact redelivery depends on this.
+    /// </remarks>
+    public bool Equals(AssertionNode? other)
+        => other is not null
+           && OccurredAtUtc == other.OccurredAtUtc
+           && string.Equals(AssertionName, other.AssertionName, StringComparison.Ordinal)
+           && string.Equals(Target, other.Target, StringComparison.Ordinal)
+           && string.Equals(Scope, other.Scope, StringComparison.Ordinal)
+           && Succeeded == other.Succeeded
+           && Equals(Actual, other.Actual)
+           && Arguments.SequenceEqual(other.Arguments);
+
+    /// <inheritdoc />
+    public override int GetHashCode() => HashCode.Combine(OccurredAtUtc, AssertionName, Target, Succeeded);
+
+    /// <summary>
+    /// The check as it would be written in a test, for a row that has to show it as one line.
+    /// </summary>
+    /// <remarks>
+    /// Rendered here rather than carried: the run states the name and the arguments, and what used to travel
+    /// beside them was this sentence, a second copy of the expectation and a third describing the difference.
+    /// </remarks>
+    public string Render()
+        => Arguments.Count == 0
+            ? AssertionName
+            : $"{AssertionName}({string.Join(", ", Arguments.Select(argument => argument.Text))})";
 }

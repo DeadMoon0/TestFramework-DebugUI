@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
@@ -104,9 +104,16 @@ public sealed class JournalRunEventSource : IRunEventSource
     /// Lists the runs recorded under a journal root, newest first.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Read from the metadata sidecars, never from the journals themselves: listing runs must stay
     /// cheap no matter how much a run logged, and a picker that had to parse every event to show a
     /// name would get slower the more there is to look at.
+    /// </para>
+    /// <para>
+    /// A recording made against a different protocol version is not listed. Its events would fail to decode
+    /// one by one, which reads as a run that opens empty for no stated reason —
+    /// <see cref="CountFromOtherBuilds"/> is how a caller says how many were left out.
+    /// </para>
     /// </remarks>
     public static ImmutableList<AvailableRun> ListRuns(string runsDirectory)
     {
@@ -130,16 +137,59 @@ public sealed class JournalRunEventSource : IRunEventSource
         return runs.ToImmutable();
     }
 
-    private static AvailableRun? TryReadMetadata(string runsDirectory, string metaPath)
+    /// <summary>
+    /// How many recordings under this root were made against another protocol version.
+    /// </summary>
+    /// <remarks>
+    /// Counted rather than listed, so the one thing said about them is said once: they exist, they are not
+    /// readable by this build, and they are still on disk.
+    /// </remarks>
+    public static int CountFromOtherBuilds(string runsDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(runsDirectory);
+
+        if (!Directory.Exists(runsDirectory))
+            return 0;
+
+        int count = 0;
+
+        foreach (string metaPath in Directory.EnumerateFiles(runsDirectory, "*.meta.json"))
+        {
+            if (ReadMetadata(metaPath) is { } metadata && metadata.ProtocolVersion != DebugProtocol.Version)
+                count++;
+        }
+
+        return count;
+    }
+
+    private static DebugRunMetadata? ReadMetadata(string metaPath)
     {
         try
         {
             using StreamReader reader = DebugJournal.OpenForReading(metaPath);
-            DebugRunMetadata? metadata = JsonConvert.DeserializeObject<DebugRunMetadata>(reader.ReadToEnd());
 
-            if (metadata is null)
-                return null;
+            return JsonConvert.DeserializeObject<DebugRunMetadata>(reader.ReadToEnd());
+        }
+        catch (Exception)
+        {
+            // One unreadable sidecar - half-written, or from a build that changed its shape - must not hide
+            // every other run from the picker.
+            return null;
+        }
+    }
 
+    private static AvailableRun? TryReadMetadata(string runsDirectory, string metaPath)
+    {
+        if (ReadMetadata(metaPath) is not { } metadata)
+            return null;
+
+        // Not this protocol, not this build's to read. Nothing in the journal would decode, and offering the
+        // run anyway would produce a board with a name and no content.
+        if (metadata.ProtocolVersion != DebugProtocol.Version)
+            return null;
+
+        try
+        {
             return new AvailableRun
             {
                 SessionId = metadata.SessionId,
@@ -164,8 +214,8 @@ public sealed class JournalRunEventSource : IRunEventSource
         }
         catch (Exception)
         {
-            // One unreadable sidecar — half-written, or from a newer build — must not hide every
-            // other run from the picker.
+            // A sidecar naming a journal this platform cannot express as a path. One bad record must not hide
+            // every other run from the picker.
             return null;
         }
     }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using TestFramework.Core.Debugger;
@@ -209,6 +209,25 @@ public sealed record RunSummary
     public bool CanRerun { get; init; }
 
     /// <summary>
+    /// Gets where in the code the run was started, when the run recorded it.
+    /// </summary>
+    /// <remarks>
+    /// Captured by Core at compile time from the call site, so it is the line that built the timeline
+    /// rather than a guess made from the test's name. Null for a run whose producer predates it, and for
+    /// an exported run, which strips it deliberately along with every other local path.
+    /// </remarks>
+    public SourceLocation? Source { get; init; }
+
+    /// <summary>
+    /// Gets how many events the run's recording holds, for a run that was found on disk.
+    /// </summary>
+    /// <remarks>
+    /// Null for a live run, and honestly so: the producer is still writing the sidecar this is counted in,
+    /// so any number shown while the run is going would be the number as of whenever the file was last read.
+    /// </remarks>
+    public long? EventCount { get; init; }
+
+    /// <summary>
     /// Gets the project file the test lives in, when the run reported one.
     /// </summary>
     /// <remarks>
@@ -264,6 +283,37 @@ public sealed record RunSummary
 
     /// <summary>Gets how long the run took, when both ends are known.</summary>
     public TimeSpan? Duration => FinishedAtUtc is { } finished ? finished - StartedAtUtc : null;
+}
+
+/// <summary>
+/// A place in the code.
+/// </summary>
+/// <remarks>
+/// The file and the line together rather than two fields on whatever holds them: a file with no line is
+/// half an answer in an eight-hundred-line test class, and a line with no file is not an answer at all.
+/// </remarks>
+public sealed record SourceLocation
+{
+    /// <summary>Gets the file, as it was on the machine that ran the test.</summary>
+    public required string FilePath { get; init; }
+
+    /// <summary>Gets the one-based line, or zero when the producer did not report one.</summary>
+    public int Line { get; init; }
+
+    /// <summary>Gets the file's own name, for a label with no room for a path.</summary>
+    public string FileName => FilePath[(FilePath.LastIndexOfAny(['/', '\\']) + 1)..];
+
+    /// <summary>
+    /// Reads a location out of what a run reported, or null when it reported nothing usable.
+    /// </summary>
+    /// <remarks>
+    /// A line without a file is discarded rather than kept as a location pointing nowhere. The reverse is
+    /// allowed: a file with no line opens at the top, which is still the right file.
+    /// </remarks>
+    public static SourceLocation? From(string? filePath, int line)
+        => string.IsNullOrWhiteSpace(filePath)
+            ? null
+            : new SourceLocation { FilePath = filePath, Line = Math.Max(0, line) };
 }
 
 /// <summary>How a run stands, in the one word a list of runs needs.</summary>

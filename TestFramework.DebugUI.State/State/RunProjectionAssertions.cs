@@ -35,6 +35,7 @@ public static partial class RunProjection
             AssertionName = entry.AssertionName,
             Arguments = [.. entry.Arguments.Select(argument => new LogFact { Name = argument.Name, Value = argument.Value })],
             Target = entry.Target,
+            TargetKind = entry.TargetKind,
             Succeeded = entry.Succeeded,
             Actual = ValueDescription.From(entry.Actual),
             Scope = entry.AssertionScope

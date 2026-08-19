@@ -95,6 +95,52 @@ public class RunProjectionAssertionTests
         Assert.Equal("order checks", Assert.Single(graph.Assertions).Scope);
     }
 
+    [Fact]
+    public void AChecksSubjectNamesTheKindBesideTheIdentifier()
+    {
+        // A variable and an artifact are allowed to share a name, so the name alone does not say which one
+        // was checked. The kind was on the wire and was being dropped here.
+        RunGraph graph = RunProjection.ApplyAssertion(new RunGraph(), Assertion("orderId", succeeded: false));
+
+        AssertionNode assertion = Assert.Single(graph.Assertions);
+
+        Assert.Equal(DebugAssertionTargetKind.Variable, assertion.TargetKind);
+        Assert.Equal("variable orderId", assertion.Subject);
+    }
+
+    [Fact]
+    public void ACheckWithNoIdentifierIsDescribedByItsKindAlone()
+    {
+        // A check against a bare value carries no target. Rendered as "target · check" that came out as a
+        // row beginning with a separator and nothing in front of it.
+        PipeAssertionSignal signal = Assertion(string.Empty, succeeded: false) with
+        {
+            Entry = Assertion(string.Empty, succeeded: false).Entry with
+            {
+                TargetKind = DebugAssertionTargetKind.Value
+            }
+        };
+
+        RunGraph graph = RunProjection.ApplyAssertion(new RunGraph(), signal);
+
+        Assert.Equal("value", Assert.Single(graph.Assertions).Subject);
+    }
+
+    [Fact]
+    public void TwoChecksDifferingOnlyInTheirKindAreNotTheSameCheck()
+    {
+        // The redelivery guard compares nodes, so a field left out of equality makes two distinct checks
+        // collapse into one — and a variable check is not an artifact check.
+        RunGraph graph = RunProjection.ApplyAssertion(new RunGraph(), Assertion("orders", succeeded: false));
+
+        PipeAssertionSignal artifact = Assertion("orders", succeeded: false);
+        graph = RunProjection.ApplyAssertion(
+            graph,
+            artifact with { Entry = artifact.Entry with { TargetKind = DebugAssertionTargetKind.Artifact } });
+
+        Assert.Equal(2, graph.Assertions.Count);
+    }
+
     private static PipeAssertionSignal Assertion(
         string target,
         bool succeeded,

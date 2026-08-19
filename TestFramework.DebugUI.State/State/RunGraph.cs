@@ -178,6 +178,25 @@ public sealed record StepIO
 
     /// <summary>Gets whether this is a variable or an artifact.</summary>
     public DebugValueKind Kind { get; init; } = DebugValueKind.Variable;
+
+    /// <summary>
+    /// Gets the type the step declared for this entry, when it declared one.
+    /// </summary>
+    /// <remarks>
+    /// A key on its own says what a step reads and not what it expects to find there, which is the half a
+    /// reader needs when a value arrives and the step rejects it anyway.
+    /// </remarks>
+    public string? DeclaredType { get; init; }
+
+    /// <summary>
+    /// Gets whether the step insists on this entry being there.
+    /// </summary>
+    /// <remarks>
+    /// Defaulted to true because that is the protocol's own default and the ordinary case: a declared input
+    /// is normally one the step cannot run without. An optional entry is the interesting one, which is why
+    /// the panel marks only those.
+    /// </remarks>
+    public bool Required { get; init; } = true;
 }
 
 /// <summary>One execution attempt of a step, owning the logs emitted during it.</summary>
@@ -402,6 +421,16 @@ public sealed record AssertionNode
     /// </remarks>
     public string Target { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Gets what kind of thing was asserted against.
+    /// </summary>
+    /// <remarks>
+    /// The name alone is ambiguous by design — a variable and an artifact can share one — and a check
+    /// against a step or a bare value has no identifier at all, which reads as a check about nothing until
+    /// the kind says otherwise.
+    /// </remarks>
+    public DebugAssertionTargetKind TargetKind { get; init; } = DebugAssertionTargetKind.Value;
+
     /// <summary>Gets whether the assertion held.</summary>
     public bool Succeeded { get; init; }
 
@@ -424,6 +453,7 @@ public sealed record AssertionNode
            && OccurredAtUtc == other.OccurredAtUtc
            && string.Equals(AssertionName, other.AssertionName, StringComparison.Ordinal)
            && string.Equals(Target, other.Target, StringComparison.Ordinal)
+           && TargetKind == other.TargetKind
            && string.Equals(Scope, other.Scope, StringComparison.Ordinal)
            && Succeeded == other.Succeeded
            && Equals(Actual, other.Actual)
@@ -443,4 +473,27 @@ public sealed record AssertionNode
         => Arguments.Count == 0
             ? AssertionName
             : $"{AssertionName}({string.Join(", ", Arguments.Select(argument => argument.Text))})";
+
+    /// <summary>
+    /// What the check was about, for a row that puts the subject before the check.
+    /// </summary>
+    /// <remarks>
+    /// The kind is said alongside the name because a variable and an artifact are allowed to share one. A
+    /// check against a bare value or a step has no identifier at all, and for those the kind is the whole
+    /// answer — the alternative, which is what this replaced, was a row that began with a separator and
+    /// nothing in front of it.
+    /// </remarks>
+    public string Subject
+    {
+        get
+        {
+            string kind = TargetKind switch
+            {
+                DebugAssertionTargetKind.StepList => "steps",
+                _ => TargetKind.ToString().ToLowerInvariant()
+            };
+
+            return string.IsNullOrWhiteSpace(Target) ? kind : $"{kind} {Target}";
+        }
+    }
 }

@@ -1,8 +1,9 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using TestFramework.DebugUI.Editors;
+using TestFramework.DebugUI.State;
 
 namespace TestFramework.DebugUI.App.Tests;
 
@@ -177,6 +178,80 @@ public class EditorPathsTests
         // one. The button says so rather than opening something arbitrary.
         Assert.Null(EditorPaths.TargetFor(projectFilePath, wantsFolder: false, _ => []));
         Assert.Null(EditorPaths.TargetFor(projectFilePath, wantsFolder: true, _ => []));
+    }
+
+    [Fact]
+    public void CodeIsGivenTheFolderAndThePositionTogether()
+    {
+        // Both, not one or the other: the workspace so the rest of the code is there, and the position so
+        // the reader does not have to find one test in a suite.
+        Assert.Equal(
+            [@"C:\src\app", "--goto", @"C:\src\app\Tests\OrderTests.cs:42"],
+            EditorPaths.ArgumentsFor(
+                @"C:\src\app\Tests\Tests.csproj",
+                wantsFolder: true,
+                new SourceLocation { FilePath = @"C:\src\app\Tests\OrderTests.cs", Line = 42 },
+                directory => directory == @"C:\src\app" ? [@"C:\src\app\App.sln"] : []));
+    }
+
+    [Fact]
+    public void VisualStudioIsGivenTheFileToEditBecauseItCannotBeToldALine()
+    {
+        // devenv has no command-line way to say a line, so the solution is dropped in favour of landing on
+        // the right file — which /edit opens inside the instance the reader already has open.
+        Assert.Equal(
+            ["/edit", @"C:\src\app\Tests\OrderTests.cs"],
+            EditorPaths.ArgumentsFor(
+                @"C:\src\app\Tests\Tests.csproj",
+                wantsFolder: false,
+                new SourceLocation { FilePath = @"C:\src\app\Tests\OrderTests.cs", Line = 42 },
+                _ => [@"C:\src\app\App.sln"]));
+    }
+
+    [Fact]
+    public void ARunWithNoSourceStillOpensItsSolution()
+    {
+        // Every run recorded before the source location was read here, and every imported one, which strips
+        // local paths on purpose. The button keeps working, it just lands where it used to.
+        Assert.Equal(
+            [@"C:\src\app\App.sln"],
+            EditorPaths.ArgumentsFor(
+                @"C:\src\app\Tests\Tests.csproj",
+                wantsFolder: false,
+                source: null,
+                directory => directory == @"C:\src\app" ? [@"C:\src\app\App.sln"] : []));
+    }
+
+    [Fact]
+    public void AFileWithNoLineIsOpenedAtItsTop()
+    {
+        // A producer that reported the file and not the line. The right file with no position beats no
+        // position and no file.
+        // No solution above it either, so the folder is the project's own — the existing rule, unchanged.
+        Assert.Equal(
+            [@"C:\src\app\Tests", "--goto", @"C:\src\app\Tests\OrderTests.cs"],
+            EditorPaths.ArgumentsFor(
+                @"C:\src\app\Tests\Tests.csproj",
+                wantsFolder: true,
+                new SourceLocation { FilePath = @"C:\src\app\Tests\OrderTests.cs" },
+                _ => []));
+    }
+
+    [Fact]
+    public void ARunWithNeitherProjectNorSourceHasNothingToOpen()
+    {
+        Assert.Empty(EditorPaths.ArgumentsFor(null, wantsFolder: true, source: null, _ => []));
+        Assert.Empty(EditorPaths.ArgumentsFor(null, wantsFolder: false, source: null, _ => []));
+    }
+
+    [Fact]
+    public void ALineWithoutAFileIsNotALocation()
+    {
+        // The line is meaningless on its own, and a location pointing nowhere would become a button that
+        // launches an editor on nothing.
+        Assert.Null(SourceLocation.From(null, 42));
+        Assert.Null(SourceLocation.From("   ", 42));
+        Assert.Equal(0, SourceLocation.From(@"C:\x\Test.cs", -3)!.Line);
     }
 
     private static string? Env(string name) => name switch

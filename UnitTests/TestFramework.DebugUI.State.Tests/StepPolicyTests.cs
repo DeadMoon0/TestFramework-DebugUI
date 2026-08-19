@@ -78,6 +78,51 @@ public class StepPolicyTests
         Assert.False(graph.Stages[0].Steps[0].Policy.IsStated);
     }
 
+    [Fact]
+    public void ADeclaredContractKeepsItsTypeAndWhetherItIsRequired()
+    {
+        // Both arrived with protocol 4 and both were dropped in projection, so the panel could only ever
+        // list the keys — which says what a step reads and not what it expects to find there.
+        RunGraph graph = RunProjection.ApplyInit(Init(new DebugStepState
+        {
+            Name = "Fetch",
+            Description = string.Empty,
+            Phase = StepExecutionPhase.Act,
+            DoesReturn = false,
+            Parallelization = StepParallelizationMode.Parallelizable,
+            Inputs =
+            [
+                new DebugStepIo { Key = "orderId", Kind = StepIOKind.Variable, DeclaredType = "Int32" },
+                new DebugStepIo { Key = "trace", Kind = StepIOKind.Variable, Required = false }
+            ]
+        }));
+
+        StepNode step = graph.Stages[0].Steps[0];
+
+        Assert.Equal("Int32", step.Inputs[0].DeclaredType);
+        Assert.True(step.Inputs[0].Required);
+
+        Assert.Null(step.Inputs[1].DeclaredType);
+        Assert.False(step.Inputs[1].Required);
+    }
+
+    [Fact]
+    public void AnEntryTheRunSaidNothingAboutIsRequired()
+    {
+        // Which is the protocol's own default, so the two sides cannot disagree about what silence meant.
+        RunGraph graph = RunProjection.ApplyInit(Init(new DebugStepState
+        {
+            Name = "Fetch",
+            Description = string.Empty,
+            Phase = StepExecutionPhase.Act,
+            DoesReturn = false,
+            Parallelization = StepParallelizationMode.Parallelizable,
+            Outputs = [new DebugStepIo { Key = "order", Kind = StepIOKind.Artifact }]
+        }));
+
+        Assert.True(graph.Stages[0].Steps[0].Outputs[0].Required);
+    }
+
     private static PipeInitTimelineRunSignal Init(DebugStepState step) => new()
     {
         SessionId = "session-1",

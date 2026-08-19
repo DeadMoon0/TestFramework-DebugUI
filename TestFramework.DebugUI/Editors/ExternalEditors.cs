@@ -65,20 +65,21 @@ public static class ExternalEditors
     /// Reports rather than throws. An editor that has been uninstalled since it was found, or that refuses
     /// to start, is a disappointment and not a reason to take the debugger down with it.
     /// </remarks>
-    public static bool TryOpen(ExternalEditor editor, string target)
+    public static bool TryOpen(ExternalEditor editor, IReadOnlyList<string> arguments)
     {
-        if (editor is null || string.IsNullOrWhiteSpace(target))
+        if (editor is null || arguments is null || arguments.Count == 0)
             return false;
 
         try
         {
-            using Process? started = Process.Start(new ProcessStartInfo(editor.ExecutablePath)
-            {
-                // The target is passed as an argument rather than interpolated into a command line, so a
-                // path with a space in it does not arrive as two arguments.
-                ArgumentList = { target },
-                UseShellExecute = false
-            });
+            ProcessStartInfo start = new(editor.ExecutablePath) { UseShellExecute = false };
+
+            // Passed as arguments rather than interpolated into a command line, so a path with a space in
+            // it does not arrive as two arguments — which is every path under Program Files.
+            foreach (string argument in arguments)
+                start.ArgumentList.Add(argument);
+
+            using Process? started = Process.Start(start);
 
             return started is not null;
         }

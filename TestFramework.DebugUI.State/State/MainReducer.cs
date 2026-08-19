@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Immutable;
 using System.Linq;
 using Axiom.State.Reducers;
@@ -119,6 +119,7 @@ public sealed class MainReducer : Reducer<MainState>
                 ProjectPath = ProjectOf(init),
                 ProjectFilePath = init.Identity?.ProjectFilePath,
                 CanRerun = init.Identity?.CanRerun ?? false,
+                Source = SourceLocation.From(init.Identity?.SourceFilePath, init.Identity?.SourceLineNumber ?? 0),
 
                 // The run says how big it is up front, so the home page can show "3 of 14" from the
                 // first step rather than a count that grows as it goes.

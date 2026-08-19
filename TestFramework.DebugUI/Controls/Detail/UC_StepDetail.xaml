@@ -49,6 +49,16 @@
                                            Foreground="{StaticResource StateError}"/>
                                 <TextBlock x:Name="tbFailureMessage" Style="{StaticResource BodyText}" Margin="0 4 0 0"/>
 
+                                <!--
+                                    What was underneath. Directly below the message because it finishes the
+                                    sentence the message starts, and above the guidance because the innermost
+                                    exception is usually the answer: the outer one is very often
+                                    "A task was canceled" over the socket error that actually explains it.
+                                -->
+                                <TextBlock x:Name="tbCausedByLabel" Style="{StaticResource PanelHeading}" Margin="0 10 0 3"
+                                           Text="CAUSED BY" Visibility="Collapsed"/>
+                                <StackPanel x:Name="spCausedBy"/>
+
                                 <TextBlock x:Name="tbFriendlyLabel" Style="{StaticResource PanelHeading}" Margin="0 10 0 3"
                                            Text="WHAT THIS MEANS" Visibility="Collapsed"/>
                                 <TextBlock x:Name="tbFriendly" Style="{StaticResource MutedText}" Visibility="Collapsed"/>

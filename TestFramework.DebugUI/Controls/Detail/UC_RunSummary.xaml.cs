@@ -25,6 +25,9 @@ public partial class UC_RunSummary : UserControl
 {
     private readonly CompositeDisposable subscriptions = [];
 
+    private RunTally tally = RunTally.Empty;
+    private long? recorded;
+
     /// <summary>Creates the page and binds it.</summary>
     public UC_RunSummary()
     {
@@ -44,14 +47,27 @@ public partial class UC_RunSummary : UserControl
             .Bind(state => state.ActiveRun.Assertions)
             .Subscribe(ShowChecks));
 
+        // How big the recording is, which the tally cannot know: it counts what the graph holds, and this is
+        // what the producer wrote. Counted into the sidecar as the run went, so reading it costs nothing.
+        subscriptions.Add(StateStore<MainState>.Default
+            .Bind(state => state.Runs
+                .Find(run => string.Equals(run.SessionId, state.SelectedSessionId, StringComparison.Ordinal))?.EventCount)
+            .Subscribe(count =>
+            {
+                recorded = count;
+                tbCounts.Text = Counts(tally, recorded);
+            }));
+
         Unloaded += (_, _) => subscriptions.Dispose();
     }
 
     /// <summary>Raised when the reader closes the page.</summary>
     public event Action? Closed;
 
-    private void Show(RunTally tally)
+    private void Show(RunTally counted)
     {
+        tally = counted;
+
         bool decided = tally.IsFinished || tally.Failed > 0;
 
         tbVerdict.Text = !decided ? "Still running" : tally.IsValid ? "Valid" : "Not valid";
@@ -66,7 +82,7 @@ public partial class UC_RunSummary : UserControl
             : tally.HasAssertions ? Color.FromArgb(0x28, 0x62, 0xC9, 0x8F)
             : Color.FromArgb(0x28, 0xFC, 0xAF, 0x62));
 
-        tbCounts.Text = Counts(tally);
+        tbCounts.Text = Counts(tally, recorded);
 
         ShowFailures(tally);
     }
@@ -90,7 +106,7 @@ public partial class UC_RunSummary : UserControl
             : "Every step passed, but the run asserted nothing — so nothing was actually proven.";
     }
 
-    private static string Counts(RunTally tally)
+    private static string Counts(RunTally tally, long? recorded)
     {
         List<string> lines =
         [
@@ -101,6 +117,11 @@ public partial class UC_RunSummary : UserControl
 
         if (tally.Retried > 0)
             lines.Add($"retries     {tally.Retried} step(s) needed more than one attempt");
+
+        // Only for a run read from disk. A live run is still being written into the file this number is
+        // counted in, so anything shown here mid-run would be the count as of whenever it was last read.
+        if (recorded is long events)
+            lines.Add($"recorded    {events.ToString("N0", CultureInfo.CurrentCulture)} event(s) on disk");
 
         return string.Join("\n", lines);
     }
@@ -134,6 +155,23 @@ public partial class UC_RunSummary : UserControl
                 TextWrapping = TextWrapping.Wrap
             };
 
+            StackPanel body = new() { Children = { heading, detail } };
+
+            // The bottom of the chain, when there is one. A summary that lists five failures all reading
+            // "One or more errors occurred" has told the reader only that five things broke; the innermost
+            // exception is what distinguishes them, and it is a line rather than a panel.
+            if (failure.Detail?.InnerExceptions is { Count: > 0 } chain)
+            {
+                body.Children.Add(new TextBlock
+                {
+                    Text = $"↳ {chain[^1].ExceptionType}: {chain[^1].Message}",
+                    Foreground = (Brush)FindResource("TextFaint"),
+                    FontSize = 11,
+                    Margin = new Thickness(0, 2, 0, 0),
+                    TextWrapping = TextWrapping.Wrap
+                });
+            }
+
             Border row = new()
             {
                 CornerRadius = new CornerRadius(4),
@@ -142,7 +180,7 @@ public partial class UC_RunSummary : UserControl
                 Margin = new Thickness(0, 0, 0, 4),
                 Cursor = Cursors.Hand,
                 ToolTip = "Open this step on the board.",
-                Child = new StackPanel { Children = { heading, detail } }
+                Child = body
             };
 
             string stage = failure.StageName;
@@ -174,7 +212,7 @@ public partial class UC_RunSummary : UserControl
         {
             TextBlock heading = new()
             {
-                Text = $"{assertion.Target} · {assertion.Render()}",
+                Text = $"{assertion.Subject} · {assertion.Render()}",
                 Foreground = (Brush)FindResource("TextPrimary"),
                 FontSize = 12,
                 TextTrimming = TextTrimming.CharacterEllipsis

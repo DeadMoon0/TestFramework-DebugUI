@@ -175,6 +175,8 @@ public sealed class ShellController : IDisposable
                     // depend on what they had happened to click.
                     ProjectFilePath = run.ProjectFilePath,
                     CanRerun = run.CanRerun,
+                    Source = run.Source,
+                    EventCount = run.EventCount,
                     JournalPath = run.JournalPath
                 })
             ];

@@ -209,6 +209,8 @@ public sealed class JournalRunEventSource : IRunEventSource
                               ?? metadata.ProjectPath,
                 ProjectFilePath = metadata.Identity?.ProjectFilePath,
                 CanRerun = metadata.Identity?.CanRerun ?? false,
+                Source = SourceLocation.From(metadata.Identity?.SourceFilePath, metadata.Identity?.SourceLineNumber ?? 0),
+                EventCount = metadata.EventCount,
                 JournalPath = Path.Combine(runsDirectory, metadata.JournalFileName)
             };
         }

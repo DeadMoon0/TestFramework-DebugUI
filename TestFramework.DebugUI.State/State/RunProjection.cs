@@ -142,7 +142,13 @@ public static partial class RunProjection
 
                 // Carried rather than dropped: a board colours a variable and an artifact
                 // differently, and the contract is the only place that distinction is stated.
-                Kind = entry.Kind == StepIOKind.Artifact ? DebugValueKind.Artifact : DebugValueKind.Variable
+                Kind = entry.Kind == StepIOKind.Artifact ? DebugValueKind.Artifact : DebugValueKind.Variable,
+
+                // Both new with protocol 4, and both were being dropped here. The declared type is what
+                // turns "orderId" into "orderId : Int32", and required says whether a step that found
+                // nothing under that key was entitled to carry on.
+                DeclaredType = entry.DeclaredType,
+                Required = entry.Required
             });
         }
 

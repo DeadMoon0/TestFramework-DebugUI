@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Runtime.InteropServices;
@@ -35,6 +36,12 @@ public partial class MainWindow : Window
     private static ShellController? shell;
 
     private readonly SettingsStore settings = new();
+
+    /// <summary>What is unread, and the worst of it — which is what the bell shows without being opened.</summary>
+    private readonly record struct Unread(int Count, FeedSeverity Worst);
+
+    private IDisposable? notifications;
+    private Unread unread;
     private UiSettings saved = UiSettings.Defaults;
     private TrayIcon? tray;
     private WatchNotifier? notifier;
@@ -133,6 +140,24 @@ public partial class MainWindow : Window
         Breakpoints.Changed += SaveBreakpoints;
 
         ucSettings.Closed += () => ucSettings.Visibility = Visibility.Collapsed;
+
+        // The bell reports what is unread and how bad it is; the panel it opens is only the list.
+        ucFeed.Closed += () => ShowNotificationState();
+
+        notifications = StateStore<MainState>.Default
+            .Bind(state => new Unread(
+                state.Shell.UnreadFeedCount,
+                state.Shell.Feed
+                    .Skip(System.Math.Max(0, state.Shell.Feed.Count - state.Shell.UnreadFeedCount))
+                    .Select(entry => entry.Severity)
+                    .DefaultIfEmpty(FeedSeverity.Info)
+                    .Max()))
+            .DistinctUntilChanged()
+            .Subscribe(unread =>
+            {
+                this.unread = unread;
+                ShowNotificationState();
+            });
 
         // The panel reports what the user changed; the window owns the file. Watch mode is applied
         // through the same path the title-bar eye uses, so the two can never disagree.
@@ -284,6 +309,12 @@ public partial class MainWindow : Window
     /// </remarks>
     private void CloseTopmost()
     {
+        if (ucFeed.IsOpen)
+        {
+            ucFeed.Close();
+            return;
+        }
+
         if (ucSettings.Visibility == Visibility.Visible)
         {
             ucSettings.Visibility = Visibility.Collapsed;
@@ -749,6 +780,47 @@ public partial class MainWindow : Window
 
     private void ShowHome() => ucHome.Visibility = Visibility.Visible;
 
+    private void btNotifications_Click(object sender, RoutedEventArgs e)
+    {
+        ucFeed.Toggle();
+        ShowNotificationState();
+    }
+
+    /// <summary>
+    /// Puts the unread count on the bell, in the colour of the worst thing in it.
+    /// </summary>
+    /// <remarks>
+    /// The colour is a lifecycle colour rather than the accent: red and amber here mean the same as they mean on
+    /// a step, which is the whole reason one glance at the title bar is enough. A bell with nothing unread is as
+    /// quiet as the rest of the caption.
+    /// </remarks>
+    private void ShowNotificationState()
+    {
+        bUnread.Visibility = unread.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        tbUnread.Text = unread.Count > 9 ? "9+" : unread.Count.ToString(CultureInfo.InvariantCulture);
+
+        bUnread.Background = (Brush)FindResource(unread.Worst switch
+        {
+            FeedSeverity.Error => "StateError",
+            FeedSeverity.Warning => "StateTimeout",
+            _ => "Accent"
+        });
+
+        pathBell.Stroke = (Brush)FindResource(
+            ucFeed.IsOpen ? "Accent"
+            : unread.Count == 0 ? "TextSecondary"
+            : unread.Worst switch
+            {
+                FeedSeverity.Error => "StateError",
+                FeedSeverity.Warning => "StateTimeout",
+                _ => "TextSecondary"
+            });
+
+        btNotifications.ToolTip = unread.Count == 0
+            ? "What runs off screen have reported"
+            : $"{unread.Count} unread";
+    }
+
     private void btHome_Click(object sender, RoutedEventArgs e) => ShowHome();
 
     private void btClose_Click(object sender, RoutedEventArgs e) => Close();
@@ -793,6 +865,9 @@ public partial class MainWindow : Window
         // Before the store goes, since it is what is being observed.
         halts?.Dispose();
         halts = null;
+
+        notifications?.Dispose();
+        notifications = null;
 
         StopWatching();
 

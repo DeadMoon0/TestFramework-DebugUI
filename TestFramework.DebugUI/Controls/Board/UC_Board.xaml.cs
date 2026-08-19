@@ -136,7 +136,17 @@ public partial class UC_Board : UserControl
 
         // Which checks broke, so a pipe into the verdict can be coloured by its own outcome rather
         // than by the run's. One failed check among five should show as one red pipe, not five.
-        brokenChecks = [.. graph.Assertions.Where(assertion => !assertion.Succeeded).Select(assertion => assertion.Target)];
+        //
+        // Only checks that were about a named value: a check against a bare value carries no
+        // identifier, and one against a step carries the step's name — which would colour a pipe for
+        // a variable that happens to share it.
+        brokenChecks =
+        [
+            .. graph.Assertions
+                .Where(assertion => !assertion.Succeeded)
+                .Where(assertion => assertion.TargetKind is DebugAssertionTargetKind.Variable or DebugAssertionTargetKind.Artifact)
+                .Select(assertion => assertion.Target)
+        ];
 
         // Value equality on the result is what makes this cheap: most events change a step's state
         // without moving anything, and rebuilding the canvas for those would throw away the whole

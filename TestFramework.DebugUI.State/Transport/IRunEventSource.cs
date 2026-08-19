@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using TestFramework.Core.Debugger;
 
@@ -76,6 +76,22 @@ public sealed record AvailableRun
     /// carries the identity: the picker can offer re-run for a run nobody has opened.
     /// </remarks>
     public bool CanRerun { get; init; }
+
+    /// <summary>Gets where in the code the run was started, when the sidecar recorded it.</summary>
+    /// <remarks>
+    /// From the sidecar for the same reason as <see cref="CanRerun"/>: opening the test in an editor is
+    /// offered for a run in the list, before anyone has read its journal.
+    /// </remarks>
+    public SourceLocation? Source { get; init; }
+
+    /// <summary>
+    /// Gets how many events the recording holds, as the sidecar counted them.
+    /// </summary>
+    /// <remarks>
+    /// Counted by the producer while it wrote, so it is free here: the whole point of the sidecar is that
+    /// listing runs never parses one.
+    /// </remarks>
+    public long? EventCount { get; init; }
 
     /// <summary>Gets the path of the journal holding the run's events.</summary>
     public required string JournalPath { get; init; }

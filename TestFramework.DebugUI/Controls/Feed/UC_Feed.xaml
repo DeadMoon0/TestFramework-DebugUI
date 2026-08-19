@@ -5,38 +5,49 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d">
     <!--
-        A corner tab, not a strip across the window. It carries what unselected runs are doing, which
-        matters when it matters and never wants a fifth of the screen for it. Closed it is a count
-        and a headline; opened it grows upwards over the canvas.
-    -->
-    <Border Style="{StaticResource PanelOverlay}" MaxWidth="420" VerticalAlignment="Bottom">
-        <StackPanel>
-            <ScrollViewer x:Name="svEntries" MaxHeight="260" Visibility="Collapsed"
-                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                <StackPanel x:Name="spEntries" Margin="6 6 6 0"/>
-            </ScrollViewer>
+        What the runs that are not on screen have to say. It used to be a tab in the bottom-right corner of the
+        canvas, carrying its own count and a headline over the board; the count and the state now live on the
+        bell in the title bar, and this is only the list it opens.
 
-            <Grid x:Name="gHeader" MouseLeftButtonUp="Header_MouseLeftButtonUp" Background="Transparent"
-                  Cursor="Hand" Margin="8 6">
+        Anchored under that bell rather than centred, so the panel reads as coming from the thing that was
+        clicked, and narrow enough that the board is still visible beside it.
+    -->
+    <Border Style="{StaticResource PanelOverlay}" Width="380" Margin="0 4 10 0">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Foreground="{StaticResource TextFaint}" FontSize="10" FontWeight="Bold"
-                           VerticalAlignment="Center" Text="FEED"/>
+                <TextBlock Style="{StaticResource PanelHeading}" VerticalAlignment="Center" Text="NOTIFICATIONS"/>
 
-                <Border x:Name="bUnread" Grid.Column="1" CornerRadius="7" Background="{StaticResource Accent}"
-                        Padding="5 0" Height="14" VerticalAlignment="Center" Margin="6 0 0 0" Visibility="Collapsed">
-                    <TextBlock x:Name="tbUnread" FontSize="9" FontWeight="Bold" Foreground="White"
-                               VerticalAlignment="Center"/>
-                </Border>
+                <TextBlock x:Name="tbCount" Grid.Column="1" Style="{StaticResource MutedText}" FontSize="10"
+                           Foreground="{StaticResource TextFaint}" VerticalAlignment="Center"/>
 
-                <TextBlock x:Name="tbLatest" Grid.Column="2" Style="{StaticResource MutedText}" FontSize="10"
-                           VerticalAlignment="Center" Margin="8 0 0 0" TextWrapping="NoWrap"
-                           TextTrimming="CharacterEllipsis"/>
+                <Button x:Name="btClose" Grid.Column="2" Style="{StaticResource IconButton}" Margin="0 4 8 4"
+                        Click="btClose_Click" ToolTip="Close">
+                    <Path Data="{StaticResource IconClose}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+                </Button>
             </Grid>
-        </StackPanel>
+
+            <!--
+                Nothing yet is worth saying so, rather than opening an empty panel that looks broken.
+            -->
+            <TextBlock x:Name="tbEmpty" Grid.Row="1" Style="{StaticResource MutedText}" Margin="10 0 10 10"
+                       Text="Nothing to report. Runs that start, finish or fail while you are looking elsewhere appear here."/>
+
+            <ScrollViewer x:Name="svEntries" Grid.Row="1" MaxHeight="420" Visibility="Collapsed"
+                          VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel x:Name="spEntries" Margin="6 0 6 6"/>
+            </ScrollViewer>
+        </Grid>
     </Border>
 </UserControl>

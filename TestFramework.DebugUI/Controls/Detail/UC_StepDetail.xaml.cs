@@ -305,6 +305,13 @@ public partial class UC_StepDetail : UserControl
         row.Children.Add(level);
         row.Children.Add(message);
 
+        // The event that emitted the line, on the pointer rather than in a column. It is the same handful of
+        // names down the whole log, so a column of it would be a column of repetition — but it is the thing
+        // to search on when a reader wants every line one kind of event produced, and a tooltip is where
+        // they can find out what to type.
+        if (entry.EventName is { Length: > 0 } emitter)
+            row.ToolTip = ShortTypeName(emitter);
+
         return row;
     }
 
@@ -338,6 +345,8 @@ public partial class UC_StepDetail : UserControl
 
         tbFailureMessage.Text = failure.Message;
 
+        ShowCauses(failure);
+
         Fill(tbFriendlyLabel, tbFriendly, failure.FriendlyMessage);
         Fill(tbRecoveryLabel, tbRecovery, Bullets(failure.RecoverySteps));
         Fill(tbOptionsLabel, tbOptions, Bullets(failure.AvailableOptions));
@@ -353,6 +362,73 @@ public partial class UC_StepDetail : UserControl
         }
     }
 
+    /// <summary>
+    /// Lists what the failure was wrapped around, outermost first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Each link is stepped further in than the one above it, so the nesting is visible without a label
+    /// saying "depth 2". Capped after a few levels — a chain deep enough to run out of indent is deep
+    /// enough that the exact level has stopped mattering.
+    /// </para>
+    /// <para>
+    /// The type is shown short with the full name on the pointer. Fully qualified is what the wire carries
+    /// and what a reader wants when they go looking for it; it is also sixty characters of namespace in a
+    /// panel this wide, which pushes the message — the part that says what happened — onto a third line.
+    /// </para>
+    /// </remarks>
+    private void ShowCauses(DebugFailureDetail failure)
+    {
+        spCausedBy.Children.Clear();
+
+        tbCausedByLabel.Visibility = failure.InnerExceptions.Count == 0
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+
+        for (int depth = 0; depth < failure.InnerExceptions.Count; depth++)
+        {
+            DebugExceptionLink link = failure.InnerExceptions[depth];
+
+            StackPanel row = new()
+            {
+                Margin = new Thickness(Math.Min(depth, 3) * 10, depth == 0 ? 0 : 6, 0, 0)
+            };
+
+            row.Children.Add(new TextBlock
+            {
+                Style = (Style)FindResource("MutedText"),
+                FontFamily = new FontFamily("Consolas"),
+                FontSize = 11,
+                Foreground = (Brush)FindResource("TextSecondary"),
+                Text = ShortTypeName(link.ExceptionType),
+                ToolTip = link.ExceptionType
+            });
+
+            row.Children.Add(new TextBlock
+            {
+                Style = (Style)FindResource("MutedText"),
+                Margin = new Thickness(0, 1, 0, 0),
+                Text = link.Message
+            });
+
+            spCausedBy.Children.Add(row);
+        }
+    }
+
+    /// <summary>
+    /// An exception type without its namespace.
+    /// </summary>
+    /// <remarks>
+    /// Split on the last dot rather than trimming a known prefix: the chain mixes framework types with the
+    /// consumer's own, and there is no one namespace to strip.
+    /// </remarks>
+    private static string ShortTypeName(string typeName)
+    {
+        int lastDot = typeName.LastIndexOf('.');
+
+        return lastDot >= 0 && lastDot < typeName.Length - 1 ? typeName[(lastDot + 1)..] : typeName;
+    }
+
     private static void Fill(TextBlock label, TextBlock body, string? content)
     {
         bool has = !string.IsNullOrWhiteSpace(content);
@@ -362,11 +438,28 @@ public partial class UC_StepDetail : UserControl
         body.Text = content ?? string.Empty;
     }
 
-    /// <summary>Lists a declared contract, naming the kind so a reader is not left guessing.</summary>
+    /// <summary>
+    /// Lists a declared contract, naming the kind so a reader is not left guessing.
+    /// </summary>
+    /// <remarks>
+    /// The declared type is included because a key on its own says what the step reads and not what it
+    /// expects to find there — which is the half that matters when a value arrives and the step rejects it.
+    /// Only optionality is spelled out: required is the protocol's default and almost every entry, so
+    /// stating it on every line would spend the reader's attention on the unremarkable half.
+    /// </remarks>
     private static string Describe(System.Collections.Immutable.ImmutableList<StepIO> declared)
-        => declared.Count == 0
-            ? "None declared."
-            : string.Join("\n", declared.Select(entry => $"{entry.Key}  ({entry.Kind.ToString().ToLowerInvariant()})"));
+    {
+        if (declared.Count == 0)
+            return "None declared.";
+
+        return string.Join("\n", declared.Select(entry =>
+        {
+            string named = entry.DeclaredType is { Length: > 0 } type ? $"{entry.Key} : {type}" : entry.Key;
+            string kind = entry.Kind.ToString().ToLowerInvariant();
+
+            return entry.Required ? $"{named}  ({kind})" : $"{named}  ({kind}, optional)";
+        }));
+    }
 
     private static string? Bullets(System.Collections.Generic.IReadOnlyList<string>? lines)
         => lines is null || lines.Count == 0 ? null : string.Join("\n", lines.Select(line => "• " + line));
@@ -392,6 +485,10 @@ public partial class UC_StepDetail : UserControl
         StringBuilder text = new();
         text.AppendLine($"{step.DisplayName} ({stageName}, step {step.StepId})");
         text.AppendLine($"{failure.ExceptionType}: {failure.Message}");
+
+        // Indented the way the panel steps them, because the nesting is part of what is being handed over.
+        foreach (DebugExceptionLink link in failure.InnerExceptions)
+            text.AppendLine($"  ---> {link.ExceptionType}: {link.Message}");
 
         if (!string.IsNullOrWhiteSpace(failure.FriendlyMessage))
             text.AppendLine().AppendLine(failure.FriendlyMessage);

@@ -34,6 +34,7 @@ public partial class UC_RunBar : UserControl
 
     private ExternalEditor? code;
     private ExternalEditor? visualStudio;
+    private SourceLocation? source;
 
     /// <summary>Creates the bar and binds it.</summary>
     public UC_RunBar()
@@ -83,6 +84,17 @@ public partial class UC_RunBar : UserControl
             .Bind(state => state.ActiveRun.Stages.Any(stage => stage.Steps.Any(
                 step => step.Lifecycle is DebugLifecycleState.Error or DebugLifecycleState.Timeout)))
             .BindToDependencyProperty(btFirstFailure, IsEnabledProperty));
+
+        // The tooltip names the file and line the button will land on, because "open in VS Code" and "open
+        // OrderTests.cs at line 42" are different offers and only the second one is worth crossing the
+        // window for. Re-read on selection because the answer belongs to the run, not to the editor.
+        subscriptions.Add(StateStore<MainState>.Default
+            .Bind(state => Selected(state)?.Source)
+            .Subscribe(location =>
+            {
+                source = location;
+                ShowEditorTargets();
+            }));
 
         // Looked for in the background: finding Visual Studio runs vswhere, and the title bar must not wait
         // on a process launch to appear. The buttons stay hidden until the answer arrives, which for an
@@ -166,6 +178,8 @@ public partial class UC_RunBar : UserControl
         Show(btCode, imgCode, code);
         Show(btVisualStudio, imgVisualStudio, visualStudio);
 
+        ShowEditorTargets();
+
         bEditorRule.Visibility = code is null && visualStudio is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
@@ -178,8 +192,33 @@ public partial class UC_RunBar : UserControl
         }
 
         image.Source = editor.Icon;
-        button.ToolTip = $"Open this test's solution in {editor.Name}";
         button.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Says what each editor button will actually open.
+    /// </summary>
+    /// <remarks>
+    /// Visual Studio is named without a line even when the run reported one, because devenv cannot be told a
+    /// line and promising one the reader will not get is worse than promising less.
+    /// </remarks>
+    private void ShowEditorTargets()
+    {
+        if (code is not null)
+            btCode.ToolTip = Target(code, withLine: true);
+
+        if (visualStudio is not null)
+            btVisualStudio.ToolTip = Target(visualStudio, withLine: false);
+    }
+
+    private string Target(ExternalEditor editor, bool withLine)
+    {
+        if (source is null)
+            return $"Open this test's solution in {editor.Name}";
+
+        return withLine && source.Line > 0
+            ? $"Open {source.FileName} line {source.Line} in {editor.Name}"
+            : $"Open {source.FileName} in {editor.Name}";
     }
 
     private void btCode_Click(object sender, RoutedEventArgs e) => Open(code);
@@ -187,12 +226,14 @@ public partial class UC_RunBar : UserControl
     private void btVisualStudio_Click(object sender, RoutedEventArgs e) => Open(visualStudio);
 
     /// <summary>
-    /// Opens the selected run's solution in an editor.
+    /// Opens the selected run in an editor, at the line that started it when the run recorded one.
     /// </summary>
     /// <remarks>
-    /// The project file is the run's own — the one recorded so the test could be run again — so this opens
-    /// the code that produced what is on screen rather than whatever the reader last had open. A run that
-    /// never reported one says so instead of opening something arbitrary.
+    /// The project file and the source line are the run's own, so this opens the code that produced what is
+    /// on screen rather than whatever the reader last had open. Core has captured the call site at compile
+    /// time all along; until now the button ignored it and opened the solution, leaving the reader to find
+    /// one test among a suite. A run that reported nothing at all says so instead of opening something
+    /// arbitrary.
     /// </remarks>
     private void Open(ExternalEditor? editor)
     {
@@ -201,9 +242,13 @@ public partial class UC_RunBar : UserControl
 
         RunSummary? run = StateStore<MainState>.Default.GetValue(Selected);
 
-        string? target = EditorPaths.TargetFor(run?.ProjectFilePath, editor.WantsFolder, ExternalEditors.SolutionsIn);
+        System.Collections.Immutable.ImmutableList<string> arguments = EditorPaths.ArgumentsFor(
+            run?.ProjectFilePath,
+            editor.WantsFolder,
+            run?.Source,
+            ExternalEditors.SolutionsIn);
 
-        if (target is null)
+        if (arguments.Count == 0)
         {
             MainWindow.Shell.Report(new FeedEntry
             {
@@ -211,13 +256,13 @@ public partial class UC_RunBar : UserControl
                 Severity = FeedSeverity.Warning,
                 Source = FeedSource.App,
                 Title = $"There is nothing to open in {editor.Name}.",
-                Detail = "This run did not record which project file it came from."
+                Detail = "This run recorded neither a project file nor the source it was started from."
             });
 
             return;
         }
 
-        if (!ExternalEditors.TryOpen(editor, target))
+        if (!ExternalEditors.TryOpen(editor, arguments))
         {
             MainWindow.Shell.Report(new FeedEntry
             {

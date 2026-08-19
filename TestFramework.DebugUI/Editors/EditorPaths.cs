@@ -1,8 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using TestFramework.DebugUI.State;
 
 namespace TestFramework.DebugUI.Editors;
 
@@ -142,5 +144,44 @@ public static class EditorPaths
         string best = SolutionNear(projectFilePath, solutionsIn) ?? projectFilePath;
 
         return wantsFolder ? Path.GetDirectoryName(best) : best;
+    }
+
+    /// <summary>
+    /// The whole command line for opening a run, landing on the line that started it when the run said
+    /// which one that was.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The two editors are asked for this in genuinely different ways, which is why this returns arguments
+    /// rather than a path.
+    /// </para>
+    /// <para>
+    /// VS Code takes the folder <em>and</em> the position, so it loses nothing: the workspace opens and the
+    /// caret lands on the line. Visual Studio has no way to say a line on its command line at all, so it is
+    /// given <c>/edit</c> and the file — which opens in the instance the reader already has that solution
+    /// open in, this being someone looking at a test they just ran. With no instance running it opens the
+    /// file on its own, which is worse than the solution and is the price of landing on the right file; a
+    /// run that reported no source file still gets the solution, exactly as before.
+    /// </para>
+    /// </remarks>
+    public static ImmutableList<string> ArgumentsFor(
+        string? projectFilePath,
+        bool wantsFolder,
+        SourceLocation? source,
+        Func<string, IEnumerable<string>> solutionsIn)
+    {
+        string? target = TargetFor(projectFilePath, wantsFolder, solutionsIn);
+
+        if (source is null)
+            return target is null ? [] : [target];
+
+        if (!wantsFolder)
+            return ["/edit", source.FilePath];
+
+        string position = source.Line > 0
+            ? source.FilePath + ":" + source.Line.ToString(CultureInfo.InvariantCulture)
+            : source.FilePath;
+
+        return target is null ? ["--goto", position] : [target, "--goto", position];
     }
 }

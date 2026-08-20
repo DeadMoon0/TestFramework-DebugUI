@@ -21,7 +21,7 @@ namespace TestFramework.DebugUI.Controls.Detail;
 /// Counted by <see cref="RunTally"/> rather than here, so this page and the verdict drawn on the
 /// board cannot give different answers to the same question.
 /// </remarks>
-public partial class UC_RunSummary : UserControl
+public partial class UC_RunSummary : UserControl, IDisposable
 {
     /// <summary>
     /// How many moved steps this page names.
@@ -73,11 +73,8 @@ public partial class UC_RunSummary : UserControl
                 tbCounts.Text = Counts(tally, recorded);
             }));
 
-        Unloaded += (_, _) => subscriptions.Dispose();
     }
 
-    /// <summary>Raised when the reader closes the page.</summary>
-    public event Action? Closed;
 
     private void Show(RunTally counted)
     {
@@ -367,5 +364,19 @@ public partial class UC_RunSummary : UserControl
             : took < TimeSpan.FromMinutes(1) ? $"{took.TotalSeconds:F1} s"
             : $"{(int)took.TotalMinutes}m {took.Seconds}s";
 
-    private void btClose_Click(object sender, RoutedEventArgs e) => Closed?.Invoke();
+
+    /// <summary>
+    /// Lets go of the store.
+    /// </summary>
+    /// <remarks>
+    /// Called by the host when the window closes, not when the panel leaves the visual tree. Moving a panel to
+    /// another dock takes it out of one parent and puts it in another, and WPF raises <c>Unloaded</c> in
+    /// between — so disposing there would kill a panel the first time it was ever dragged. A closed panel
+    /// keeping its subscriptions also means it reopens showing whatever the reader left in it.
+    /// </remarks>
+    public void Dispose()
+    {
+        subscriptions.Dispose();
+        GC.SuppressFinalize(this);
+    }
 }

@@ -3,6 +3,8 @@ using System.Collections.Immutable;
 using System.IO;
 using TestFramework.DebugUI.State;
 
+using TestFramework.DebugUI.Docking;
+
 namespace TestFramework.DebugUI.State.Tests;
 
 /// <summary>
@@ -42,9 +44,9 @@ public class SettingsStoreTests : IDisposable
         Assert.Empty(settings.Breakpoints);
         Assert.False(settings.Watch.Enabled);
 
-        // Zero, not a width: the application decides what an undragged panel opens at, and it knows how big
-        // the window is when it decides.
-        Assert.Equal(0, settings.Panels.StepDetailWidth);
+        // Null, not the default arrangement: absent means "never arranged", and what that turns into is the
+        // application's call, made when it knows how big the window is.
+        Assert.Null(settings.Layout);
     }
 
     [Fact]
@@ -57,7 +59,7 @@ public class SettingsStoreTests : IDisposable
             Window = new WindowPlacement { Left = 100, Top = 50, Width = 1600, Height = 900, IsMaximized = true },
             Breakpoints = [new BreakpointMark { Stage = "Main", StepId = 3 }],
             Watch = new WatchSettings { Enabled = true, NotifyOnlyOnFailure = true },
-            Panels = new PanelSettings { StepDetailWidth = 620 }
+            Layout = DockLayout.Default.Move(PanelId.Summary, DockSide.Right, 0).Resize(DockSide.Bottom, 0.35)
         });
 
         UiSettings read = store.Load();
@@ -68,7 +70,11 @@ public class SettingsStoreTests : IDisposable
         Assert.Equal(3, read.Breakpoints[0].StepId);
         Assert.True(read.Watch.Enabled);
         Assert.True(read.Watch.NotifyOnlyOnFailure);
-        Assert.Equal(620, read.Panels.StepDetailWidth);
+        // The arrangement survives the round trip through JSON, wells, floats and all — which is the whole
+        // reason it is a plain record rather than anything WPF.
+        Assert.Equal([PanelId.Summary, PanelId.Step], read.Layout!.At(DockSide.Right).Panels);
+        Assert.Equal(0.35, read.Layout.At(DockSide.Bottom).Extent);
+        Assert.Equal([PanelId.Runs, PanelId.Values], read.Layout.At(DockSide.Left).Panels);
     }
 
     [Fact]

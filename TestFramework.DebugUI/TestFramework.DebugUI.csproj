@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
@@ -9,6 +9,9 @@
 		<SupportedOSPlatformVersion>10.0.20348.0</SupportedOSPlatformVersion>
 		<ApplicationIcon>Icon.ico</ApplicationIcon>
 		<RootNamespace>TestFramework.DebugUI</RootNamespace>
+
+		<!-- Declares per-monitor DPI awareness. See app.manifest for why. -->
+		<ApplicationManifest>app.manifest</ApplicationManifest>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -33,6 +36,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\TestFramework.DebugUI.Docking\TestFramework.DebugUI.Docking.csproj" />
 		<ProjectReference Include="..\TestFramework.DebugUI.Layout\TestFramework.DebugUI.Layout.csproj" />
 		<ProjectReference Include="..\TestFramework.DebugUI.State\TestFramework.DebugUI.State.csproj" />
 	</ItemGroup>

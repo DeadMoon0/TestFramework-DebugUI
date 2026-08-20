@@ -1,4 +1,4 @@
-<UserControl x:Class="TestFramework.DebugUI.Controls.Detail.UC_ValueInspector"
+﻿<UserControl x:Class="TestFramework.DebugUI.Controls.Detail.UC_ValueInspector"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -9,7 +9,7 @@
         "what is actually in it" — the facts laid out, and as much of the content as was sent, with
         the file for the rest.
     -->
-    <Border Style="{StaticResource PanelOverlay}" Width="640">
+    <Border>
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -42,11 +42,6 @@
                     <Button x:Name="btDiff" Style="{StaticResource FlatButton}" Margin="0 5 4 5"
                             Padding="7 2" Content="Diff" Visibility="Collapsed" Click="btDiff_Click"/>
 
-                    <Button x:Name="btClose" Style="{StaticResource IconButton}" Margin="0 5 8 5"
-                            Click="btClose_Click" ToolTip="Close">
-                        <Path Data="{StaticResource IconClose}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
-                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
-                    </Button>
                 </StackPanel>
             </Grid>
 

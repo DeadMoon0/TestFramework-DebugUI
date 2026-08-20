@@ -11,6 +11,8 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Shell;
+using System.Windows.Shapes;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using Axiom.State;
@@ -18,6 +20,8 @@ using TestFramework.Core.Debugger;
 using System.Collections.Immutable;
 using TestFramework.DebugUI.State.Bundles;
 using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.Controls.Dock;
+using TestFramework.DebugUI.Docking;
 using TestFramework.DebugUI.State.Transport;
 using static TestFramework.DebugUI.NativeMethods;
 
@@ -47,6 +51,9 @@ public partial class MainWindow : Window
     private WatchNotifier? notifier;
     private IDisposable? halts;
 
+    /// <summary>What fraction of the window the pinned wells have reserved.</summary>
+    private DockInsets reserved = DockInsets.None;
+
     /// <summary>
     /// Gets the controller the views drive.
     /// </summary>
@@ -55,6 +62,16 @@ public partial class MainWindow : Window
     /// every control's constructor buys nothing when there is only ever one.
     /// </remarks>
     public static ShellController Shell => shell ?? throw new InvalidOperationException("The window has not been created yet.");
+
+    private Controls.Runs.UC_Runs Runs => ucDock.Get<Controls.Runs.UC_Runs>(PanelId.Runs);
+
+    private Controls.Detail.UC_ValueRail Values => ucDock.Get<Controls.Detail.UC_ValueRail>(PanelId.Values);
+
+    private Controls.Detail.UC_RunSummary Summary => ucDock.Get<Controls.Detail.UC_RunSummary>(PanelId.Summary);
+
+    private Controls.Detail.UC_ValueInspector Inspector => ucDock.Get<Controls.Detail.UC_ValueInspector>(PanelId.Inspector);
+
+    private Controls.Home.UC_Home HomePage => ucDock.Get<Controls.Home.UC_Home>(PanelId.Home);
 
     /// <summary>Creates the window and the store behind it.</summary>
     public MainWindow()
@@ -92,13 +109,12 @@ public partial class MainWindow : Window
         // title bar, a shortcut - asks, and the window decides where it goes. Neither of them has any
         // business knowing what else is on screen.
         ucBoard.SummaryRequested += ShowSummary;
-        ucSummary.Closed += () => ucSummary.Visibility = Visibility.Collapsed;
 
         // The title bar acts on the run directly, but anything that moves the board is forwarded, because
         // the board owns its own zoom and selection.
         ucRunBar.SummaryRequested += ShowSummary;
         ucRunBar.ShareRequested += ShareSelectedRun;
-        ucHome.ShareRequested += ShowExport;
+        HomePage.ShareRequested += ShowExport;
         ucExport.Closed += () => ucExport.Visibility = Visibility.Collapsed;
         ucExport.Exported += ReportExport;
         ucRunBar.FitRequested += ucBoard.FitToWindow;
@@ -112,17 +128,16 @@ public partial class MainWindow : Window
         ucAnnotate.VisibilityChanged += ucBoard.SetAnnotationsVisible;
         ucAnnotate.Closed += StopAnnotating;
 
-        ucValues.ValueOpened += (key, isArtifact) => ucValueInspector.Show(key, isArtifact);
-        ucValueInspector.Closed += () => ucValueInspector.Visibility = Visibility.Collapsed;
+        Values.ValueOpened += OpenValue;
 
         // The home page is shown on purpose and hidden on purpose. It is deliberately not tied to
         // whether a run is selected: the first live run selects itself, and having the page vanish
         // under the reader because a test started elsewhere would be the tool moving on its own.
-        ucHome.Closed += () => ucHome.Visibility = Visibility.Collapsed;
+        HomePage.Closed += () => Put(PanelId.Home);
 
         // The rail answers "which run"; the page answers "how is everything doing". Its root row is the way
         // across, because the whole journal is what the page is about.
-        ucRuns.OverviewRequested += ShowHome;
+        Runs.OverviewRequested += ShowHome;
 
         // A halt is the one exception. The step that stopped the run is marked on the board, the buttons
         // that answer it are in the title bar, and a run held up is waiting on the reader rather than
@@ -134,7 +149,7 @@ public partial class MainWindow : Window
             .Subscribe(waiting =>
             {
                 if (waiting)
-                    ucHome.Visibility = Visibility.Collapsed;
+                    Put(PanelId.Home);
             });
 
         // Read before the window is shown, so restoring geometry does not visibly move it.
@@ -143,12 +158,25 @@ public partial class MainWindow : Window
         Breakpoints.BreakOnFailure = saved.BreakOnFailure;
         ApplyPlacement(saved.Window);
 
-        // The step panel's width is the reader's, and it is theirs on the next start too. Written when the
-        // drag ends, and re-checked whenever the window changes size - a panel dragged wide on a maximised
-        // window would otherwise cover the whole board once the window was made small again.
-        ucStep.SetWidth(saved.Panels.StepDetailWidth);
-        ucStep.Resized += width => Persist(saved with { Panels = saved.Panels with { StepDetailWidth = width } });
-        SizeChanged += (_, _) => ucStep.Reclamp();
+        // Where every panel is, as the reader last left it. Restored before the window is shown so it does
+        // not visibly rearrange itself, and repaired on the way in so a file from another build is survivable.
+        Arrangement.Restore(saved.Layout);
+        Arrangement.Changed += SaveLayout;
+
+        // A pinned well reserves its room, and the board is the one thing that has to be told: its own
+        // fit-to-window measures the area it actually has, not the area the window has. Given as fractions and
+        // turned into a margin here, because the host must not read a size — doing that inside its own layout is
+        // what made an early version inflate itself past the window.
+        ucDock.InsetsChanged += insets =>
+        {
+            reserved = insets;
+            ApplyBoardInsets();
+        };
+
+        SizeChanged += (_, _) => ApplyBoardInsets();
+
+        Arrangement.Changed += ShowPanelStrip;
+        ShowPanelStrip();
 
         // Saved on change rather than on exit. A tool that is killed - and this one is attached to
         // test hosts that get killed - would otherwise lose every breakpoint set in the session.
@@ -158,7 +186,7 @@ public partial class MainWindow : Window
 
         // A value found by searching opens where a value opened from the rail does. The bar stays up, so a
         // reader can work through several hits without retyping the query.
-        ucSearch.Opened += (key, isArtifact) => ucValueInspector.Show(key, isArtifact);
+        ucSearch.Opened += OpenValue;
 
         // The bell reports what is unread and how bad it is; the panel it opens is only the list.
         ucFeed.Closed += () => ShowNotificationState();
@@ -200,7 +228,6 @@ public partial class MainWindow : Window
 
         BindShortcuts();
 
-        btHome.ToolTip = Shortcuts.Describe("Every run, with what became of each", Shortcuts.Runs);
         btAnnotate.ToolTip = "Draw on this run";
         btSettings.ToolTip = Shortcuts.Describe("Settings", Shortcuts.Settings);
         ApplyWatchMode(saved.Watch.Enabled, announce: false);
@@ -355,9 +382,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (ucValueInspector.Visibility == Visibility.Visible)
+        if (Arrangement.Current.IsOpen(PanelId.Inspector))
         {
-            ucValueInspector.Visibility = Visibility.Collapsed;
+            Put(PanelId.Inspector);
             return;
         }
 
@@ -373,14 +400,16 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (ucSummary.Visibility == Visibility.Visible)
+        if (Arrangement.Current.IsOpen(PanelId.Summary))
         {
-            ucSummary.Visibility = Visibility.Collapsed;
+            Put(PanelId.Summary);
             return;
         }
 
-        if (ucHome.Visibility == Visibility.Visible)
-            ucHome.Visibility = Visibility.Collapsed;
+        // Last, and only what is in the centre: a page is the thing in front, and the rails down the sides are
+        // not something the reader opened, so there is nothing there for Escape to put away.
+        if (Arrangement.Current.At(DockSide.Center).Active is { } page)
+            Put(page);
     }
 
     /// <summary>
@@ -392,7 +421,7 @@ public partial class MainWindow : Window
     /// </remarks>
     private void ShowSearch()
     {
-        ucHome.Visibility = Visibility.Collapsed;
+        Put(PanelId.Home);
         ucSearch.Open();
     }
 
@@ -699,7 +728,7 @@ public partial class MainWindow : Window
             return;
 
         if (BundleImport.Open(bundlePath))
-            ucHome.Visibility = Visibility.Collapsed;
+            Put(PanelId.Home);
     }
 
     /// <summary>
@@ -773,7 +802,7 @@ public partial class MainWindow : Window
     private void ShowAnnotateState(bool annotating)
         => pathAnnotate.Stroke = (Brush)FindResource(annotating ? "Accent" : "TextSecondary");
 
-    private void ShowSummary() => ucSummary.Visibility = Visibility.Visible;
+    private void ShowSummary() => Reveal(PanelId.Summary);
 
     /// <summary>Offers to share the run being watched.</summary>
     private void ShareSelectedRun()
@@ -825,7 +854,207 @@ public partial class MainWindow : Window
         });
     }
 
-    private void ShowHome() => ucHome.Visibility = Visibility.Visible;
+    private void ShowHome() => Reveal(PanelId.Home);
+
+    /// <summary>Opens a value in the inspector, wherever the reader has put the inspector.</summary>
+    /// <remarks>
+    /// Two steps because they are two things: which value is the panel's own business, and whether the panel is
+    /// on screen is the arrangement's. Asked for from the value rail and from a search hit alike.
+    /// </remarks>
+    private void OpenValue(string key, bool isArtifact)
+    {
+        Inspector.Show(key, isArtifact);
+        Reveal(PanelId.Inspector);
+    }
+
+    /// <summary>Brings a panel out, at its own default place if it was put away.</summary>
+    private static void Reveal(PanelId panel)
+        => Arrangement.Apply(layout => layout.Reveal(panel, PanelRegistry.DefaultSideOf(panel)));
+
+    /// <summary>Puts a panel away.</summary>
+    private static void Put(PanelId panel) => Arrangement.Apply(layout => layout.Close(panel));
+
+    private void SaveLayout() => Persist(saved with { Layout = Arrangement.Current });
+
+    /// <summary>Keeps the board out of whatever the pinned wells have reserved.</summary>
+    private void ApplyBoardInsets()
+        => ucBoard.Margin = reserved.Against(ucDock.ActualWidth, ucDock.ActualHeight);
+
+    /// <summary>
+    /// Fills the title bar's panel strip from the registry.
+    /// </summary>
+    /// <remarks>
+    /// Built rather than written out in markup, so a panel that exists always has a way to reach it — the same
+    /// reason the settings page lists shortcuts off the command table instead of a copy of it.
+    /// </remarks>
+    /// <summary>
+    /// Fills the title bar's panel strip from the registry, grouped by card.
+    /// </summary>
+    /// <remarks>
+    /// Built rather than written out in markup, so a panel that exists always has a way to reach it — the same
+    /// reason the settings page lists shortcuts off the command table instead of a copy of it.
+    ///
+    /// Rebuilt whenever the arrangement changes, because the grouping is a fact about the arrangement: two panels
+    /// sharing a card are one thing on screen, and their icons have to sit together and act together to say so.
+    /// </remarks>
+    private void ShowPanelStrip()
+    {
+        spPanels.Children.Clear();
+
+        DockLayout layout = Arrangement.Current;
+
+        foreach (ImmutableList<PanelId> card in DockGrouping.Cards(layout))
+        {
+            bool shared = card.Count > 1;
+
+            StackPanel row = new() { Orientation = Orientation.Horizontal };
+
+            for (int index = 0; index < card.Count; index++)
+            {
+                // A hairline between the parts, which is what turns two icons in a box into one control with two
+                // halves. Without it a bordered pair reads as two buttons that happen to be boxed in together.
+                if (index > 0)
+                {
+                    row.Children.Add(new Border
+                    {
+                        Width = 1,
+                        Margin = new Thickness(0, 7, 0, 7),
+                        Background = (Brush)FindResource("IconGroupEdge")
+                    });
+                }
+
+                row.Children.Add(PanelButton(card[index], card));
+            }
+
+            // Drawn as a segmented control: an outline round the pair, a divider between them, and no gap either
+            // side of the divider. A plate alone was not enough — it read as spacing rather than as meaning, and
+            // closing one icon while the other went with it came as a surprise. The shape now says they are one
+            // thing before it is clicked, and the tooltip says it in words.
+            Border group = new()
+            {
+                CornerRadius = new CornerRadius(6),
+                Margin = new Thickness(shared ? 5 : 0, 0, shared ? 5 : 0, 0),
+                Padding = new Thickness(shared ? 2 : 0, 0, shared ? 2 : 0, 0),
+                Background = shared ? (Brush)FindResource("SurfaceRaised") : Brushes.Transparent,
+                BorderBrush = shared ? (Brush)FindResource("IconGroupEdge") : Brushes.Transparent,
+                BorderThickness = new Thickness(shared ? 1 : 0),
+                Child = row
+            };
+
+            WindowChrome.SetIsHitTestVisibleInChrome(group, true);
+
+            spPanels.Children.Add(group);
+        }
+
+        ShowPanelStripState();
+    }
+
+    /// <summary>One panel's icon in the strip.</summary>
+    /// <param name="panel">The panel the icon opens and closes.</param>
+    /// <param name="card">
+    /// Every panel drawn in the same card, so the tooltip can name what else goes away with this one. Being told
+    /// afterwards is what made the grouping feel like a bug rather than a rule.
+    /// </param>
+    private Button PanelButton(PanelId panel, ImmutableList<PanelId> card)
+    {
+        PanelDescriptor descriptor = PanelRegistry.Of(panel);
+
+        Path glyph = new()
+        {
+            Data = (Geometry)FindResource(descriptor.IconKey),
+            Stroke = (Brush)FindResource("TextSecondary"),
+            StrokeThickness = 1.5,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            Width = 18,
+            Height = 18,
+            Stretch = Stretch.None
+        };
+
+        Button button = new()
+        {
+            Style = (Style)FindResource("CaptionIconButton"),
+            Content = glyph,
+            Tag = panel,
+
+            ToolTip = Tip(panel, descriptor, card)
+        };
+
+        WindowChrome.SetIsHitTestVisibleInChrome(button, true);
+
+        button.Click += (_, _) => TogglePanel(panel);
+
+        return button;
+    }
+
+    /// <summary>
+    /// Puts a panel away, or brings it back.
+    /// </summary>
+    /// <remarks>
+    /// Closing takes the whole card with it. A panel sharing a card with another is not separately on screen —
+    /// they are tabs of one thing — so putting one away while the other stayed would mean closing half a card,
+    /// which is not a state the window can be in. Opening is per panel, because a panel that is away has no card
+    /// to share and no company to bring with it.
+    /// </remarks>
+    /// <summary>
+    /// What an icon says it does.
+    /// </summary>
+    /// <remarks>
+    /// Named in the casing a reader says it in rather than the header's shouted form, and the runs page carries
+    /// its shortcut because it is the one panel with a key of its own. A panel sharing a card names its company:
+    /// the outline says two icons act together, and this says which panel the other one is.
+    /// </remarks>
+    private static string Tip(PanelId panel, PanelDescriptor descriptor, ImmutableList<PanelId> card)
+    {
+        string name = panel == PanelId.Home
+            ? Shortcuts.Describe("Every run, with what became of each", Shortcuts.Runs)
+            : Spoken(descriptor.Title);
+
+        ImmutableList<string> company =
+        [
+            .. card
+                .Where(member => member != panel)
+                .Select(member => Spoken(PanelRegistry.Of(member).Title))
+        ];
+
+        return company.Count == 0 ? name : $"{name}  ·  shares a card with {string.Join(", ", company)}, and closes with it";
+    }
+
+    /// <summary>A panel's name as a reader would say it, rather than as its header shouts it.</summary>
+    private static string Spoken(string title)
+        => char.ToUpperInvariant(title[0]) + title[1..].ToLowerInvariant();
+
+    private static void TogglePanel(PanelId panel) => Arrangement.Apply(layout =>
+    {
+        if (!layout.IsOpen(panel))
+            return layout.Move(panel, PanelRegistry.DefaultSideOf(panel), int.MaxValue);
+
+        DockLayout closed = layout;
+
+        foreach (PanelId member in DockGrouping.SharingACard(layout, panel))
+            closed = closed.Close(member);
+
+        return closed;
+    });
+
+    /// <summary>Lights the icon of every panel that is on screen.</summary>
+    /// <remarks>
+    /// The same rule the pen and the eye follow — lit means on — so the strip needs no labels and no second kind
+    /// of indicator for the reader to learn.
+    /// </remarks>
+    private void ShowPanelStripState()
+    {
+        foreach (Button button in spPanels.Children.OfType<Border>().SelectMany(Icons))
+        {
+            if (button.Tag is not PanelId panel || button.Content is not Path glyph)
+                continue;
+
+            glyph.Stroke = (Brush)FindResource(Arrangement.Current.IsOpen(panel) ? "Accent" : "TextSecondary");
+        }
+    }
+
+    private static IEnumerable<Button> Icons(Border group)
+        => group.Child is StackPanel row ? row.Children.OfType<Button>() : [];
 
     private void btNotifications_Click(object sender, RoutedEventArgs e)
     {
@@ -867,8 +1096,6 @@ public partial class MainWindow : Window
             ? "What runs off screen have reported"
             : $"{unread.Count} unread";
     }
-
-    private void btHome_Click(object sender, RoutedEventArgs e) => ShowHome();
 
     private void btClose_Click(object sender, RoutedEventArgs e) => Close();
 

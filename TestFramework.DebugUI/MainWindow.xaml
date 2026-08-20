@@ -12,6 +12,7 @@
         xmlns:share="clr-namespace:TestFramework.DebugUI.Controls.Share"
         xmlns:annotate="clr-namespace:TestFramework.DebugUI.Controls.Annotate"
         xmlns:feed="clr-namespace:TestFramework.DebugUI.Controls.Feed"
+        xmlns:dock="clr-namespace:TestFramework.DebugUI.Controls.Dock"
         xmlns:search="clr-namespace:TestFramework.DebugUI.Controls.Search"
         mc:Ignorable="d"
         Title="TestFrameworkDebugger" Height="800" Width="1400" WindowStyle="None" Background="#01000000"
@@ -71,11 +72,17 @@
                     armed.
                 -->
                 <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="8 0 0 0">
-                    <Button x:Name="btHome" Style="{StaticResource CaptionIconButton}" Click="btHome_Click"
-                            WindowChrome.IsHitTestVisibleInChrome="True">
-                        <Path Data="{StaticResource IconHome}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
-                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
-                    </Button>
+                    <!--
+                        The panels, as an activity bar. VS Code puts this strip down the left edge; here the
+                        title bar already carries the tool's own controls, and a second column of icons for the
+                        same job would spend width saying twice what one row says once.
+
+                        Filled from the registry rather than written out, so a panel cannot exist without a way
+                        to reach it. Lit means on screen.
+                    -->
+                    <StackPanel x:Name="spPanels" Orientation="Horizontal" VerticalAlignment="Center"/>
+
+                    <Border Width="1" Height="18" Margin="6 0" Background="{StaticResource SurfaceCard}"/>
 
                     <Button x:Name="btAnnotate" Style="{StaticResource CaptionIconButton}" Click="btAnnotate_Click"
                             WindowChrome.IsHitTestVisibleInChrome="True">
@@ -188,29 +195,12 @@
             <Grid Grid.Row="1">
                 <board:UC_Board x:Name="ucBoard"/>
 
-                <!-- Project, class, test, then the executions of it. Taller than the flat list it replaced,
-                     because a tree needs the room and because this is the surface the whole journal exists
-                     for. Its root row opens the runs page, which is the half that needs the width. -->
-                <runs:UC_Runs x:Name="ucRuns" HorizontalAlignment="Left" VerticalAlignment="Top"
-                              Width="300" MaxHeight="460"/>
-
-                <detail:UC_ValueRail x:Name="ucValues" HorizontalAlignment="Left" VerticalAlignment="Bottom"
-                                     Width="290" MaxHeight="360"/>
-
-                <!-- The width here is only what the designer shows; the remembered one is applied at
-                     startup, and the reader can drag the panel's left edge to change it. -->
-                <detail:UC_StepDetail x:Name="ucStep" HorizontalAlignment="Right" VerticalAlignment="Stretch"
-                                      Width="390" Margin="0 0 0 44"/>
-
-                <!-- Centred and on top: the summary is a question you ask about the whole run, so
-                     it takes the foreground while it is open and gets out of the way when it is not. -->
-                <detail:UC_RunSummary x:Name="ucSummary" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                      MaxHeight="620" Visibility="Collapsed" Panel.ZIndex="2"/>
-
-                <!-- Same treatment as the summary: a question about one thing, answered in the
-                     foreground, out of the way once answered. -->
-                <detail:UC_ValueInspector x:Name="ucValueInspector" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                          MaxHeight="720" Visibility="Collapsed" Panel.ZIndex="2"/>
+                <!--
+                    Every arrangeable panel, drawn from the arrangement rather than placed here. The board
+                    stays a sibling underneath and keeps out of whatever the pinned wells reserve, which is
+                    the one thing the host has to tell it.
+                -->
+                <dock:UC_DockHost x:Name="ucDock" Panel.ZIndex="1"/>
 
                 <!-- Along the bottom of the canvas, the way a drawing tool puts its instruments. Above the
                      board it draws on, below the pages that cover the board entirely. -->
@@ -232,8 +222,6 @@
                 <!-- Where the window opens. Which run to look at is the question you have before you
                      have any question about a run, so it is answered first and covers everything. -->
                 <settings:UC_Settings x:Name="ucSettings" Panel.ZIndex="4" Visibility="Collapsed"/>
-
-                <home:UC_Home x:Name="ucHome" Panel.ZIndex="3"/>
 
                 <!-- Above the runs page, because sharing is asked for from it and the answer belongs in front
                      of the question. Below settings, which is above everything. -->

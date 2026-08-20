@@ -20,6 +20,20 @@
     -->
     <SolidColorBrush x:Key="SurfaceOverlay" Color="#FF1E1E1E"/>
 
+    <!--
+        The hairline around a floating card. A single light stroke at low alpha rather than a drawn frame: it is
+        what separates one card's dark surface from the dark surface behind it without reading as a border.
+    -->
+    <SolidColorBrush x:Key="PanelEdge" Color="#1FFFFFFF"/>
+
+    <!--
+        The outline around icons that act together, and the hairline between them. Deliberately stronger than
+        PanelEdge: a card's edge only has to separate one dark surface from another, while this has to say "these
+        two are one control" at the size of a title bar icon. Drawn as a segmented control because that is the
+        shape everything else uses to mean exactly that.
+    -->
+    <SolidColorBrush x:Key="IconGroupEdge" Color="#4DFFFFFF"/>
+
     <!-- Dimming behind an overlay, so it reads as the thing that has focus. -->
     <SolidColorBrush x:Key="Scrim" Color="#A6000000"/>
 
@@ -105,12 +119,16 @@
         A panel that floats over the canvas rather than taking space from it. Opaque enough to read
         against a board of bright pipes, and inset from the edge so the canvas is visibly continuous
         underneath — the board is the application, and the panels are things laid on top of it.
+
+        Still used by the overlays that are not arrangeable panels — settings, the export sheet, the
+        notification list. An arrangeable panel gets its card from the dock host instead, so that every
+        one of them is inset, rounded and lifted by exactly the same amounts.
     -->
     <Style x:Key="PanelOverlay" TargetType="Border">
-        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="CornerRadius" Value="8"/>
         <Setter Property="Background" Value="{StaticResource SurfaceOverlay}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="BorderBrush" Value="#14FFFFFF"/>
+        <Setter Property="BorderBrush" Value="{StaticResource PanelEdge}"/>
         <Setter Property="Margin" Value="10"/>
     </Style>
 
@@ -182,6 +200,14 @@
     <!-- Drawn pointing right and rotated a quarter turn when its branch is open, so one geometry covers
          both states and the two can never be drawn at different weights. -->
     <Geometry x:Key="IconChevron">M 7,5 L 11.5,9 L 7,13</Geometry>
+
+    <!-- The panels, for the strip that reveals them. Each is the thing the panel is about rather than a
+         generic pane: a tree, a tag, a card with a corner turned, a tick in a circle, a lens. A row of
+         identical rectangles would name none of them. -->
+    <Geometry x:Key="IconPanelRuns">M 4,4 L 4,14 M 4,5.5 L 9,5.5 M 4,9 L 11,9 M 4,12.5 L 9,12.5</Geometry>
+    <Geometry x:Key="IconPanelValues">M 3.5,7 L 8.5,3 L 14.5,3 L 14.5,9 L 8.5,15 L 3.5,10.5 Z M 11.5,6 L 11.6,6</Geometry>
+    <Geometry x:Key="IconPanelStep">M 4,3.5 L 11,3.5 L 14,6.5 L 14,14.5 L 4,14.5 Z M 10.5,3.5 L 10.5,7 L 14,7</Geometry>
+    <Geometry x:Key="IconPanelInspector">M 7.6,3.4 A 4.2,4.2 0 1 1 7.6,11.8 A 4.2,4.2 0 1 1 7.6,3.4 Z M 10.9,10.6 L 14.4,14.2 M 5.6,7.6 L 9.6,7.6</Geometry>
     <Geometry x:Key="IconFolder">M 2,4.5 L 7,4.5 L 8.6,6.5 L 16,6.5 L 16,14 L 2,14 Z</Geometry>
     <Geometry x:Key="IconTrash">M 3,5.5 L 15,5.5 M 7,5.5 L 7,3.5 L 11,3.5 L 11,5.5 M 4.5,5.5 L 5.4,15 L 12.6,15 L 13.5,5.5</Geometry>
     <Geometry x:Key="IconRefresh">M 15,9 A 6,6 0 1 1 12.8,4.4 M 15,3.2 L 15,4.6 L 13.6,4.6</Geometry>

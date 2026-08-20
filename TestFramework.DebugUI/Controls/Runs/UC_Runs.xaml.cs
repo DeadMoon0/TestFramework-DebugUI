@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Globalization;
@@ -11,6 +11,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using Axiom.State;
+using TestFramework.DebugUI.Controls.Dock;
 using TestFramework.DebugUI.Controls.Home;
 using TestFramework.DebugUI.State;
 
@@ -33,7 +34,7 @@ namespace TestFramework.DebugUI.Controls.Runs;
 /// hundred pixels and is read constantly. One badge per node is the whole of what this shows about health.
 /// </para>
 /// </remarks>
-public partial class UC_Runs : UserControl
+public partial class UC_Runs : UserControl, IDisposable, IPanelActions
 {
     /// <summary>How far each level is stepped in.</summary>
     /// <remarks>
@@ -82,11 +83,20 @@ public partial class UC_Runs : UserControl
                 Rebuild();
             }));
 
-        Unloaded += (_, _) => subscriptions.Dispose();
     }
 
     /// <summary>Raised when the reader asks for the whole journal rather than one run.</summary>
     public event Action? OverviewRequested;
+
+    /// <inheritdoc />
+    public FrameworkElement Actions => spActions;
+
+    /// <inheritdoc />
+    public void ReclaimActions()
+    {
+        PanelActions.Detach(spActions);
+        bActionSlot.Child = spActions;
+    }
 
     /// <summary>Puts the caret in the filter.</summary>
     public void FocusFilter()
@@ -472,4 +482,19 @@ public partial class UC_Runs : UserControl
     private void btClearFilter_Click(object sender, RoutedEventArgs e) => tbFilter.Text = string.Empty;
 
     private void btRefresh_Click(object sender, RoutedEventArgs e) => MainWindow.Shell.RefreshRecordedRuns();
+
+    /// <summary>
+    /// Lets go of the store.
+    /// </summary>
+    /// <remarks>
+    /// Called by the host when the window closes, not when the panel leaves the visual tree. Moving a panel to
+    /// another dock takes it out of one parent and puts it in another, and WPF raises <c>Unloaded</c> in
+    /// between — so disposing there would kill a panel the first time it was ever dragged. A closed panel
+    /// keeping its subscriptions also means it reopens showing whatever the reader left in it.
+    /// </remarks>
+    public void Dispose()
+    {
+        subscriptions.Dispose();
+        GC.SuppressFinalize(this);
+    }
 }

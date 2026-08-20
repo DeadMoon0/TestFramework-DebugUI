@@ -1,4 +1,4 @@
-<UserControl x:Class="TestFramework.DebugUI.Controls.Runs.UC_Runs"
+﻿<UserControl x:Class="TestFramework.DebugUI.Controls.Runs.UC_Runs"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -9,7 +9,7 @@
         is doing, in a table six columns wide — and that half is not something a rail this narrow can show
         without truncating every column. Its root row opens it.
     -->
-    <Border Style="{StaticResource PanelOverlay}">
+    <Border>
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -24,18 +24,22 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Style="{StaticResource PanelHeading}" VerticalAlignment="Center" Text="RUNS"/>
-
                 <!-- Only says anything while the filter is on, where "12 of 54" is the number that stops a
                      reader wondering whether the rest of their runs have gone. -->
                 <TextBlock x:Name="tbCount" Grid.Column="1" Style="{StaticResource MutedText}" FontSize="10"
                            Foreground="{StaticResource TextFaint}" VerticalAlignment="Center"/>
 
-                <Button x:Name="btRefresh" Grid.Column="2" Style="{StaticResource IconButton}" Margin="0 4 6 4"
-                        Click="btRefresh_Click" ToolTip="Look again on disk">
-                    <Path Data="{StaticResource IconRefresh}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
-                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
-                </Button>
+                <!-- Lifted into the card's header when this panel has one of its own, and dropped back in here
+                     when it is sharing a tab strip with other panels. -->
+                <Border x:Name="bActionSlot" Grid.Column="2">
+                    <StackPanel x:Name="spActions" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button x:Name="btRefresh" Style="{StaticResource IconButton}" Margin="0 4 6 4"
+                                Click="btRefresh_Click" ToolTip="Look again on disk">
+                            <Path Data="{StaticResource IconRefresh}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+                        </Button>
+                    </StackPanel>
+                </Border>
             </Grid>
 
             <!--

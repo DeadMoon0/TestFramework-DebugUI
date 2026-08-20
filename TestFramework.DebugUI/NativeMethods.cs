@@ -36,6 +36,28 @@ namespace TestFramework.DebugUI
 		[DllImport("user32.dll", SetLastError = true)]
 		public static extern IntPtr MonitorFromPoint(POINT pt, MonitorOptions dwFlags);
 
+		[DllImport("user32.dll", SetLastError = true)]
+		[return: MarshalAs(UnmanagedType.Bool)]
+		public static extern bool SetWindowPos(IntPtr handle, IntPtr after, int x, int y, int width, int height, uint flags);
+
+		[DllImport("user32.dll")]
+		[return: MarshalAs(UnmanagedType.Bool)]
+		public static extern bool GetWindowRect(IntPtr handle, out RECT rect);
+
+		/// <summary>Move and size a window without changing the z-order or activating it.</summary>
+		public const uint SWP_NOZORDER_NOACTIVATE = 0x0004 | 0x0010;
+
+		/// <summary>
+		/// Where the pointer is, in physical pixels.
+		/// </summary>
+		/// <remarks>
+		/// Not converted to anything. A floating panel is placed and read back in the same physical pixels this
+		/// returns, because a window's own Left and Top are device-independent and the two spaces only agree while
+		/// every monitor runs at one scale — which is exactly the case a popped-out panel exists for.
+		/// </remarks>
+		public static System.Windows.Point CursorPosition()
+			=> GetCursorPos(out POINT at) ? new System.Windows.Point(at.X, at.Y) : default;
+
 		public enum MonitorOptions : uint
 		{
 			MONITOR_DEFAULTTONULL = 0x00000000,

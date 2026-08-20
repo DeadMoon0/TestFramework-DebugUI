@@ -31,7 +31,7 @@ namespace TestFramework.DebugUI.Controls.Detail;
 /// open changes on screen. A snapshot would quietly become a lie during a live run.
 /// </para>
 /// </remarks>
-public partial class UC_ValueInspector : UserControl
+public partial class UC_ValueInspector : UserControl, IDisposable
 {
     private CompositeDisposable subscriptions = [];
     private ValueBody? body;
@@ -52,11 +52,8 @@ public partial class UC_ValueInspector : UserControl
         // looking at - and the preview below is a read-only text box that selects the ordinary way.
         Copyable.Enable(tbBody);
 
-        Unloaded += (_, _) => subscriptions.Dispose();
     }
 
-    /// <summary>Raised when the reader closes the inspector.</summary>
-    public event Action? Closed;
 
     /// <summary>Shows a value, following it for as long as the inspector stays open.</summary>
     /// <param name="key">The value's identifier.</param>
@@ -518,5 +515,19 @@ public partial class UC_ValueInspector : UserControl
             .GetValue(state => state.Runs
                 .Find(run => string.Equals(run.SessionId, state.SelectedSessionId, StringComparison.Ordinal))?.JournalPath);
 
-    private void btClose_Click(object sender, RoutedEventArgs e) => Closed?.Invoke();
+
+    /// <summary>
+    /// Lets go of the store.
+    /// </summary>
+    /// <remarks>
+    /// Called by the host when the window closes, not when the panel leaves the visual tree. Moving a panel to
+    /// another dock takes it out of one parent and puts it in another, and WPF raises <c>Unloaded</c> in
+    /// between — so disposing there would kill a panel the first time it was ever dragged. A closed panel
+    /// keeping its subscriptions also means it reopens showing whatever the reader left in it.
+    /// </remarks>
+    public void Dispose()
+    {
+        subscriptions.Dispose();
+        GC.SuppressFinalize(this);
+    }
 }

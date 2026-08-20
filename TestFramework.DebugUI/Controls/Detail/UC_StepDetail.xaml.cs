@@ -22,15 +22,12 @@ namespace TestFramework.DebugUI.Controls.Detail;
 /// framework's own explanation and recovery steps, rendered as content rather than buried in log
 /// text, which is the whole point of Core carrying them. Everything else follows underneath.
 /// </remarks>
-public partial class UC_StepDetail : UserControl
+public partial class UC_StepDetail : UserControl, IDisposable
 {
     private readonly CompositeDisposable subscriptions = [];
 
     /// <summary>The wash behind every other row, which is what separates one long entry from two.</summary>
     private static readonly Brush Odd = new SolidColorBrush(Color.FromArgb(0x0A, 0xFF, 0xFF, 0xFF));
-
-    /// <summary>The resize handle when nobody is near it.</summary>
-    private static readonly Brush Resting = new SolidColorBrush(Color.FromArgb(0x1F, 0xFF, 0xFF, 0xFF));
 
     private StepNode? step;
     private string? stageName;
@@ -38,10 +35,6 @@ public partial class UC_StepDetail : UserControl
     /// <summary>How this run's steps timed against the last run of the test that passed.</summary>
     private TimingDiff timing = TimingDiff.None;
     private LogNode[] entries = [];
-
-    private bool sizing;
-    private double sizingFrom;
-    private double sizingWidth;
 
     /// <summary>Creates the panel and binds it.</summary>
     public UC_StepDetail()
@@ -68,35 +61,6 @@ public partial class UC_StepDetail : UserControl
                 ShowTiming();
             }));
 
-        Unloaded += (_, _) => subscriptions.Dispose();
-    }
-
-    /// <summary>
-    /// Raised when the reader has finished dragging the panel wider or narrower.
-    /// </summary>
-    /// <remarks>
-    /// On finishing rather than on every pixel of the drag. The width is remembered in the settings file, and
-    /// a file written a hundred times while somebody drags a handle is a file being written for no reason.
-    /// </remarks>
-    public event Action<double>? Resized;
-
-    /// <summary>
-    /// Opens the panel at a remembered width.
-    /// </summary>
-    /// <remarks>
-    /// Clamped against the window it is actually opening in, not the one it was saved on: a width from a wide
-    /// desktop would otherwise cover a laptop's whole board.
-    /// </remarks>
-    public void SetWidth(double width)
-    {
-        Width = PanelWidth.Clamp(width, Available());
-    }
-
-    /// <summary>Brings the panel back inside the window after the window itself was made smaller.</summary>
-    public void Reclamp()
-    {
-        if (!sizing)
-            Width = PanelWidth.Clamp(Width, Available());
     }
 
     /// <summary>
@@ -562,76 +526,18 @@ public partial class UC_StepDetail : UserControl
         Clipboards.Set(text.ToString());
     }
 
-    /// <summary>How much room the panel has to grow into.</summary>
-    private double Available()
-    {
-        FrameworkElement? host = Parent as FrameworkElement;
-
-        return host?.ActualWidth ?? double.NaN;
-    }
-
-    private void bGrip_MouseEnter(object sender, MouseEventArgs e)
-        => bGripBar.Background = (Brush)FindResource("Accent");
-
-    private void bGrip_MouseLeave(object sender, MouseEventArgs e)
-    {
-        if (!sizing)
-            bGripBar.Background = Resting;
-    }
-
     /// <summary>
-    /// Starts a drag.
+    /// Lets go of the store.
     /// </summary>
     /// <remarks>
-    /// The pointer is measured against the window rather than against this panel, because this panel is the
-    /// thing being resized: every position taken inside it would be measured from an edge that had just moved.
+    /// Called by the host when the window closes, not when the panel leaves the visual tree. Moving a panel to
+    /// another dock takes it out of one parent and puts it in another, and WPF raises <c>Unloaded</c> in
+    /// between — so disposing there would kill a panel the first time it was ever dragged. A closed panel
+    /// keeping its subscriptions also means it reopens showing whatever the reader left in it.
     /// </remarks>
-    private void bGrip_MouseDown(object sender, MouseButtonEventArgs e)
+    public void Dispose()
     {
-        if (Parent is not IInputElement host)
-            return;
-
-        sizing = true;
-        sizingFrom = e.GetPosition(host).X;
-        sizingWidth = ActualWidth;
-
-        bGrip.CaptureMouse();
-        e.Handled = true;
-    }
-
-    private void bGrip_MouseMove(object sender, MouseEventArgs e)
-    {
-        if (!sizing || Parent is not IInputElement host)
-            return;
-
-        // Leftwards is wider: the panel is pinned to the right edge, so dragging its left edge away from that
-        // edge is asking for more of the window.
-        Width = PanelWidth.Clamp(sizingWidth + (sizingFrom - e.GetPosition(host).X), Available());
-    }
-
-    private void bGrip_MouseUp(object sender, MouseButtonEventArgs e)
-    {
-        if (sizing)
-            bGrip.ReleaseMouseCapture();
-    }
-
-    /// <summary>
-    /// Ends a drag, however it ended.
-    /// </summary>
-    /// <remarks>
-    /// On losing capture rather than only on the button coming up, so a drag interrupted by anything else -
-    /// another window taking focus, a dialog opening - leaves the panel at a width and not mid-drag.
-    /// </remarks>
-    private void bGrip_LostCapture(object sender, MouseEventArgs e)
-    {
-        if (!sizing)
-            return;
-
-        sizing = false;
-
-        if (!bGrip.IsMouseOver)
-            bGripBar.Background = Resting;
-
-        Resized?.Invoke(Width);
+        subscriptions.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

@@ -1,0 +1,41 @@
+﻿<UserControl x:Class="TestFramework.DebugUI.Controls.Dock.UC_DockHost"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d">
+    <!--
+        One grid, and the extents are its star weights. Nothing here is sized in pixels.
+
+        That is the whole point of this markup rather than an incidental detail. The first version computed each
+        well's width and height from the host's own ActualWidth and ActualHeight and wrote them back as explicit
+        sizes, from inside a SizeChanged handler — a size derived from a size, assigned during layout. It looked
+        correct at startup and diverged on the first real resize: the host measured itself at 2380 pixels inside a
+        1000-pixel window and the bottom well walked off the screen. Star weights let the layout system do the
+        proportioning, so there is no arithmetic to feed back.
+
+        The wells and the canvas share one geometry. The only difference a pinned well makes is that the board —
+        a sibling underneath this control — is told to keep out of the room it takes; an unpinned well sits in the
+        same cell and simply covers whatever is under it.
+    -->
+    <Grid>
+        <Grid x:Name="gWells">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="cLeft" Width="0*"/>
+                <ColumnDefinition x:Name="cMiddle" Width="1*"/>
+                <ColumnDefinition x:Name="cRight" Width="0*"/>
+            </Grid.ColumnDefinitions>
+
+            <Grid.RowDefinitions>
+                <RowDefinition x:Name="rMiddle" Height="1*"/>
+                <RowDefinition x:Name="rBottom" Height="0*"/>
+            </Grid.RowDefinitions>
+        </Grid>
+
+        <!--
+            Where a dragged panel would land. Above every card and never hit-testable: a drop hint that could
+            take the pointer would be a drop hint that changed the answer by being shown.
+        -->
+        <Canvas x:Name="gDropHint" IsHitTestVisible="False" Panel.ZIndex="99"/>
+    </Grid>
+</UserControl>

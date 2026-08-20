@@ -4,154 +4,128 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d">
-    <!--
-        The panel and the handle that sizes it. Two elements rather than a Grid with a grip column, so the
-        handle straddles the panel's edge: half of it is over the canvas and half over the panel, which is
-        where a pointer aiming at an edge actually ends up.
-    -->
-    <Grid>
-        <Border Style="{StaticResource PanelOverlay}">
-            <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
+    <Border>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
 
-                <TextBlock Style="{StaticResource PanelHeading}" Text="STEP"/>
+            <TextBlock x:Name="tbEmpty" Grid.Row="1" Style="{StaticResource MutedText}" Margin="14 4 14 0"
+                       Text="Pick a step on the board. Its failure, inputs, outputs, attempts and log all appear here."/>
 
-                <TextBlock x:Name="tbEmpty" Grid.Row="1" Style="{StaticResource MutedText}" Margin="14 4 14 0"
-                           Text="Pick a step on the board. Its failure, inputs, outputs, attempts and log all appear here."/>
+            <ScrollViewer x:Name="svBody" Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
+                <StackPanel Margin="10 0 10 10">
+                    <TextBlock x:Name="tbName" Style="{StaticResource BodyText}" FontSize="15"/>
+                    <TextBlock x:Name="tbKind" Style="{StaticResource MutedText}" Margin="0 1 0 0"/>
 
-                <ScrollViewer x:Name="svBody" Grid.Row="1" VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled" Visibility="Collapsed">
-                    <StackPanel Margin="10 0 10 10">
-                        <TextBlock x:Name="tbName" Style="{StaticResource BodyText}" FontSize="15"/>
-                        <TextBlock x:Name="tbKind" Style="{StaticResource MutedText}" Margin="0 1 0 0"/>
+                    <!-- What it cost, and whether that is what it usually costs. Hidden until the step
+                         has finished and an earlier passing run has been found to compare it against. -->
+                    <TextBlock x:Name="tbTiming" Style="{StaticResource MutedText}" Margin="0 4 0 0"
+                               TextWrapping="Wrap" Visibility="Collapsed"/>
 
-                        <!-- What it cost, and whether that is what it usually costs. Hidden until the step
-                             has finished and an earlier passing run has been found to compare it against. -->
-                        <TextBlock x:Name="tbTiming" Style="{StaticResource MutedText}" Margin="0 4 0 0"
-                                   TextWrapping="Wrap" Visibility="Collapsed"/>
+                    <TextBlock x:Name="tbDescription" Style="{StaticResource MutedText}" Margin="0 6 0 0"/>
 
-                        <TextBlock x:Name="tbDescription" Style="{StaticResource MutedText}" Margin="0 6 0 0"/>
+                    <!-- Setting a breakpoint used to be offered here too. It belongs on the step, and it is
+                         there: the red marker in the card's corner. Two ways to do it, one of them a
+                         labelled button in a panel a long way from the card it applied to, meant the
+                         marker had to be explained rather than simply seen. -->
+                    <Button x:Name="btCopyFailure" Style="{StaticResource FlatButton}" Padding="7 3"
+                            Margin="0 10 0 0" HorizontalAlignment="Left"
+                            Content="Copy failure" Click="btCopyFailure_Click" Visibility="Collapsed"
+                            ToolTip="Copy the message and the framework's recovery steps."/>
 
-                        <!-- Setting a breakpoint used to be offered here too. It belongs on the step, and it is
-                             there: the red marker in the card's corner. Two ways to do it, one of them a
-                             labelled button in a panel a long way from the card it applied to, meant the
-                             marker had to be explained rather than simply seen. -->
-                        <Button x:Name="btCopyFailure" Style="{StaticResource FlatButton}" Padding="7 3"
-                                Margin="0 10 0 0" HorizontalAlignment="Left"
-                                Content="Copy failure" Click="btCopyFailure_Click" Visibility="Collapsed"
-                                ToolTip="Copy the message and the framework's recovery steps."/>
+                    <!--
+                        Failure first, above everything else about the step. When a step has broken,
+                        that is the only reason anyone opened this panel.
+                    -->
+                    <Border x:Name="bFailure" CornerRadius="4" Background="#28FC4646" Margin="0 12 0 0"
+                            Padding="10" Visibility="Collapsed">
+                        <StackPanel>
+                            <TextBlock x:Name="tbFailureType" Style="{StaticResource BodyText}" FontWeight="Bold"
+                                       Foreground="{StaticResource StateError}"/>
+                            <TextBlock x:Name="tbFailureMessage" Style="{StaticResource BodyText}" Margin="0 4 0 0"/>
 
-                        <!--
-                            Failure first, above everything else about the step. When a step has broken,
-                            that is the only reason anyone opened this panel.
-                        -->
-                        <Border x:Name="bFailure" CornerRadius="4" Background="#28FC4646" Margin="0 12 0 0"
-                                Padding="10" Visibility="Collapsed">
-                            <StackPanel>
-                                <TextBlock x:Name="tbFailureType" Style="{StaticResource BodyText}" FontWeight="Bold"
-                                           Foreground="{StaticResource StateError}"/>
-                                <TextBlock x:Name="tbFailureMessage" Style="{StaticResource BodyText}" Margin="0 4 0 0"/>
+                            <!--
+                                What was underneath. Directly below the message because it finishes the
+                                sentence the message starts, and above the guidance because the innermost
+                                exception is usually the answer: the outer one is very often
+                                "A task was canceled" over the socket error that actually explains it.
+                            -->
+                            <TextBlock x:Name="tbCausedByLabel" Style="{StaticResource PanelHeading}" Margin="0 10 0 3"
+                                       Text="CAUSED BY" Visibility="Collapsed"/>
+                            <StackPanel x:Name="spCausedBy"/>
 
-                                <!--
-                                    What was underneath. Directly below the message because it finishes the
-                                    sentence the message starts, and above the guidance because the innermost
-                                    exception is usually the answer: the outer one is very often
-                                    "A task was canceled" over the socket error that actually explains it.
-                                -->
-                                <TextBlock x:Name="tbCausedByLabel" Style="{StaticResource PanelHeading}" Margin="0 10 0 3"
-                                           Text="CAUSED BY" Visibility="Collapsed"/>
-                                <StackPanel x:Name="spCausedBy"/>
+                            <TextBlock x:Name="tbFriendlyLabel" Style="{StaticResource PanelHeading}" Margin="0 10 0 3"
+                                       Text="WHAT THIS MEANS" Visibility="Collapsed"/>
+                            <TextBlock x:Name="tbFriendly" Style="{StaticResource MutedText}" Visibility="Collapsed"/>
 
-                                <TextBlock x:Name="tbFriendlyLabel" Style="{StaticResource PanelHeading}" Margin="0 10 0 3"
-                                           Text="WHAT THIS MEANS" Visibility="Collapsed"/>
-                                <TextBlock x:Name="tbFriendly" Style="{StaticResource MutedText}" Visibility="Collapsed"/>
+                            <TextBlock x:Name="tbRecoveryLabel" Style="{StaticResource PanelHeading}" Margin="0 10 0 3"
+                                       Text="WHAT TO DO" Visibility="Collapsed"/>
+                            <TextBlock x:Name="tbRecovery" Style="{StaticResource MutedText}" Visibility="Collapsed"/>
 
-                                <TextBlock x:Name="tbRecoveryLabel" Style="{StaticResource PanelHeading}" Margin="0 10 0 3"
-                                           Text="WHAT TO DO" Visibility="Collapsed"/>
-                                <TextBlock x:Name="tbRecovery" Style="{StaticResource MutedText}" Visibility="Collapsed"/>
+                            <TextBlock x:Name="tbOptionsLabel" Style="{StaticResource PanelHeading}" Margin="0 10 0 3"
+                                       Text="OPTIONS" Visibility="Collapsed"/>
+                            <TextBlock x:Name="tbOptions" Style="{StaticResource MutedText}" Visibility="Collapsed"/>
 
-                                <TextBlock x:Name="tbOptionsLabel" Style="{StaticResource PanelHeading}" Margin="0 10 0 3"
-                                           Text="OPTIONS" Visibility="Collapsed"/>
-                                <TextBlock x:Name="tbOptions" Style="{StaticResource MutedText}" Visibility="Collapsed"/>
+                            <Expander x:Name="exStack" Margin="0 10 0 0" Foreground="{StaticResource TextFaint}"
+                                      Header="Stack trace" Visibility="Collapsed">
+                                <TextBlock x:Name="tbStack" Style="{StaticResource CodeText}" Margin="0 6 0 0"/>
+                            </Expander>
+                        </StackPanel>
+                    </Border>
 
-                                <Expander x:Name="exStack" Margin="0 10 0 0" Foreground="{StaticResource TextFaint}"
-                                          Header="Stack trace" Visibility="Collapsed">
-                                    <TextBlock x:Name="tbStack" Style="{StaticResource CodeText}" Margin="0 6 0 0"/>
-                                </Expander>
-                            </StackPanel>
-                        </Border>
+                    <!-- What the step is allowed to do. Stated by the run since protocol 4; before that the
+                         numbers were not on the wire at all, so this panel could not have said any of it. -->
+                    <TextBlock x:Name="tbPolicyLabel" Style="{StaticResource PanelHeading}" Margin="0 14 0 3"
+                               Text="POLICY" Visibility="Collapsed"/>
+                    <WrapPanel x:Name="wpPolicy" Margin="0 0 0 2"/>
 
-                        <!-- What the step is allowed to do. Stated by the run since protocol 4; before that the
-                             numbers were not on the wire at all, so this panel could not have said any of it. -->
-                        <TextBlock x:Name="tbPolicyLabel" Style="{StaticResource PanelHeading}" Margin="0 14 0 3"
-                                   Text="POLICY" Visibility="Collapsed"/>
-                        <WrapPanel x:Name="wpPolicy" Margin="0 0 0 2"/>
+                    <TextBlock Style="{StaticResource PanelHeading}" Margin="0 14 0 3" Text="INPUTS"/>
+                    <TextBlock x:Name="tbInputs" Style="{StaticResource MutedText}"/>
 
-                        <TextBlock Style="{StaticResource PanelHeading}" Margin="0 14 0 3" Text="INPUTS"/>
-                        <TextBlock x:Name="tbInputs" Style="{StaticResource MutedText}"/>
+                    <TextBlock Style="{StaticResource PanelHeading}" Margin="0 10 0 3" Text="OUTPUTS"/>
+                    <TextBlock x:Name="tbOutputs" Style="{StaticResource MutedText}"/>
 
-                        <TextBlock Style="{StaticResource PanelHeading}" Margin="0 10 0 3" Text="OUTPUTS"/>
-                        <TextBlock x:Name="tbOutputs" Style="{StaticResource MutedText}"/>
+                    <TextBlock Style="{StaticResource PanelHeading}" Margin="0 10 0 3" Text="ATTEMPTS"/>
+                    <StackPanel x:Name="spAttempts"/>
 
-                        <TextBlock Style="{StaticResource PanelHeading}" Margin="0 10 0 3" Text="ATTEMPTS"/>
-                        <StackPanel x:Name="spAttempts"/>
+                    <!--
+                        The log's own heading row, because the log is the one section here with something to
+                        do rather than only to read: take it somewhere. One button for the whole log, not one
+                        per line - a step that logged forty times would otherwise grow forty buttons.
+                    -->
+                    <Grid Margin="0 10 0 3">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
 
-                        <!--
-                            The log's own heading row, because the log is the one section here with something to
-                            do rather than only to read: take it somewhere. One button for the whole log, not one
-                            per line - a step that logged forty times would otherwise grow forty buttons.
-                        -->
-                        <Grid Margin="0 10 0 3">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource PanelHeading}" Margin="0" VerticalAlignment="Center" Text="LOG"/>
+                        <TextBlock x:Name="tbLogCount" Grid.Column="1" Style="{StaticResource MutedText}" FontSize="10"
+                                   Margin="6 0 0 0" VerticalAlignment="Center" Foreground="{StaticResource TextFaint}"/>
 
-                            <TextBlock Style="{StaticResource PanelHeading}" Margin="0" VerticalAlignment="Center" Text="LOG"/>
-                            <TextBlock x:Name="tbLogCount" Grid.Column="1" Style="{StaticResource MutedText}" FontSize="10"
-                                       Margin="6 0 0 0" VerticalAlignment="Center" Foreground="{StaticResource TextFaint}"/>
+                        <Button x:Name="btCopyLog" Grid.Column="2" Style="{StaticResource IconButton}"
+                                Click="btCopyLog_Click" Visibility="Collapsed" ToolTip="Copy the whole log">
+                            <Path x:Name="pathCopyLog" Data="{StaticResource IconCopy}" Width="18" Height="18"
+                                  Stretch="None" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Button>
+                    </Grid>
 
-                            <Button x:Name="btCopyLog" Grid.Column="2" Style="{StaticResource IconButton}"
-                                    Click="btCopyLog_Click" Visibility="Collapsed" ToolTip="Copy the whole log">
-                                <Path x:Name="pathCopyLog" Data="{StaticResource IconCopy}" Width="18" Height="18"
-                                      Stretch="None" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
-                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                            </Button>
-                        </Grid>
+                    <!--
+                        A row per entry rather than one block of wrapped text. The old form put the time, the
+                        severity and the message of every entry into a single paragraph, and a message long
+                        enough to wrap - which is most of them - ran under the next entry's timestamp.
 
-                        <!--
-                            A row per entry rather than one block of wrapped text. The old form put the time, the
-                            severity and the message of every entry into a single paragraph, and a message long
-                            enough to wrap - which is most of them - ran under the next entry's timestamp.
-
-                            A shared size scope rather than fixed column widths, so the time and severity columns
-                            are as wide as they need to be and identical on every row.
-                        -->
-                        <StackPanel x:Name="spLog" Grid.IsSharedSizeScope="True"/>
-                    </StackPanel>
-                </ScrollViewer>
-            </Grid>
-        </Border>
-
-        <!--
-            Left edge only. The panel is pinned to the right of the window, so its other three edges are the
-            window's own - dragging them is what the window's borders are for.
-
-            A quiet bar that lights on hover, rather than a splitter drawn as a permanent seam: this is a
-            panel floating over a canvas, not a pane in a layout, and it should read as one until reached for.
-        -->
-        <Border x:Name="bGrip" Width="11" HorizontalAlignment="Left" Margin="5 10 0 10"
-                Background="Transparent" Cursor="SizeWE" ToolTip="Drag to resize"
-                MouseEnter="bGrip_MouseEnter" MouseLeave="bGrip_MouseLeave"
-                PreviewMouseLeftButtonDown="bGrip_MouseDown" MouseMove="bGrip_MouseMove"
-                PreviewMouseLeftButtonUp="bGrip_MouseUp" LostMouseCapture="bGrip_LostCapture">
-            <Border x:Name="bGripBar" Width="3" Height="40" CornerRadius="1.5"
-                    HorizontalAlignment="Center" VerticalAlignment="Center"
-                    Background="#1FFFFFFF"/>
-        </Border>
-    </Grid>
+                        A shared size scope rather than fixed column widths, so the time and severity columns
+                        are as wide as they need to be and identical on every row.
+                    -->
+                    <StackPanel x:Name="spLog" Grid.IsSharedSizeScope="True"/>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Border>
 </UserControl>

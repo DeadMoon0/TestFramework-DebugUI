@@ -9,7 +9,7 @@
         with the verdict, then the counts behind it, then the failures themselves — so the reader
         either stops at the first line or has somewhere to click.
     -->
-    <Border Style="{StaticResource PanelOverlay}" Width="420">
+    <Border>
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -23,12 +23,6 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Style="{StaticResource PanelHeading}" Text="SUMMARY"/>
-                <Button x:Name="btClose" Grid.Column="1" Style="{StaticResource IconButton}" Margin="0 5 8 5"
-                        Click="btClose_Click" ToolTip="Close">
-                    <Path Data="{StaticResource IconClose}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
-                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
-                </Button>
             </Grid>
 
             <StackPanel Grid.Row="1" Margin="12 4 12 0">

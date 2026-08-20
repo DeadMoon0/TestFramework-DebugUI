@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="TestFramework.DebugUI.app"/>
+
+  <!--
+    Declares what this process knows about display scaling.
+
+    Without this the process runs system-DPI-aware: Windows scales the window it drew for the primary
+    monitor's factor by a bitmap when it lands on a monitor with a different one. Everything in this tool is
+    vector — the board, the icons, the text — so it has nothing to gain from being stretched and everything
+    to lose. Measured before this file existed, the process reported SYSTEM_DPI_AWARE.
+
+    PerMonitorV2 rather than PerMonitor: V2 is what tells Windows to rescale the non-client area and to send
+    the DPI change to child windows too. The V1 line beneath it is what an older Windows reads, so a machine
+    that does not understand the first still gets per-monitor rather than falling all the way back.
+  -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+    </windowsSettings>
+  </application>
+</assembly>

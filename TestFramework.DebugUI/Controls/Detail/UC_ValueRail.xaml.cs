@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Disposables;
@@ -26,7 +26,7 @@ namespace TestFramework.DebugUI.Controls.Detail;
 /// its current value and nothing else.
 /// </para>
 /// </remarks>
-public partial class UC_ValueRail : UserControl
+public partial class UC_ValueRail : UserControl, IDisposable
 {
     private readonly CompositeDisposable subscriptions = [];
 
@@ -54,7 +54,6 @@ public partial class UC_ValueRail : UserControl
             .Bind(state => state.ActiveDiff)
             .Subscribe(ShowBaseline));
 
-        Unloaded += (_, _) => subscriptions.Dispose();
     }
 
     /// <summary>Raised when the reader asks to see one value in full.</summary>
@@ -138,5 +137,20 @@ public partial class UC_ValueRail : UserControl
     private readonly record struct ValueRow(string Key, bool IsArtifact)
     {
         internal string Id => (IsArtifact ? "artifact:" : "variable:") + Key;
+    }
+
+    /// <summary>
+    /// Lets go of the store.
+    /// </summary>
+    /// <remarks>
+    /// Called by the host when the window closes, not when the panel leaves the visual tree. Moving a panel to
+    /// another dock takes it out of one parent and puts it in another, and WPF raises <c>Unloaded</c> in
+    /// between — so disposing there would kill a panel the first time it was ever dragged. A closed panel
+    /// keeping its subscriptions also means it reopens showing whatever the reader left in it.
+    /// </remarks>
+    public void Dispose()
+    {
+        subscriptions.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

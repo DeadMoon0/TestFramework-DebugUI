@@ -1,10 +1,10 @@
-<UserControl x:Class="TestFramework.DebugUI.Controls.Detail.UC_ValueRail"
+﻿<UserControl x:Class="TestFramework.DebugUI.Controls.Detail.UC_ValueRail"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d">
-    <Border Style="{StaticResource PanelOverlay}">
+    <Border>
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -17,8 +17,6 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-
-                <TextBlock Style="{StaticResource PanelHeading}" Text="VALUES"/>
 
                 <!-- How many of each, so the heading says what the run actually produced. -->
                 <TextBlock x:Name="tbCounts" Grid.Column="1" Style="{StaticResource MutedText}" FontSize="9"

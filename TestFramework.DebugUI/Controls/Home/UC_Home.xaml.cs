@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Globalization;
@@ -17,6 +17,8 @@ using Axiom.Wpf.Extensions;
 using TestFramework.DebugUI.State.Bundles;
 using TestFramework.DebugUI.State;
 
+using TestFramework.DebugUI.Controls.Dock;
+
 namespace TestFramework.DebugUI.Controls.Home;
 
 /// <summary>
@@ -34,7 +36,7 @@ namespace TestFramework.DebugUI.Controls.Home;
 /// gathered under the burst of activity they arrived in.
 /// </para>
 /// </remarks>
-public partial class UC_Home : UserControl
+public partial class UC_Home : UserControl, IDisposable, IPanelActions
 {
     /// <summary>
     /// How many cards the attention strip will show.
@@ -88,7 +90,16 @@ public partial class UC_Home : UserControl
             .Bind(state => state.Runs.Count == 0 ? Visibility.Visible : Visibility.Collapsed)
             .BindToDependencyProperty(tbEmpty, VisibilityProperty));
 
-        Unloaded += (_, _) => subscriptions.Dispose();
+    }
+
+    /// <inheritdoc />
+    public FrameworkElement Actions => spActions;
+
+    /// <inheritdoc />
+    public void ReclaimActions()
+    {
+        PanelActions.Detach(spActions);
+        bActionSlot.Child = spActions;
     }
 
     /// <summary>Raised when the reader leaves the page, either by closing it or by opening a run.</summary>
@@ -499,7 +510,22 @@ public partial class UC_Home : UserControl
 
     private void btRefresh_Click(object sender, RoutedEventArgs e) => MainWindow.Shell.RefreshRecordedRuns();
 
-    private void btClose_Click(object sender, RoutedEventArgs e) => Closed?.Invoke();
+
+    /// <summary>
+    /// Lets go of the store.
+    /// </summary>
+    /// <remarks>
+    /// Called by the host when the window closes, not when the panel leaves the visual tree. Moving a panel to
+    /// another dock takes it out of one parent and puts it in another, and WPF raises <c>Unloaded</c> in
+    /// between — so disposing there would kill a panel the first time it was ever dragged. A closed panel
+    /// keeping its subscriptions also means it reopens showing whatever the reader left in it.
+    /// </remarks>
+    public void Dispose()
+    {
+        subscriptions.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
 }
 
 /// <summary>

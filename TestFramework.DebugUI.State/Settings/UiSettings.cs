@@ -1,4 +1,5 @@
 ﻿using System.Collections.Immutable;
+using TestFramework.DebugUI.Docking;
 
 namespace TestFramework.DebugUI.State;
 
@@ -21,6 +22,10 @@ public sealed record UiSettings
     /// <remarks>
     /// Two since a breakpoint began naming the test it belongs to. A version-one file's marks name no test
     /// and are dropped on load — see <c>Breakpoints.Restore</c> for why they cannot be migrated.
+    ///
+    /// The arrangement arrived without needing a third: absent means the default, which is the fixed layout
+    /// the tool had before panels could be moved, so an older file already describes the right thing. A number
+    /// is only bumped when a file's meaning changes, not whenever it gains a field.
     /// </remarks>
     public const int CurrentVersion = 2;
 
@@ -65,29 +70,16 @@ public sealed record UiSettings
     /// <summary>How the tool behaves while it is watching rather than being looked at.</summary>
     public WatchSettings Watch { get; init; } = new();
 
-    /// <summary>How the reader has sized the panels that float over the board.</summary>
-    public PanelSettings Panels { get; init; } = new();
-}
-
-/// <summary>
-/// The panels' own geometry.
-/// </summary>
-/// <remarks>
-/// Remembered because it is a preference, not a mode: how much of the window someone gives to a stack trace
-/// depends on their screen and on the kind of work they do, and having to drag it back after every start would
-/// teach them not to drag it at all.
-/// </remarks>
-public sealed record PanelSettings
-{
     /// <summary>
-    /// How wide the step panel was left.
+    /// Where every panel was left.
     /// </summary>
     /// <remarks>
-    /// Zero means "never dragged", which reads as the default width. The bounds are the application's, not
-    /// this record's: a width is checked against the window it is being applied to, which is not necessarily
-    /// the window it was saved from.
+    /// Null on a file written before panels could be arranged, which reads as the default arrangement — and the
+    /// default is deliberately the fixed layout the tool used to have, so nobody upgrading finds their window
+    /// rebuilt. Repaired rather than refused when it names panels this build does not have: a mislaid panel is
+    /// an inconvenience, and discarding somebody's whole arrangement over one entry would be the greater harm.
     /// </remarks>
-    public double StepDetailWidth { get; init; }
+    public DockLayout? Layout { get; init; }
 }
 
 /// <summary>Where the window was last left.</summary>

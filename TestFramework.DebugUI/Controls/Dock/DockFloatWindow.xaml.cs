@@ -28,6 +28,55 @@ public partial class DockFloatWindow : Window
         InitializeComponent();
 
         Owner = owner;
+
+        // The corners and the message hook both need the window to exist as a Win32 one, which it does not until
+        // the source has been created.
+        SourceInitialized += (_, _) =>
+        {
+            ArcylicManager.RoundCorners(Handle());
+
+            if (System.Windows.Interop.HwndSource.FromHwnd(Handle()) is { } source)
+                source.AddHook(OnMessage);
+        };
+    }
+
+    /// <summary>Raised while the reader is dragging the window, with where the pointer is.</summary>
+    /// <remarks>
+    /// Moving a float over the main window is how a single panel gets docked again: there is no tab to drag, and
+    /// the caption belongs to the window. So the move doubles as the drag, and this is what lets the host show
+    /// where the panel would land.
+    /// </remarks>
+    public event Action<Point>? Dragging;
+
+    /// <summary>Raised when the reader stops dragging the window, with where they let go.</summary>
+    public event Action<Point>? Dropped;
+
+    /// <summary>Whether the reader is dragging the window right now.</summary>
+    private bool dragging;
+
+    /// <summary>
+    /// Watches for the start and end of a system move.
+    /// </summary>
+    /// <remarks>
+    /// The two messages Windows sends around its own move loop. There is no WPF event for either, and the
+    /// alternative — deciding a move has ended because the position stopped changing — guesses at a fact the
+    /// system is willing to state.
+    /// </remarks>
+    private IntPtr OnMessage(IntPtr hwnd, int message, IntPtr wparam, IntPtr lparam, ref bool handled)
+    {
+        const int EnterSizeMove = 0x0231;
+        const int ExitSizeMove = 0x0232;
+
+        if (message == EnterSizeMove)
+            dragging = true;
+
+        if (message == ExitSizeMove && dragging)
+        {
+            dragging = false;
+            Dropped?.Invoke(NativeMethods.CursorPosition());
+        }
+
+        return IntPtr.Zero;
     }
 
     /// <summary>Raised when the reader asks for the whole window to go away.</summary>
@@ -43,20 +92,66 @@ public partial class DockFloatWindow : Window
     /// <summary>Whether the window is currently being placed by the host rather than by the reader.</summary>
     private bool placing;
 
-    /// <summary>Puts the float's tab strip and its panel into the window.</summary>
+    /// <summary>Puts the float's caption content and its panel into the window.</summary>
     /// <remarks>
-    /// The strip is marked hit-test-visible in the chrome. It sits inside the caption, and without this the window
-    /// chrome takes every press over it to drag the window — so the tabs could not be clicked and, worse, a panel
-    /// could not be dragged back out of a float, because the gesture became "move this window" instead.
+    /// <para>
+    /// Only what is meant to be clicked is taken out of the chrome's hands — the buttons, and the tabs when there
+    /// is more than one. Everything else in the caption is left to the window, so the caption drags the window the
+    /// way every other window's does.
+    /// </para>
+    /// <para>
+    /// It was the whole strip to begin with, which meant the caption belonged to the panel and the window could
+    /// not be moved at all. A popped-out panel is a window first; the arranging comes second.
+    /// </para>
     /// </remarks>
-    public void ShowContent(UIElement strip, UIElement body)
+    public void ShowContent(UIElement caption, UIElement body)
     {
-        if (strip is not null)
-            System.Windows.Shell.WindowChrome.SetIsHitTestVisibleInChrome(strip, true);
+        if (caption is not null)
+            LetTheChromeHaveTheRest(caption);
 
-        bStrip.Child = strip;
+        bStrip.Child = caption;
         bBody.Child = body;
     }
+
+    /// <summary>
+    /// Marks the pressable things in the caption, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// A tab is a border rather than a button, so it has to be named as well — but a tab does not span the strip,
+    /// which is what leaves the rest of the caption for the window to be dragged by.
+    /// </remarks>
+    private static void LetTheChromeHaveTheRest(DependencyObject caption)
+    {
+        int children = System.Windows.Media.VisualTreeHelper.GetChildrenCount(caption);
+
+        if (caption is System.Windows.Controls.Primitives.ButtonBase || Interactive(caption))
+        {
+            System.Windows.Shell.WindowChrome.SetIsHitTestVisibleInChrome((UIElement)caption, true);
+            return;
+        }
+
+        for (int index = 0; index < children; index++)
+            LetTheChromeHaveTheRest(System.Windows.Media.VisualTreeHelper.GetChild(caption, index));
+
+        // A caption whose visual tree has not been built yet answers with no children, so the marking is done
+        // again once it has been. Without this a float opens with unclickable tabs until something else redraws it.
+        if (children == 0 && caption is FrameworkElement pending && !pending.IsLoaded)
+            pending.Loaded += Mark;
+
+        static void Mark(object sender, RoutedEventArgs e)
+        {
+            if (sender is not FrameworkElement element)
+                return;
+
+            element.Loaded -= Mark;
+            LetTheChromeHaveTheRest(element);
+        }
+    }
+
+    /// <summary>Whether an element is something the reader is meant to press rather than drag the window by.</summary>
+    private static bool Interactive(DependencyObject element)
+        => element is FrameworkElement { Cursor: not null } framework
+           && framework.Cursor == System.Windows.Input.Cursors.Hand;
 
     /// <summary>
     /// Moves the window to where the arrangement says it is, without reporting it back.
@@ -162,8 +257,13 @@ public partial class DockFloatWindow : Window
 
     private void Report()
     {
-        if (!placing && IsLoaded)
-            Moved?.Invoke(Bounds());
+        if (placing || !IsLoaded)
+            return;
+
+        Moved?.Invoke(Bounds());
+
+        if (dragging)
+            Dragging?.Invoke(NativeMethods.CursorPosition());
     }
 
     private static bool Same(double one, double other) => Math.Abs(one - other) < 0.5;

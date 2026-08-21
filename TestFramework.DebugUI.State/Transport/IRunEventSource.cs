@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using TestFramework.Core.Debugger;
+using TestFramework.DebugUI.State.Runs;
+using TestFramework.DebugUI.State.Shell.Feed;
 
 namespace TestFramework.DebugUI.State.Transport;
 

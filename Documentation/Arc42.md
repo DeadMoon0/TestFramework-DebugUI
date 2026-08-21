@@ -86,10 +86,75 @@ The app runs locally on the developer machine and connects to test processes thr
 - Diagnostics over magic: transport failures should point users toward recovery steps, not just disappear into silent no-op behavior.
 - User docs vs internal docs: onboarding and recovery guidance should stay separate from protocol redesign planning.
 
+### State is a tree of slices
+
+`MainState` holds no fields of its own. It composes three `record struct` slices, and each slice has
+its actions, reducer, selectors and any effects in the folder beside it:
+
+```
+State/                        MainState, MainActions, MainReducer, MainSelectors,
+                              MainStore, ReadOnlySelector, RunIngestService
+  Runs/       RunsState       (All, SelectedSessionId)
+                              + RunSummary, RunHealth, SourceLocation, RunProgress,
+                                RerunCommand, ProjectResolution, RunTree, RunBatches
+  Board/      BoardState      (ActiveRun, SelectedStep)
+                              + RunGraph, RunProjection*, RunTally, ValueDescription,
+                                ValueInspection, RunSearch, SearchQuery, SearchPattern
+    Comparison/ ComparisonState (Values, Timing)
+                              + RunBaseline, TimingComparison, ValueComparison, TextDiff
+  Shell/      ShellState      (Transport, AwaitedRerun)
+                              + TransportStatus
+    Feed/     FeedState       (Entries, UnreadCount)
+                              + FeedEntry, FeedSeverity, FeedSource
+```
+
+A folder holds its slice and the types that slice owns. A file's namespace matches its folder, so the
+`using` list of any consumer states which parts of the state it actually reaches into — the run bar
+reads `Runs` and `Board`, the feed panel reads only `Shell.Feed`. The non-slice files are placed by
+what they operate on rather than by what they are: `RunSearch` sits under `Board/` because it searches
+the graph and its comparison, `RunTree` under `Runs/` because it groups summaries, and `TextDiff`
+under `Board/Comparison/` because a value's before-and-after is the only thing that asks for it.
+
+Four rules hold this together, and each of them is a property of Axiom rather than a preference:
+
+- **One reducer per action.** The store maps an action to exactly one handler and throws when two
+  reducers claim the same one. So a slice-local transition lives in its slice, and the transitions
+  that write more than one slice — ingesting an event, changing the selection, asking for a re-run —
+  are owned by `MainReducer`. Effects are the opposite: many may watch one action.
+- **Slices are never `readonly record struct`.** Axiom compiles a field copier per struct type, but an
+  init-only field cannot be assigned from an expression tree, so a readonly slice falls back to boxed
+  reflection on every clone. The compiled copier is cached per type, which is what makes the tree deep
+  without making the clone expensive.
+- **Bulk stays behind references.** Slices hold scalars and references to immutable classes;
+  `RunGraph` and everything under it is never nested into a value type. `StateCloneBudgetTests` is
+  what notices if that changes, because the symptom in the app is only a UI that slows as runs grow.
+- **Selectors are the transport lanes.** Every binding in the UI goes through a named selector rather
+  than an inline lambda. It matters most for the derived ones: "the selected run" and "is a step held
+  at a breakpoint" were each open-coded at several call sites, and the second one decides whether the
+  window comes to the front.
+
+A lane that is derived rather than stored has no state to write back, so its setter throws instead of
+discarding the write — scoping a reducer to one fails at the first dispatch rather than losing every
+update through it. Lanes the store must also read through `GetValue`, which takes a function and has
+no selector overload, expose the getter the selector is built from so both cannot disagree.
+
+`MainStore` lists the reducers once, so the window and the tests build the same store. Its effect
+arguments are optional: a test checking a transition passes none and gets a store that reduces and
+nothing more.
+
 ## 9. Architecture Decisions
 
 - Keep DebugUI as an inspection surface rather than extending it into a hidden execution runtime.
   Rationale: the framework design favors explicit boundaries between authored test behavior and supporting tooling.
+
+- Move action-triggered async work into effects, and leave transport in the controller.
+  Rationale: the comparison against an earlier run was a bare `Task.Run` inside `ShellController` that
+  read the store, computed, and dispatched its own answer. As `ComparisonEffects` the request is one
+  action and the answer another, both visible to anything watching the store. The staleness guard moved
+  with it: the result carries the session it was computed for and the reducer drops it if the selection
+  has moved, which closes the window that existed between checking and dispatching. What stayed behind
+  is what is genuinely transport — pipe lifecycle, per-session event retention, breakpoint replies, and
+  listing recorded runs, which callers expect to have happened by the time the call returns.
 
 - Keep the current pipe adapter documented as current-state architecture.
   Rationale: users need to understand what exists today before future broker work lands.

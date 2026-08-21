@@ -7,7 +7,9 @@ using TestFramework.Core.Artifacts;
 using TestFramework.Core.Debugger;
 using TestFramework.Core.Steps.Options;
 using TestFramework.Core.Variables;
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Runs;
+using TestFramework.DebugUI.State.Shell.Feed;
 
 namespace TestFramework.DebugUI.State.Tests;
 
@@ -26,7 +28,7 @@ public class MainReducerTests : IDisposable
 
     private StateStore<MainState> CreateStore()
     {
-        StateStore<MainState> store = StateStore<MainState>.Create().AddReducer(new MainReducer()).Build();
+        StateStore<MainState> store = MainStore.Create().Build();
         stores.Add(store);
         return store;
     }
@@ -37,10 +39,10 @@ public class MainReducerTests : IDisposable
         // Showing the only run beats showing an empty board and asking the user to pick.
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(Init("s1", "First")));
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s1", "First")));
 
-        Assert.Equal("s1", store.GetValue(state => state.SelectedSessionId));
-        Assert.Single(store.GetValue(state => state.Runs));
+        Assert.Equal("s1", store.GetValue(state => state.Runs.SelectedSessionId));
+        Assert.Single(store.GetValue(state => state.Runs.All));
     }
 
     [Fact]
@@ -50,15 +52,15 @@ public class MainReducerTests : IDisposable
         // only one drags a graph through the per-dispatch clone.
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(Init("s1", "First"), Init("s2", "Second")));
-        store.Dispatch(RunActions.IngestBatch, Batch(StepRunning("s2")));
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s1", "First"), Init("s2", "Second")));
+        store.Dispatch(MainActions.IngestBatch, Batch(StepRunning("s2")));
 
-        Assert.Equal(2, store.GetValue(state => state.Runs.Count));
-        Assert.Equal("s1", store.GetValue(state => state.SelectedSessionId));
+        Assert.Equal(2, store.GetValue(state => state.Runs.All.Count));
+        Assert.Equal("s1", store.GetValue(state => state.Runs.SelectedSessionId));
 
         // The transition belonged to the unselected run, so the rendered board is untouched.
         Assert.All(
-            store.GetValue(state => state.ActiveRun).Stages.SelectMany(stage => stage.Steps),
+            store.GetValue(state => state.Board.ActiveRun).Stages.SelectMany(stage => stage.Steps),
             step => Assert.Equal(DebugLifecycleState.Initialized, step.Lifecycle));
     }
 
@@ -67,9 +69,9 @@ public class MainReducerTests : IDisposable
     {
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(Init("s1", "First"), StepRunning("s1")));
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s1", "First"), StepRunning("s1")));
 
-        StepNode step = store.GetValue(state => state.ActiveRun).Stages[0].Steps[0];
+        StepNode step = store.GetValue(state => state.Board.ActiveRun).Stages[0].Steps[0];
         Assert.Equal(DebugLifecycleState.Running, step.Lifecycle);
     }
 
@@ -78,10 +80,10 @@ public class MainReducerTests : IDisposable
     {
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(Init("s1", "First")));
-        store.Dispatch(RunActions.IngestBatch, Batch(Init("s2", "Second")));
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s1", "First")));
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s2", "Second")));
 
-        Assert.Equal(["s2", "s1"], store.GetValue(state => state.Runs).Select(run => run.SessionId));
+        Assert.Equal(["s2", "s1"], store.GetValue(state => state.Runs.All).Select(run => run.SessionId));
     }
 
     [Fact]
@@ -91,11 +93,11 @@ public class MainReducerTests : IDisposable
         // attention without projecting them all.
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(Init("s1", "First"), Init("s2", "Second")));
-        store.Dispatch(RunActions.IngestBatch, Batch(Breakpoint("s2")));
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s1", "First"), Init("s2", "Second")));
+        store.Dispatch(MainActions.IngestBatch, Batch(Breakpoint("s2")));
 
-        Assert.True(store.GetValue(state => state.Runs).Single(run => run.SessionId == "s2").IsWaitingAtBreakpoint);
-        Assert.False(store.GetValue(state => state.Runs).Single(run => run.SessionId == "s1").IsWaitingAtBreakpoint);
+        Assert.True(store.GetValue(state => state.Runs.All).Single(run => run.SessionId == "s2").IsWaitingAtBreakpoint);
+        Assert.False(store.GetValue(state => state.Runs.All).Single(run => run.SessionId == "s1").IsWaitingAtBreakpoint);
     }
 
     [Fact]
@@ -103,12 +105,12 @@ public class MainReducerTests : IDisposable
     {
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(Init("s1", "First"), Breakpoint("s1")));
-        Assert.True(store.GetValue(state => state.Runs)[0].IsWaitingAtBreakpoint);
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s1", "First"), Breakpoint("s1")));
+        Assert.True(store.GetValue(state => state.Runs.All)[0].IsWaitingAtBreakpoint);
 
-        store.Dispatch(RunActions.IngestBatch, Batch(StepRunning("s1")));
+        store.Dispatch(MainActions.IngestBatch, Batch(StepRunning("s1")));
 
-        Assert.False(store.GetValue(state => state.Runs)[0].IsWaitingAtBreakpoint);
+        Assert.False(store.GetValue(state => state.Runs.All)[0].IsWaitingAtBreakpoint);
     }
 
     [Fact]
@@ -116,9 +118,9 @@ public class MainReducerTests : IDisposable
     {
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(Init("s1", "First"), Finished("s1")));
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s1", "First"), Finished("s1")));
 
-        RunSummary run = store.GetValue(state => state.Runs)[0];
+        RunSummary run = store.GetValue(state => state.Runs.All)[0];
         Assert.True(run.IsFinished);
         Assert.False(run.IsLive);
     }
@@ -130,20 +132,20 @@ public class MainReducerTests : IDisposable
         // would show one run's steps under another run's name.
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(Init("s1", "First"), StepRunning("s1"), Init("s2", "Second")));
-        Assert.NotEmpty(store.GetValue(state => state.ActiveRun).Stages);
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s1", "First"), StepRunning("s1"), Init("s2", "Second")));
+        Assert.NotEmpty(store.GetValue(state => state.Board.ActiveRun).Stages);
 
-        store.Dispatch(RunActions.SelectRun, "s2");
+        store.Dispatch(MainActions.SelectRun, "s2");
 
-        Assert.Equal("s2", store.GetValue(state => state.SelectedSessionId));
-        Assert.Empty(store.GetValue(state => state.ActiveRun).Stages);
+        Assert.Equal("s2", store.GetValue(state => state.Runs.SelectedSessionId));
+        Assert.Empty(store.GetValue(state => state.Board.ActiveRun).Stages);
     }
 
     [Fact]
     public void AMalformedEnvelopeDoesNotLoseTheRunOnScreen()
     {
         StateStore<MainState> store = CreateStore();
-        store.Dispatch(RunActions.IngestBatch, Batch(Init("s1", "First"), StepRunning("s1")));
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s1", "First"), StepRunning("s1")));
 
         DebugEnvelope corrupt = new()
         {
@@ -155,9 +157,9 @@ public class MainReducerTests : IDisposable
             Payload = new Newtonsoft.Json.Linq.JObject { ["nonsense"] = true }
         };
 
-        store.Dispatch(RunActions.IngestBatch, ImmutableList.Create(corrupt));
+        store.Dispatch(MainActions.IngestBatch, ImmutableList.Create(corrupt));
 
-        Assert.NotEmpty(store.GetValue(state => state.ActiveRun).Stages);
+        Assert.NotEmpty(store.GetValue(state => state.Board.ActiveRun).Stages);
     }
 
     [Fact]
@@ -167,10 +169,10 @@ public class MainReducerTests : IDisposable
         StateStore<MainState> store = CreateStore();
 
         for (int i = 0; i < 600; i++)
-            store.Dispatch(RunActions.AppendFeedEntry, new FeedEntry { Title = $"entry {i}" });
+            store.Dispatch(FeedActions.AppendEntry, new FeedEntry { Title = $"entry {i}" });
 
-        Assert.Equal(500, store.GetValue(state => state.Shell.Feed.Count));
-        Assert.Equal("entry 599", store.GetValue(state => state.Shell.Feed[^1]).Title);
+        Assert.Equal(500, store.GetValue(state => state.Shell.Feed.Entries.Count));
+        Assert.Equal("entry 599", store.GetValue(state => state.Shell.Feed.Entries[^1]).Title);
     }
 
     [Fact]
@@ -178,12 +180,12 @@ public class MainReducerTests : IDisposable
     {
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.AppendFeedEntry, new FeedEntry { Title = "one" });
-        store.Dispatch(RunActions.AppendFeedEntry, new FeedEntry { Title = "two" });
-        Assert.Equal(2, store.GetValue(state => state.Shell.UnreadFeedCount));
+        store.Dispatch(FeedActions.AppendEntry, new FeedEntry { Title = "one" });
+        store.Dispatch(FeedActions.AppendEntry, new FeedEntry { Title = "two" });
+        Assert.Equal(2, store.GetValue(state => state.Shell.Feed.UnreadCount));
 
-        store.Dispatch(RunActions.ClearUnreadFeed);
-        Assert.Equal(0, store.GetValue(state => state.Shell.UnreadFeedCount));
+        store.Dispatch(FeedActions.ClearUnread);
+        Assert.Equal(0, store.GetValue(state => state.Shell.Feed.UnreadCount));
     }
 
     [Fact]
@@ -191,9 +193,9 @@ public class MainReducerTests : IDisposable
     {
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, ImmutableList<DebugEnvelope>.Empty);
+        store.Dispatch(MainActions.IngestBatch, ImmutableList<DebugEnvelope>.Empty);
 
-        Assert.Empty(store.GetValue(state => state.Runs));
+        Assert.Empty(store.GetValue(state => state.Runs.All));
     }
 
     private static ImmutableList<DebugEnvelope> Batch(params DebugEnvelope[] envelopes) => [.. envelopes];

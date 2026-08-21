@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Globalization;
@@ -11,6 +11,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Axiom.State;
 using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Board.Comparison;
 
 namespace TestFramework.DebugUI.Controls.Search;
 
@@ -46,15 +48,15 @@ public partial class UC_Search : UserControl
         // Re-run when the run changes as well as when the query does: a live run gains steps and log lines
         // while the bar is open, and a result list that goes stale as the run proceeds is worse than none.
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.ActiveRun)
+            .Bind(BoardSelectors.SelectActiveRun)
             .Subscribe(_ => Run()));
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.ActiveTiming)
+            .Bind(ComparisonSelectors.SelectTiming)
             .Subscribe(_ => Run()));
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.ActiveDiff)
+            .Bind(ComparisonSelectors.SelectValues)
             .Subscribe(_ => Run()));
 
         Unloaded += (_, _) => subscriptions.Dispose();
@@ -107,7 +109,7 @@ public partial class UC_Search : UserControl
         SearchQuery query = SearchQuery.Parse(tbQuery.Text);
 
         MainState state = StateStore<MainState>.Default.GetValue(current => current);
-        SearchResults results = RunSearch.Find(query, state.ActiveRun, state.ActiveDiff, state.ActiveTiming);
+        SearchResults results = RunSearch.Find(query, state.Board.ActiveRun, state.Board.Comparison.Values, state.Board.Comparison.Timing);
 
         hits = results.Hits;
         highlighted = hits.Count == 0 ? -1 : 0;

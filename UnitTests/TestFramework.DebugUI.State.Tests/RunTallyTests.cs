@@ -1,6 +1,6 @@
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using TestFramework.Core.Debugger;
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
 
 namespace TestFramework.DebugUI.State.Tests;
 

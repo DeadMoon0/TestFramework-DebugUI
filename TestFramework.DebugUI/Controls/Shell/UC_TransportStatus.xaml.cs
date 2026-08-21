@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -11,6 +11,8 @@ using System.Windows.Media;
 using Axiom.State;
 using Axiom.Wpf.Extensions;
 using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Runs;
+using TestFramework.DebugUI.State.Shell;
 using TestFramework.DebugUI.State.Transport;
 
 namespace TestFramework.DebugUI.Controls.Shell;
@@ -44,12 +46,12 @@ public partial class UC_TransportStatus : UserControl
         InitializeComponent();
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.Shell.Transport)
+            .Bind(ShellSelectors.SelectTransport)
             .Select(status => Labels[status])
             .BindToDependencyProperty(tbStatus, TextBlock.TextProperty));
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.Shell.Transport)
+            .Bind(ShellSelectors.SelectTransport)
             .Select(BrushFor)
             .BindToDependencyProperty(bIndicator, Border.BackgroundProperty));
 
@@ -87,7 +89,7 @@ public partial class UC_TransportStatus : UserControl
     private void popDetails_Opened(object sender, EventArgs e)
     {
         liveDetails = StateStore<MainState>.Default
-            .Bind(state => state.Runs)
+            .Bind(RunsSelectors.SelectAll)
             .Subscribe(Describe);
     }
 

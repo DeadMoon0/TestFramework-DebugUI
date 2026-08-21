@@ -1,12 +1,13 @@
-﻿using Axiom.State;
-using Axiom.State.Actions;
-using Axiom.State.Reducers;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using Axiom.State;
+using Axiom.State.Actions;
+using Axiom.State.Reducers;
 using TestFramework.Core.Debugger;
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Runs;
 using Xunit.Abstractions;
 
 namespace TestFramework.DebugUI.State.Tests;
@@ -38,8 +39,8 @@ public class StateCloneBudgetTests(ITestOutputHelper output) : IDisposable
     {
         public MainReducer()
         {
-            On(SetActiveRunAction, (state, graph) => state with { ActiveRun = graph });
-            On(SelectRunAction, (state, sessionId) => state with { SelectedSessionId = sessionId });
+            On(SetActiveRunAction, (state, graph) => state with { Board = state.Board with { ActiveRun = graph } });
+            On(SelectRunAction, (state, sessionId) => state with { Runs = state.Runs with { SelectedSessionId = sessionId } });
         }
     }
 
@@ -103,12 +104,12 @@ public class StateCloneBudgetTests(ITestOutputHelper output) : IDisposable
 
         RunGraph first = BuildRun(stages: 1, stepsPerStage: 2, logsPerStep: 1);
         store.Dispatch(SetActiveRunAction, first);
-        RunGraph captured = store.GetValue(state => state.ActiveRun);
+        RunGraph captured = store.GetValue(state => state.Board.ActiveRun);
 
         store.Dispatch(SetActiveRunAction, BuildRun(stages: 3, stepsPerStage: 4, logsPerStep: 1));
 
         Assert.Single(captured.Stages);
-        Assert.Equal(3, store.GetValue(state => state.ActiveRun).Stages.Count);
+        Assert.Equal(3, store.GetValue(state => state.Board.ActiveRun).Stages.Count);
     }
 
     [Fact]

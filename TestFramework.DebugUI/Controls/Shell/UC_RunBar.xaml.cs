@@ -10,6 +10,9 @@ using Axiom.Wpf.Extensions;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.Editors;
 using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Runs;
+using TestFramework.DebugUI.State.Shell.Feed;
 
 namespace TestFramework.DebugUI.Controls.Shell;
 
@@ -44,7 +47,8 @@ public partial class UC_RunBar : UserControl
         // Left in the casing the test author wrote: a test name is PascalCase and nothing else, so
         // upper-casing it removes the only thing separating its words.
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => Selected(state)?.Name ?? string.Empty)
+            .Bind(RunsSelectors.SelectSelectedRun)
+            .Select(run => run?.Name ?? string.Empty)
             .BindToDependencyProperty(tbRunName, TextBlock.TextProperty));
 
         // Capped and trimmed, so a long name cannot push the actions off the bar. The qualified name is on
@@ -52,44 +56,44 @@ public partial class UC_RunBar : UserControl
         // and a button that appears under the pointer in the strip you grab the window by is a button in
         // the way. The same name is copyable from the step panel, where reading it is the point.
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => Selected(state)?.Test ?? string.Empty)
+            .Bind(RunsSelectors.SelectSelectedTest)
             .Subscribe(test => tbRunName.ToolTip = string.IsNullOrWhiteSpace(test) ? null : test));
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.SelectedSessionId is null ? Visibility.Collapsed : Visibility.Visible)
+            .Bind(RunsSelectors.SelectHasSelection)
+            .Select(selected => selected ? Visibility.Visible : Visibility.Collapsed)
             .BindToDependencyProperty(this, VisibilityProperty));
 
         // Shown only when there is something to release. A button that is always there and almost always
         // does nothing teaches people not to look at it.
         IObservable<Visibility> held = StateStore<MainState>.Default
-            .Bind(state => state.ActiveRun.Stages.Any(stage => stage.Steps.Any(step => step.IsWaitingAtBreakpoint)))
+            .Bind(BoardSelectors.SelectIsWaitingAtBreakpoint)
             .Select(waiting => waiting ? Visibility.Visible : Visibility.Collapsed);
 
         subscriptions.Add(held.BindToDependencyProperty(btContinue, VisibilityProperty));
         subscriptions.Add(held.BindToDependencyProperty(btStep, VisibilityProperty));
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.SelectedSessionId is not null && !state.ActiveRun.IsFinished)
+            .Bind(BoardSelectors.SelectIsRunning)
             .BindToDependencyProperty(btStop, IsEnabledProperty));
 
         // Offered only where it can actually be done. A button that explains itself only after being
         // pressed is a button that wastes the press.
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => RerunCommand.IsAvailableFor(
-                state.Runs.Find(run => string.Equals(run.SessionId, state.SelectedSessionId, StringComparison.Ordinal))))
+            .Bind(RunsSelectors.SelectCanRerunSelected)
             .BindToDependencyProperty(btRerun, IsEnabledProperty));
 
         // Dead unless there is a failure to jump to.
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.ActiveRun.Stages.Any(stage => stage.Steps.Any(
-                step => step.Lifecycle is DebugLifecycleState.Error or DebugLifecycleState.Timeout)))
+            .Bind(BoardSelectors.SelectHasFailure)
             .BindToDependencyProperty(btFirstFailure, IsEnabledProperty));
 
         // The tooltip names the file and line the button will land on, because "open in VS Code" and "open
         // OrderTests.cs at line 42" are different offers and only the second one is worth crossing the
         // window for. Re-read on selection because the answer belongs to the run, not to the editor.
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => Selected(state)?.Source)
+            .Bind(RunsSelectors.SelectSelectedRun)
+            .Select(run => run?.Source)
             .Subscribe(location =>
             {
                 source = location;
@@ -125,9 +129,6 @@ public partial class UC_RunBar : UserControl
     /// <summary>Raised when the reader asks to share the selected run.</summary>
     public event Action? ShareRequested;
 
-    private static RunSummary? Selected(MainState state)
-        => state.Runs.Find(run => string.Equals(run.SessionId, state.SelectedSessionId, StringComparison.Ordinal));
-
     private async void btContinue_Click(object sender, RoutedEventArgs e)
         => await MainWindow.Shell.ContinueSelectedRunAsync();
 
@@ -143,7 +144,7 @@ public partial class UC_RunBar : UserControl
     /// </remarks>
     internal static async Task StepAsync()
     {
-        string? sessionId = StateStore<MainState>.Default.GetValue(state => state.SelectedSessionId);
+        string? sessionId = StateStore<MainState>.Default.GetValue(state => state.Runs.SelectedSessionId);
 
         if (sessionId is null)
             return;
@@ -157,8 +158,8 @@ public partial class UC_RunBar : UserControl
     private async void btStop_Click(object sender, RoutedEventArgs e)
         => await MainWindow.Shell.CancelSelectedRunAsync();
 
-    private async void btRerun_Click(object sender, RoutedEventArgs e)
-        => await MainWindow.Shell.RerunSelectedAsync();
+    private void btRerun_Click(object sender, RoutedEventArgs e)
+        => MainWindow.Shell.RerunSelected();
 
     /// <summary>
     /// Shows a button for each editor that is actually installed.
@@ -240,7 +241,7 @@ public partial class UC_RunBar : UserControl
         if (editor is null)
             return;
 
-        RunSummary? run = StateStore<MainState>.Default.GetValue(Selected);
+        RunSummary? run = StateStore<MainState>.Default.GetValue(RunsSelectors.SelectedRunOf);
 
         System.Collections.Immutable.ImmutableList<string> arguments = EditorPaths.ArgumentsFor(
             run?.ProjectFilePath,

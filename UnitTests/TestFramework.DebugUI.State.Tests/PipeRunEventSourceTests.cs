@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO.Pipes;
@@ -13,7 +13,8 @@ using TestFramework.Core.Steps;
 using TestFramework.Core.Steps.Options;
 using TestFramework.Core.Timelines;
 using TestFramework.Core.Variables;
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Shell.Feed;
 using TestFramework.DebugUI.State.Transport;
 
 namespace TestFramework.DebugUI.State.Tests;
@@ -44,8 +45,8 @@ public sealed class PipeRunEventSourceTests
         await RunTimelineAsync("live");
         watcher.Ingest.Flush();
 
-        Assert.Single(watcher.Store.GetValue(state => state.Runs));
-        Assert.True(watcher.Store.GetValue(state => state.ActiveRun).IsFinished);
+        Assert.Single(watcher.Store.GetValue(state => state.Runs.All));
+        Assert.True(watcher.Store.GetValue(state => state.Board.ActiveRun).IsFinished);
 
         StepNode step = Steps(watcher).Single(candidate => candidate.DisplayName == "live");
         Assert.Equal(DebugLifecycleState.Complete, step.Lifecycle);
@@ -66,8 +67,8 @@ public sealed class PipeRunEventSourceTests
 
         watcher.Ingest.Flush();
 
-        Assert.Equal(3, watcher.Store.GetValue(state => state.Runs).Count);
-        Assert.Equal(3, watcher.Store.GetValue(state => state.Runs).Select(run => run.SessionId).Distinct().Count());
+        Assert.Equal(3, watcher.Store.GetValue(state => state.Runs.All).Count);
+        Assert.Equal(3, watcher.Store.GetValue(state => state.Runs.All).Select(run => run.SessionId).Distinct().Count());
     }
 
     [Fact]
@@ -228,12 +229,12 @@ public sealed class PipeRunEventSourceTests
         watcher.Ingest.Flush();
 
         Assert.True(seen > 1, "The connection stopped after the consumer threw.");
-        Assert.True(watcher.Store.GetValue(state => state.ActiveRun).IsFinished);
+        Assert.True(watcher.Store.GetValue(state => state.Board.ActiveRun).IsFinished);
         Assert.Contains(watcher.Notices, entry => entry.Severity == FeedSeverity.Error);
     }
 
     private static IEnumerable<StepNode> Steps(Watcher watcher)
-        => watcher.Store.GetValue(state => state.ActiveRun).Stages.SelectMany(stage => stage.Steps);
+        => watcher.Store.GetValue(state => state.Board.ActiveRun).Stages.SelectMany(stage => stage.Steps);
 
     private static async Task<string> WaitForAttachedSessionAsync(Watcher watcher)
     {
@@ -333,7 +334,7 @@ public sealed class PipeRunEventSourceTests
 
         internal Watcher(string pipeName)
         {
-            Store = StateStore<MainState>.Create().AddReducer(new MainReducer()).Build();
+            Store = MainStore.Create().Build();
             Ingest = new RunIngestService(Store, TimeSpan.FromMilliseconds(10));
             Source = new PipeRunEventSource(pipeName);
 

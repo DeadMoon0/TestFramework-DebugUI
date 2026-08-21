@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
 using TestFramework.Core.Debugger;
+using TestFramework.DebugUI.State.Runs;
+using TestFramework.DebugUI.State.Shell.Feed;
 
 namespace TestFramework.DebugUI.State.Transport;
 

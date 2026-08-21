@@ -11,7 +11,7 @@ using TestFramework.Core.Steps;
 using TestFramework.Core.Steps.Options;
 using TestFramework.Core.Timelines;
 using TestFramework.Core.Variables;
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
 
 namespace TestFramework.DebugUI.State.Tests;
 

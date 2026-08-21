@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using TestFramework.DebugUI.Editors;
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Runs;
 
 namespace TestFramework.DebugUI.App.Tests;
 

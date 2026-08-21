@@ -1,6 +1,6 @@
-using TestFramework.Core.Debugger;
+﻿using TestFramework.Core.Debugger;
 using TestFramework.DebugUI;
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Settings;
 using TestFramework.DebugUI.State.Transport;
 
 namespace TestFramework.DebugUI.App.Tests;

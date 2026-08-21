@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -10,6 +10,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Axiom.State;
 using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Runs;
 
 namespace TestFramework.DebugUI.Controls.Home;
 
@@ -34,11 +35,11 @@ public partial class UC_HomeCard : UserControl
         InitializeComponent();
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.Runs.FirstOrDefault(run => string.Equals(run.SessionId, SessionId, StringComparison.Ordinal)))
+            .Bind(RunsSelectors.SelectBySession(SessionId))
             .Subscribe(Show));
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => string.Equals(state.SelectedSessionId, SessionId, StringComparison.Ordinal))
+            .Bind(RunsSelectors.SelectIsSelected(SessionId))
             .Subscribe(selected => { IsSelected = selected; Paint(); }));
 
         Unloaded += (_, _) => subscriptions.Dispose();

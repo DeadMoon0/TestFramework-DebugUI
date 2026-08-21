@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 using System.Globalization;
+using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Windows;
@@ -10,7 +10,11 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Axiom.State;
+using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Board.Comparison;
+using TestFramework.DebugUI.State.Runs;
 
 namespace TestFramework.DebugUI.Controls.Detail;
 
@@ -47,26 +51,28 @@ public partial class UC_RunSummary : UserControl, IDisposable
         // page in the tool that exists to be read at a glance.
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => RunTally.Of(state.ActiveRun))
+            .Bind(BoardSelectors.SelectActiveRun)
+            .Select(RunTally.Of)
             .Subscribe(Show));
 
         // Bound separately from the tally: the tally counts checks, and this page also has room to name the
         // ones that did not hold.
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.ActiveRun.Assertions)
+            .Bind(BoardSelectors.SelectActiveRun)
+            .Select(run => run.Assertions)
             .Subscribe(ShowChecks));
 
         // Arrives after the board, because a baseline means reading an earlier run's journal. Bound on its
         // own so the page fills in when it lands rather than waiting for it.
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.ActiveTiming)
+            .Bind(ComparisonSelectors.SelectTiming)
             .Subscribe(ShowTiming));
 
         // How big the recording is, which the tally cannot know: it counts what the graph holds, and this is
         // what the producer wrote. Counted into the sidecar as the run went, so reading it costs nothing.
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.Runs
-                .Find(run => string.Equals(run.SessionId, state.SelectedSessionId, StringComparison.Ordinal))?.EventCount)
+            .Bind(RunsSelectors.SelectSelectedRun)
+            .Select(run => run?.EventCount)
             .Subscribe(count =>
             {
                 recorded = count;
@@ -174,9 +180,14 @@ public partial class UC_RunSummary : UserControl, IDisposable
             // exception is what distinguishes them, and it is a line rather than a panel.
             if (failure.Detail?.InnerExceptions is { Count: > 0 } chain)
             {
+                // The deepest cause rather than the last one listed. With several causes flattened into one list
+                // the last entry can be a shallow sibling, and the deepest is the one that actually explains the
+                // failure — which is the whole reason this line is here.
+                DebugExceptionLink root = chain.MaxBy(link => link.Depth) ?? chain[^1];
+
                 body.Children.Add(new TextBlock
                 {
-                    Text = $"↳ {chain[^1].ExceptionType}: {chain[^1].Message}",
+                    Text = $"↳ {root.ExceptionType}: {root.Message}",
                     Foreground = (Brush)FindResource("TextFaint"),
                     FontSize = 11,
                     Margin = new Thickness(0, 2, 0, 0),

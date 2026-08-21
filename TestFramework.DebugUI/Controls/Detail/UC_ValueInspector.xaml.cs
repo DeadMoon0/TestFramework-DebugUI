@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Reactive.Disposables;
 using System.Windows;
 using System.Windows.Controls;
@@ -13,8 +13,10 @@ using System.Windows.Media;
 using Axiom.State;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.Copying;
-using TestFramework.DebugUI.State.Bundles;
 using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Board.Comparison;
+using TestFramework.DebugUI.State.Bundles;
 
 namespace TestFramework.DebugUI.Controls.Detail;
 
@@ -77,16 +79,16 @@ public partial class UC_ValueInspector : UserControl, IDisposable
 
         subscriptions.Add(isArtifact
             ? StateStore<MainState>.Default
-                .Bind(state => state.ActiveRun.Artifacts.TryGetValue(key, out ArtifactNode? artifact) ? artifact : null)
+                .Bind(BoardSelectors.SelectArtifact(key))
                 .Subscribe(ShowArtifact)
             : StateStore<MainState>.Default
-                .Bind(state => state.ActiveRun.Variables.TryGetValue(key, out ValueNode? value) ? value : null)
+                .Bind(BoardSelectors.SelectVariable(key))
                 .Subscribe(ShowVariable));
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => isArtifact
-                ? state.ActiveDiff.ChangeForArtifact(key)
-                : state.ActiveDiff.ChangeForVariable(key))
+            .Bind(isArtifact
+                ? ComparisonSelectors.SelectArtifactChange(key)
+                : ComparisonSelectors.SelectVariableChange(key))
             .Subscribe(ShowComparison));
 
         Visibility = Visibility.Visible;
@@ -146,13 +148,13 @@ public partial class UC_ValueInspector : UserControl, IDisposable
 
         if (shownIsArtifact)
         {
-            if (state.ActiveRun.Artifacts.TryGetValue(shownKey!, out ArtifactNode? artifact))
+            if (state.Board.ActiveRun.Artifacts.TryGetValue(shownKey!, out ArtifactNode? artifact))
                 ShowArtifact(artifact);
 
             return;
         }
 
-        if (state.ActiveRun.Variables.TryGetValue(shownKey!, out ValueNode? value))
+        if (state.Board.ActiveRun.Variables.TryGetValue(shownKey!, out ValueNode? value))
             ShowVariable(value);
     }
 
@@ -512,8 +514,8 @@ public partial class UC_ValueInspector : UserControl, IDisposable
     /// <summary>The journal the selected run was replayed from, when it came from disk.</summary>
     private static string? JournalPath()
         => StateStore<MainState>.Default
-            .GetValue(state => state.Runs
-                .Find(run => string.Equals(run.SessionId, state.SelectedSessionId, StringComparison.Ordinal))?.JournalPath);
+            .GetValue(state => state.Runs.All
+                .Find(run => string.Equals(run.SessionId, state.Runs.SelectedSessionId, StringComparison.Ordinal))?.JournalPath);
 
 
     /// <summary>

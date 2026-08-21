@@ -11,8 +11,10 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Axiom.State;
-using TestFramework.DebugUI.State.Bundles;
 using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Board.Comparison;
+using TestFramework.DebugUI.State.Bundles;
 
 namespace TestFramework.DebugUI.Controls.Detail;
 
@@ -47,16 +49,16 @@ public partial class UC_ValueItem : UserControl
 
         subscriptions.Add(isArtifact
             ? StateStore<MainState>.Default
-                .Bind(state => state.ActiveRun.Artifacts.TryGetValue(Key, out ArtifactNode? artifact) ? artifact : null)
+                .Bind(BoardSelectors.SelectArtifact(Key))
                 .Subscribe(ShowArtifact)
             : StateStore<MainState>.Default
-                .Bind(state => state.ActiveRun.Variables.TryGetValue(Key, out ValueNode? value) ? value : null)
+                .Bind(BoardSelectors.SelectVariable(Key))
                 .Subscribe(ShowVariable));
 
         // Bound separately from the value itself: the comparison arrives after the board does,
         // because it has to read an earlier run off disk.
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => isArtifact ? state.ActiveDiff.ForArtifact(Key) : state.ActiveDiff.ForVariable(Key))
+            .Bind(isArtifact ? ComparisonSelectors.SelectArtifactChangeKind(Key) : ComparisonSelectors.SelectVariableChangeKind(Key))
             .Subscribe(ShowChange));
 
         Unloaded += (_, _) => subscriptions.Dispose();
@@ -269,6 +271,6 @@ public partial class UC_ValueItem : UserControl
     /// <summary>The journal the selected run was replayed from, when it came from disk.</summary>
     private static string? JournalPath()
         => StateStore<MainState>.Default
-            .GetValue(state => state.Runs
-                .Find(run => string.Equals(run.SessionId, state.SelectedSessionId, StringComparison.Ordinal))?.JournalPath);
+            .GetValue(state => state.Runs.All
+                .Find(run => string.Equals(run.SessionId, state.Runs.SelectedSessionId, StringComparison.Ordinal))?.JournalPath);
 }

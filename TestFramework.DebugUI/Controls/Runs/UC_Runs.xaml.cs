@@ -14,6 +14,8 @@ using Axiom.State;
 using TestFramework.DebugUI.Controls.Dock;
 using TestFramework.DebugUI.Controls.Home;
 using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Runs;
 
 namespace TestFramework.DebugUI.Controls.Runs;
 
@@ -64,7 +66,7 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
         InitializeComponent();
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.Runs)
+            .Bind(RunsSelectors.SelectAll)
             .Subscribe(all =>
             {
                 runs = all;
@@ -75,7 +77,7 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
         // opened. A live run selects itself the moment it announces, and a rail that left it collapsed
         // would be hiding the one run the reader is about to be shown.
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.SelectedSessionId)
+            .Bind(RunsSelectors.SelectSelectedSessionId)
             .Subscribe(sessionId =>
             {
                 selected = sessionId;

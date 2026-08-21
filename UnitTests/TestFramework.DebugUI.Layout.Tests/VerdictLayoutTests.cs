@@ -1,5 +1,5 @@
-using System.Linq;
-using TestFramework.DebugUI.State;
+﻿using System.Linq;
+using TestFramework.DebugUI.State.Board;
 
 namespace TestFramework.DebugUI.Layout.Tests;
 

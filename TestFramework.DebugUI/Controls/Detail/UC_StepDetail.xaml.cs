@@ -11,6 +11,8 @@ using Axiom.State;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.Copying;
 using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Board.Comparison;
 
 namespace TestFramework.DebugUI.Controls.Detail;
 
@@ -54,7 +56,7 @@ public partial class UC_StepDetail : UserControl, IDisposable
         // Arrives later than the step does, because a baseline means reading an earlier run's journal. Kept
         // so the line can be filled in when it lands rather than only on the next selection.
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.ActiveTiming)
+            .Bind(ComparisonSelectors.SelectTiming)
             .Subscribe(compared =>
             {
                 timing = compared;
@@ -73,11 +75,11 @@ public partial class UC_StepDetail : UserControl, IDisposable
     /// </remarks>
     private static (string Stage, StepNode? Step) Resolve(MainState state)
     {
-        StepSelection? selection = state.SelectedStep;
+        StepSelection? selection = state.Board.SelectedStep;
         if (selection is null)
             return (string.Empty, null);
 
-        StageNode? stage = state.ActiveRun.Stages
+        StageNode? stage = state.Board.ActiveRun.Stages
             .FirstOrDefault(candidate => string.Equals(candidate.Name, selection.StageName, StringComparison.Ordinal));
 
         return (selection.StageName, stage?.Steps.FirstOrDefault(candidate => candidate.StepId == selection.StepId));
@@ -413,7 +415,10 @@ public partial class UC_StepDetail : UserControl, IDisposable
 
             StackPanel row = new()
             {
-                Margin = new Thickness(Math.Min(depth, 3) * 10, depth == 0 ? 0 : 6, 0, 0)
+                // Indented by how deep the cause actually sat, not by its place in the list. Two exceptions
+                // aggregated by the same parent are siblings, and stepping the second one further in than the
+                // first would say the first had caused it.
+                Margin = new Thickness(Math.Min(link.Depth, 3) * 12, depth == 0 ? 0 : 6, 0, 0)
             };
 
             row.Children.Add(new TextBlock
@@ -508,9 +513,9 @@ public partial class UC_StepDetail : UserControl, IDisposable
         text.AppendLine($"{step.DisplayName} ({stageName}, step {step.StepId})");
         text.AppendLine($"{failure.ExceptionType}: {failure.Message}");
 
-        // Indented the way the panel steps them, because the nesting is part of what is being handed over.
+        // Indented by depth, the way the panel steps them, because the nesting is part of what is handed over.
         foreach (DebugExceptionLink link in failure.InnerExceptions)
-            text.AppendLine($"  ---> {link.ExceptionType}: {link.Message}");
+            text.AppendLine($"{new string(' ', 2 + (link.Depth * 2))}---> {link.ExceptionType}: {link.Message}");
 
         if (!string.IsNullOrWhiteSpace(failure.FriendlyMessage))
             text.AppendLine().AppendLine(failure.FriendlyMessage);

@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Settings;
 using TestFramework.DebugUI.State.Transport;
 
 namespace TestFramework.DebugUI;

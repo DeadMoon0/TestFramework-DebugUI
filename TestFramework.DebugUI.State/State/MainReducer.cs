@@ -3,72 +3,51 @@ using System.Collections.Immutable;
 using System.Linq;
 using Axiom.State.Reducers;
 using TestFramework.Core.Debugger;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Runs;
 
 namespace TestFramework.DebugUI.State;
 
 /// <summary>
-/// Applies debug events to the UI state.
+/// Applies the transitions that touch more than one slice.
 /// </summary>
 /// <remarks>
 /// The reducer decides <em>where</em> an event goes; <see cref="RunProjection"/> decides what it
 /// means. Keeping those apart is what lets the projection rules be tested exhaustively without a
 /// store, and what lets a replayed journal and a live stream share one implementation.
+/// <para>
+/// Only cross-slice work is here. Anything that writes a single slice belongs to that slice's own
+/// reducer, beside it in the folder tree.
+/// </para>
 /// </remarks>
 public sealed class MainReducer : Reducer<MainState>
 {
-    /// <summary>Bounds the feed so a long session cannot grow it without limit.</summary>
-    private const int MaxFeedEntries = 500;
-
     /// <summary>
     /// Initializes the reducer and registers its handlers.
     /// </summary>
     public MainReducer()
     {
-        On(RunActions.IngestBatch, (state, envelopes) => Ingest(state, envelopes));
-        On(RunActions.SelectRun, (state, sessionId) => Select(state, sessionId));
-        On(RunActions.AppendFeedEntry, (state, entry) => AppendFeed(state, entry));
-        On(RunActions.ClearUnreadFeed, state => state with { Shell = state.Shell with { UnreadFeedCount = 0 } });
-        On(RunActions.SetTransportStatus, (state, status) => state with { Shell = state.Shell with { Transport = status } });
-        On(RunActions.SelectStep, (state, selection) => state with { SelectedStep = selection });
-        On(RunActions.AddRecordedRuns, (state, runs) => AddRecorded(state, runs));
-        On(RunActions.AwaitRerun, (state, test) => state with { Shell = state.Shell with { AwaitedRerun = test } });
-        On(RunActions.SetValueDiff, (state, diff) => state with { ActiveDiff = diff });
-
-        On(RunActions.SetComparison, (state, comparison) => state with
-        {
-            ActiveDiff = comparison.Values,
-            ActiveTiming = comparison.Timing
-        });
+        On(MainActions.IngestBatch, (state, envelopes) => Ingest(state, envelopes));
+        On(MainActions.SelectRun, (state, sessionId) => Select(state, sessionId));
+        On(MainActions.RerunSelected, RecordRerunIntent);
     }
 
     /// <summary>
-    /// Merges runs found on disk into the picker.
+    /// Notes which test a re-run was asked for, so its run is shown when it arrives.
     /// </summary>
     /// <remarks>
-    /// A live run records itself as it goes, so the same session is both attached and on disk. The
-    /// live copy wins: it is the one receiving events, and replacing it with the recorded summary
-    /// would make a running test look finished.
+    /// Reads the selection out of one slice and writes another, which is why it is here rather than
+    /// in <see cref="ShellReducer"/>. A run that cannot be repeated records nothing: the intent would
+    /// never be answered, and it would then steal the next unrelated run of that name.
     /// </remarks>
-    private static MainState AddRecorded(MainState state, ImmutableList<RunSummary> runs)
+    private static MainState RecordRerunIntent(MainState state)
     {
-        if (runs is null || runs.Count == 0)
+        RunSummary? run = Selected(state);
+
+        if (run is null || !RerunCommand.IsAvailableFor(run))
             return state;
 
-        ImmutableList<RunSummary> merged = state.Runs;
-
-        foreach (RunSummary run in runs)
-        {
-            if (merged.Exists(known => string.Equals(known.SessionId, run.SessionId, StringComparison.Ordinal)))
-                continue;
-
-            merged = merged.Add(run);
-        }
-
-        if (ReferenceEquals(merged, state.Runs))
-            return state;
-
-        // Newest first, so a picker showing them in order needs no sorting of its own.
-        return state with { Runs = [.. merged.OrderByDescending(run => run.StartedAtUtc)] };
+        return state with { Shell = state.Shell with { AwaitedRerun = run.Test } };
     }
 
     private static MainState Ingest(MainState state, ImmutableList<DebugEnvelope> envelopes)
@@ -100,15 +79,18 @@ public sealed class MainReducer : Reducer<MainState>
 
         // Every session is tracked, but only the selected one is projected in full. That is what
         // keeps twenty parallel runs from each dragging a graph through the per-dispatch clone.
-        if (!string.Equals(state.SelectedSessionId, envelope.SessionId, StringComparison.Ordinal))
+        if (!string.Equals(state.Runs.SelectedSessionId, envelope.SessionId, StringComparison.Ordinal))
             return state;
 
-        return state with { ActiveRun = RunProjection.Apply(state.ActiveRun, signal) };
+        return state with
+        {
+            Board = state.Board with { ActiveRun = RunProjection.Apply(state.Board.ActiveRun, signal) }
+        };
     }
 
     private static MainState TrackSession(MainState state, DebugEnvelope envelope, IPipeSignal signal)
     {
-        int index = state.Runs.FindIndex(run => string.Equals(run.SessionId, envelope.SessionId, StringComparison.Ordinal));
+        int index = state.Runs.All.FindIndex(run => string.Equals(run.SessionId, envelope.SessionId, StringComparison.Ordinal));
 
         if (index < 0)
         {
@@ -133,12 +115,12 @@ public sealed class MainReducer : Reducer<MainState>
             };
 
             // Newest first, so the picker's default order needs no sorting.
-            state = state with { Runs = state.Runs.Insert(0, summary) };
+            state = state with { Runs = state.Runs with { All = state.Runs.All.Insert(0, summary) } };
 
             // Nothing selected yet means this is the first run the UI has seen; showing it beats
             // showing an empty board and making the user pick.
-            if (state.SelectedSessionId is null)
-                return state with { SelectedSessionId = envelope.SessionId };
+            if (state.Runs.SelectedSessionId is null)
+                return state with { Runs = state.Runs with { SelectedSessionId = envelope.SessionId } };
 
             // The run someone asked for by pressing re-run. They are waiting to watch it, so it is
             // shown rather than filed behind the run already on screen — which is the one they just
@@ -147,7 +129,7 @@ public sealed class MainReducer : Reducer<MainState>
             {
                 return state with
                 {
-                    SelectedSessionId = envelope.SessionId,
+                    Runs = state.Runs with { SelectedSessionId = envelope.SessionId },
                     Shell = state.Shell with { AwaitedRerun = null }
                 };
             }
@@ -155,7 +137,7 @@ public sealed class MainReducer : Reducer<MainState>
             return state;
         }
 
-        RunSummary existing = state.Runs[index];
+        RunSummary existing = state.Runs.All[index];
         RunSummary updated = signal switch
         {
             PipeTimelineRunFinishedSignal => existing with
@@ -194,7 +176,7 @@ public sealed class MainReducer : Reducer<MainState>
 
         return ReferenceEquals(existing, updated)
             ? state
-            : state with { Runs = state.Runs.SetItem(index, updated) };
+            : state with { Runs = state.Runs with { All = state.Runs.All.SetItem(index, updated) } };
     }
 
     /// <summary>
@@ -247,7 +229,7 @@ public sealed class MainReducer : Reducer<MainState>
 
     private static MainState Select(MainState state, string sessionId)
     {
-        if (string.Equals(state.SelectedSessionId, sessionId, StringComparison.Ordinal))
+        if (string.Equals(state.Runs.SelectedSessionId, sessionId, StringComparison.Ordinal))
             return state;
 
         // The newly selected run's graph is not held anywhere, so it is rebuilt by whoever owns the
@@ -255,32 +237,21 @@ public sealed class MainReducer : Reducer<MainState>
         // keeps the board from briefly showing the previous run's contents under the new run's name.
         // The step selection goes with it: a stage and index mean nothing in a different run, and
         // keeping them would open the detail panel on whatever happened to sit at that index.
-        // The diff goes too. It is a statement about two named runs, so carrying it across a
-        // selection change would badge the new run's values with the old run's comparison.
+        // The comparison goes too. It is a statement about two named runs, so carrying it across a
+        // selection change would badge the new run's values with the old run's verdict.
+        //
+        // A fresh BoardState rather than a field-by-field reset, so a field added to the board later
+        // is cleared here by construction instead of being forgotten.
         return state with
         {
-            SelectedSessionId = sessionId,
-            ActiveRun = RunGraph.Empty,
-            ActiveDiff = ValueDiff.None,
-            ActiveTiming = TimingDiff.None,
-            SelectedStep = null
+            Runs = state.Runs with { SelectedSessionId = sessionId },
+            Board = new BoardState()
         };
     }
 
-    private static MainState AppendFeed(MainState state, FeedEntry entry)
-    {
-        ImmutableList<FeedEntry> feed = state.Shell.Feed.Add(entry);
-
-        if (feed.Count > MaxFeedEntries)
-            feed = feed.RemoveRange(0, feed.Count - MaxFeedEntries);
-
-        return state with
-        {
-            Shell = state.Shell with
-            {
-                Feed = feed,
-                UnreadFeedCount = state.Shell.UnreadFeedCount + 1
-            }
-        };
-    }
+    /// <summary>The selected run, or null when nothing is selected or the selection is stale.</summary>
+    private static RunSummary? Selected(MainState state)
+        => state.Runs.SelectedSessionId is { } sessionId
+            ? state.Runs.All.Find(run => string.Equals(run.SessionId, sessionId, StringComparison.Ordinal))
+            : null;
 }

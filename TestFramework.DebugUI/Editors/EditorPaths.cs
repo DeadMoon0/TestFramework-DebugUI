@@ -4,7 +4,7 @@ using System.Collections.Immutable;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Runs;
 
 namespace TestFramework.DebugUI.Editors;
 

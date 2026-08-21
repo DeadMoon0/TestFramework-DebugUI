@@ -2,7 +2,7 @@
 using System.Linq;
 using Newtonsoft.Json.Linq;
 using TestFramework.Core.Debugger;
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
 
 namespace TestFramework.DebugUI.State.Tests;
 

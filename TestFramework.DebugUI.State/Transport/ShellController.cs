@@ -7,6 +7,11 @@ using System.Linq;
 using System.Threading.Tasks;
 using Axiom.State;
 using TestFramework.Core.Debugger;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Board.Comparison;
+using TestFramework.DebugUI.State.Runs;
+using TestFramework.DebugUI.State.Shell;
+using TestFramework.DebugUI.State.Shell.Feed;
 
 namespace TestFramework.DebugUI.State.Transport;
 
@@ -52,8 +57,6 @@ public sealed class ShellController : IDisposable
     /// to answer a step that is holding a run open — and the store is a coalesced dispatch behind the pipe.
     /// </remarks>
     private readonly ConcurrentDictionary<string, string> tests = new(StringComparer.Ordinal);
-    private readonly TestRerunner rerunner;
-    private readonly BaselineResolver baselines;
 
     private bool disposed;
 
@@ -76,7 +79,7 @@ public sealed class ShellController : IDisposable
     public ShellController(StateStore<MainState> store, string? runsDirectory = null, string? pipeName = null, TimeSpan? ingestWindow = null)
     {
         this.store = store ?? throw new ArgumentNullException(nameof(store));
-        this.runsDirectory = runsDirectory ?? SafeRunsDirectory();
+        this.runsDirectory = runsDirectory ?? DefaultRunsDirectory();
 
         ingest = new RunIngestService(store, ingestWindow);
         pipe = new PipeRunEventSource(pipeName);
@@ -85,9 +88,6 @@ public sealed class ShellController : IDisposable
         pipe.Notice += Report;
         pipe.ConnectionsChanged += OnConnectionsChanged;
         pipe.PauseAtBreakpoint = ShouldPause;
-
-        rerunner = new TestRerunner(Report);
-        baselines = new BaselineResolver(this.runsDirectory);
     }
 
     /// <summary>Gets the live transport, for the window to drive breakpoints and cancellation.</summary>
@@ -121,7 +121,7 @@ public sealed class ShellController : IDisposable
         ObjectDisposedException.ThrowIf(disposed, this);
 
         pipe.Start();
-        store.Dispatch(RunActions.SetTransportStatus, TransportStatus.Listening);
+        store.Dispatch(ShellActions.SetTransportStatus, TransportStatus.Listening);
 
         RefreshRecordedRuns();
         ReportRecordingsFromOtherBuilds();
@@ -200,7 +200,7 @@ public sealed class ShellController : IDisposable
                 })
             ];
 
-            store.Dispatch(RunActions.AddRecordedRuns, Located(recorded));
+            store.Dispatch(RunsActions.AddRecorded, Located(recorded));
         }
         catch (Exception e)
         {
@@ -247,7 +247,7 @@ public sealed class ShellController : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ObjectDisposedException.ThrowIf(disposed, this);
 
-        store.Dispatch(RunActions.SelectRun, sessionId);
+        store.Dispatch(MainActions.SelectRun, sessionId);
 
         if (histories.TryGetValue(sessionId, out RunHistory? history))
         {
@@ -280,7 +280,7 @@ public sealed class ShellController : IDisposable
     public void SelectStep(string stageName, int stepId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stageName);
-        store.Dispatch(RunActions.SelectStep, new StepSelection { StageName = stageName, StepId = stepId });
+        store.Dispatch(BoardActions.SelectStep, new StepSelection { StageName = stageName, StepId = stepId });
     }
 
     /// <summary>
@@ -288,7 +288,7 @@ public sealed class ShellController : IDisposable
     /// </summary>
     public async Task<bool> ContinueSelectedRunAsync()
     {
-        string? sessionId = store.GetValue(state => state.SelectedSessionId);
+        string? sessionId = store.GetValue(state => state.Runs.SelectedSessionId);
         if (sessionId is null)
             return false;
 
@@ -316,7 +316,7 @@ public sealed class ShellController : IDisposable
     /// </remarks>
     public async Task<bool> CancelSelectedRunAsync(string? reason = null)
     {
-        string? sessionId = store.GetValue(state => state.SelectedSessionId);
+        string? sessionId = store.GetValue(state => state.Runs.SelectedSessionId);
         if (sessionId is null)
             return false;
 
@@ -333,28 +333,17 @@ public sealed class ShellController : IDisposable
     /// Runs the selected run's test again.
     /// </summary>
     /// <remarks>
-    /// The new run arrives over the pipe like any other, so nothing here waits for it or tracks it.
-    /// This only starts the process and reports the cases the pipe cannot: that it could not be
-    /// started, or that the run never carried enough identity to be repeated.
+    /// One dispatch, and everything else follows from it: <see cref="MainReducer"/> records which
+    /// test is being waited for, and <see cref="RunsEffects"/> starts the process. That ordering is
+    /// guaranteed rather than arranged — a dispatch reduces before its effects are queued — which is
+    /// what the old hand-ordered version here was trying to achieve by dispatching first and starting
+    /// the process second.
     /// </remarks>
-    public Task<bool> RerunSelectedAsync()
+    public void RerunSelected()
     {
-        string? sessionId = store.GetValue(state => state.SelectedSessionId);
+        ObjectDisposedException.ThrowIf(disposed, this);
 
-        RunSummary? run = sessionId is null
-            ? null
-            : store.GetValue(state => state.Runs.Find(candidate => string.Equals(candidate.SessionId, sessionId, StringComparison.Ordinal)));
-
-        if (run is null)
-            return Task.FromResult(false);
-
-        // Said before the process starts, so the run cannot arrive before the UI knows to show it.
-        // A fast test finishes in a couple of hundred milliseconds; claiming the intent afterwards
-        // would be a race the user loses on exactly the runs that are quickest to read.
-        if (RerunCommand.IsAvailableFor(run))
-            store.Dispatch(RunActions.AwaitRerun, run.Test);
-
-        return rerunner.RerunAsync(run);
+        store.Dispatch(MainActions.RerunSelected);
     }
 
     /// <summary>Adds an entry to the message feed.</summary>
@@ -363,7 +352,7 @@ public sealed class ShellController : IDisposable
         if (entry is null || disposed)
             return;
 
-        store.Dispatch(RunActions.AppendFeedEntry, entry);
+        store.Dispatch(FeedActions.AppendEntry, entry);
     }
 
     /// <summary>
@@ -405,7 +394,7 @@ public sealed class ShellController : IDisposable
         TransportStatus next = pipe.AttachedRunCount > 0 ? TransportStatus.Attached : TransportStatus.Listening;
 
         if (next != current)
-            store.Dispatch(RunActions.SetTransportStatus, next);
+            store.Dispatch(ShellActions.SetTransportStatus, next);
     }
 
     private void OnLiveEnvelope(DebugEnvelope envelope)
@@ -419,7 +408,7 @@ public sealed class ShellController : IDisposable
         WatchForBreakpointContext(envelope);
 
         if (store.GetValue(state => state.Shell.Transport) != TransportStatus.Attached)
-            store.Dispatch(RunActions.SetTransportStatus, TransportStatus.Attached);
+            store.Dispatch(ShellActions.SetTransportStatus, TransportStatus.Attached);
 
         ingest.Accept(envelope);
 
@@ -427,7 +416,7 @@ public sealed class ShellController : IDisposable
         // have not been assigned yet as removed. Its finish is the moment they settle, and the moment
         // the comparison is worth making.
         if (envelope.Kind == PipeSignalKind.TimelineRunFinished
-            && string.Equals(store.GetValue(state => state.SelectedSessionId), envelope.SessionId, StringComparison.Ordinal))
+            && string.Equals(store.GetValue(state => state.Runs.SelectedSessionId), envelope.SessionId, StringComparison.Ordinal))
         {
             ingest.Flush();
             RefreshDiff(envelope.SessionId);
@@ -479,19 +468,13 @@ public sealed class ShellController : IDisposable
     }
 
     /// <summary>
-    /// Works out how the selected run's values and timings compare with the last run of the same test that passed.
+    /// Asks for the selected run's comparison against the last run of the same test that passed.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Off the calling thread, because it reads journals: a comparison is worth waiting for but never
-    /// worth freezing the window for. The board is already on screen by the time this starts, so the
-    /// diff arrives as a later state change and the rail badges itself when it does.
-    /// </para>
-    /// <para>
-    /// The result is only dispatched if the run is still the selected one. Someone clicking through
-    /// several runs quickly would otherwise have an earlier run's comparison land on a later run's
-    /// values, which is the one outcome worse than showing no comparison at all.
-    /// </para>
+    /// The work itself is <see cref="ComparisonEffects"/>. What is left here is the timing: a
+    /// comparison needs the run's graph, and the graph does not exist when the selection changes —
+    /// it is replayed from the retained events or from the journal first. This is called once that
+    /// replay has been flushed, which is the only point at which there is something to compare.
     /// </remarks>
     public void RefreshDiff(string sessionId)
     {
@@ -500,37 +483,7 @@ public sealed class ShellController : IDisposable
         if (disposed)
             return;
 
-        RunSummary? run = store.GetValue(state =>
-            state.Runs.Find(candidate => string.Equals(candidate.SessionId, sessionId, StringComparison.Ordinal)));
-
-        if (run is null)
-            return;
-
-        RunGraph graph = store.GetValue(state => state.ActiveRun);
-        ImmutableList<RunSummary> runs = store.GetValue(state => state.Runs);
-
-        _ = Task.Run(() =>
-        {
-            RunComparison comparison;
-
-            try
-            {
-                comparison = baselines.Resolve(run, graph, runs);
-            }
-            catch (Exception e)
-            {
-                Debug.WriteLine(e);
-                comparison = RunComparison.Unavailable("The comparison against an earlier run could not be computed.");
-            }
-
-            if (disposed)
-                return;
-
-            if (!string.Equals(store.GetValue(state => state.SelectedSessionId), sessionId, StringComparison.Ordinal))
-                return;
-
-            store.Dispatch(RunActions.SetComparison, comparison);
-        });
+        store.Dispatch(ComparisonActions.Refresh, sessionId);
     }
 
     /// <summary>
@@ -626,7 +579,16 @@ public sealed class ShellController : IDisposable
     /// A machine with no journal root is the ordinary case before the tool has been installed. The
     /// window still opens and still watches live runs; there is simply nothing recorded to list.
     /// </remarks>
-    private static string? SafeRunsDirectory()
+    /// <summary>
+    /// The folder runs are recorded in, or null when it cannot be determined.
+    /// </summary>
+    /// <remarks>
+    /// Public because the effects need the same answer: <see cref="ComparisonEffects"/> reads earlier
+    /// runs out of this folder, and it is built when the store is, before any controller exists. Two
+    /// separate defaults would mean the comparison reading a different folder than the one the runs
+    /// were listed from.
+    /// </remarks>
+    public static string? DefaultRunsDirectory()
     {
         try
         {

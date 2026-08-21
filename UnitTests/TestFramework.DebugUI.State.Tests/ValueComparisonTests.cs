@@ -1,8 +1,9 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using TestFramework.Core.Debugger;
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Board.Comparison;
 
 namespace TestFramework.DebugUI.State.Tests;
 

@@ -7,6 +7,8 @@ using TestFramework.Core.Artifacts;
 using TestFramework.Core.Debugger;
 using TestFramework.Core.Steps.Options;
 using TestFramework.Core.Variables;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Runs;
 
 namespace TestFramework.DebugUI.State.Tests;
 
@@ -25,7 +27,7 @@ public class RunProgressTests : IDisposable
 
     private StateStore<MainState> CreateStore()
     {
-        StateStore<MainState> store = StateStore<MainState>.Create().AddReducer(new MainReducer()).Build();
+        StateStore<MainState> store = MainStore.Create().Build();
         stores.Add(store);
         return store;
     }
@@ -37,7 +39,7 @@ public class RunProgressTests : IDisposable
         // start rather than a total that grows as the run goes.
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(Init("s1", "First")));
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s1", "First")));
 
         RunProgress progress = Run(store, "s1").Progress!;
         Assert.Equal(2, progress.Steps);
@@ -51,12 +53,12 @@ public class RunProgressTests : IDisposable
         // is ever projected into a board.
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(Init("s1", "First"), Init("s2", "Second")));
-        store.Dispatch(RunActions.IngestBatch, Batch(
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s1", "First"), Init("s2", "Second")));
+        store.Dispatch(MainActions.IngestBatch, Batch(
             Settled("s2", 0, DebugLifecycleState.Complete),
             Assertion("s2", succeeded: true)));
 
-        Assert.Equal("s1", store.GetValue(state => state.SelectedSessionId));
+        Assert.Equal("s1", store.GetValue(state => state.Runs.SelectedSessionId));
 
         RunProgress progress = Run(store, "s2").Progress!;
         Assert.Equal(1, progress.Complete);
@@ -70,7 +72,7 @@ public class RunProgressTests : IDisposable
         // complete, and the run as having more steps than it has.
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(
+        store.Dispatch(MainActions.IngestBatch, Batch(
             Init("s1", "First"),
             Settled("s1", 0, DebugLifecycleState.Error),
             Settled("s1", 0, DebugLifecycleState.Complete)));
@@ -87,7 +89,7 @@ public class RunProgressTests : IDisposable
         // A step id is an index within its stage, so two stages both have a step 0.
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(
+        store.Dispatch(MainActions.IngestBatch, Batch(
             Init("s1", "First"),
             Settled("s1", 0, DebugLifecycleState.Complete),
             Settled("s1", 0, DebugLifecycleState.Complete, stage: "Cleanup")));
@@ -100,7 +102,7 @@ public class RunProgressTests : IDisposable
     {
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(
+        store.Dispatch(MainActions.IngestBatch, Batch(
             Init("s1", "First"),
             Settled("s1", 0, DebugLifecycleState.Running),
             Settled("s1", 0, DebugLifecycleState.WaitingForRetry)));
@@ -116,7 +118,7 @@ public class RunProgressTests : IDisposable
     {
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(
+        store.Dispatch(MainActions.IngestBatch, Batch(
             Init("s1", "First"),
             Settled("s1", 0, DebugLifecycleState.Complete),
             Assertion("s1", succeeded: true),
@@ -132,7 +134,7 @@ public class RunProgressTests : IDisposable
         // honest one, and a home page full of green for runs that checked nothing is a lie.
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(
+        store.Dispatch(MainActions.IngestBatch, Batch(
             Init("s1", "First"),
             Settled("s1", 0, DebugLifecycleState.Complete),
             Finished("s1")));
@@ -145,7 +147,7 @@ public class RunProgressTests : IDisposable
     {
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(
+        store.Dispatch(MainActions.IngestBatch, Batch(
             Init("s1", "First"),
             Settled("s1", 0, DebugLifecycleState.Complete),
             Assertion("s1", succeeded: false),
@@ -159,7 +161,7 @@ public class RunProgressTests : IDisposable
     {
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(Init("s1", "First")));
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s1", "First")));
 
         Assert.Equal(RunHealth.Running, Run(store, "s1").Health);
     }
@@ -169,7 +171,7 @@ public class RunProgressTests : IDisposable
     {
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(Init("s1", "First"), Breakpoint("s1")));
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s1", "First"), Breakpoint("s1")));
 
         Assert.Equal(RunHealth.Waiting, Run(store, "s1").Health);
     }
@@ -181,7 +183,7 @@ public class RunProgressTests : IDisposable
         // looks like from here.
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.AddRecordedRuns, ImmutableList.Create(new RunSummary
+        store.Dispatch(RunsActions.AddRecorded, ImmutableList.Create(new RunSummary
         {
             SessionId = "dead",
             Name = "Killed",
@@ -200,7 +202,7 @@ public class RunProgressTests : IDisposable
         // because no failure was seen would be inventing a result out of not having looked.
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.AddRecordedRuns, ImmutableList.Create(new RunSummary
+        store.Dispatch(RunsActions.AddRecorded, ImmutableList.Create(new RunSummary
         {
             SessionId = "old",
             Name = "Recorded",
@@ -218,7 +220,7 @@ public class RunProgressTests : IDisposable
     {
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.AddRecordedRuns, ImmutableList.Create(new RunSummary
+        store.Dispatch(RunsActions.AddRecorded, ImmutableList.Create(new RunSummary
         {
             SessionId = "s1",
             Name = "Recorded",
@@ -227,8 +229,8 @@ public class RunProgressTests : IDisposable
         }));
 
         // Selecting replays the journal, which arrives as the same envelopes the pipe carries.
-        store.Dispatch(RunActions.SelectRun, "s1");
-        store.Dispatch(RunActions.IngestBatch, Batch(
+        store.Dispatch(MainActions.SelectRun, "s1");
+        store.Dispatch(MainActions.IngestBatch, Batch(
             Init("s1", "Recorded"),
             Settled("s1", 0, DebugLifecycleState.Complete),
             Assertion("s1", succeeded: true),
@@ -245,7 +247,7 @@ public class RunProgressTests : IDisposable
         // the wrong one.
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(
+        store.Dispatch(MainActions.IngestBatch, Batch(
             Init("s1", "First"),
             Settled("s1", 0, DebugLifecycleState.Complete),
             Settled("s1", 1, DebugLifecycleState.Error),
@@ -254,7 +256,7 @@ public class RunProgressTests : IDisposable
             Finished("s1")));
 
         RunProgress progress = Run(store, "s1").Progress!;
-        RunTally tally = RunTally.Of(store.GetValue(state => state.ActiveRun));
+        RunTally tally = RunTally.Of(store.GetValue(state => state.Board.ActiveRun));
 
         Assert.Equal(tally.Steps, progress.Steps);
         Assert.Equal(tally.Complete, progress.Complete);
@@ -271,14 +273,14 @@ public class RunProgressTests : IDisposable
     {
         StateStore<MainState> store = CreateStore();
 
-        store.Dispatch(RunActions.IngestBatch, Batch(Init("s1", "First"), Finished("s1")));
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s1", "First"), Finished("s1")));
 
         Assert.NotNull(Run(store, "s1").FinishedAtUtc);
         Assert.NotNull(Run(store, "s1").Duration);
     }
 
     private static RunSummary Run(StateStore<MainState> store, string sessionId)
-        => store.GetValue(state => state.Runs).Single(run => run.SessionId == sessionId);
+        => store.GetValue(state => state.Runs.All).Single(run => run.SessionId == sessionId);
 
     private static ImmutableList<DebugEnvelope> Batch(params DebugEnvelope[] envelopes) => [.. envelopes];
 

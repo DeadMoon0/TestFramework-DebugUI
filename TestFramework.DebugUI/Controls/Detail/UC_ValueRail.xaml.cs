@@ -9,6 +9,8 @@ using System.Windows.Media;
 using Axiom.State;
 using Axiom.Wpf.Extensions;
 using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Board.Comparison;
 
 namespace TestFramework.DebugUI.Controls.Detail;
 
@@ -36,22 +38,22 @@ public partial class UC_ValueRail : UserControl, IDisposable
         InitializeComponent();
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.ActiveRun)
+            .Bind(BoardSelectors.SelectActiveRun)
             .Select(Rows)
             .BindToCollection(spValues.Children, row => row.Id, row => Build(row)));
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.ActiveRun)
+            .Bind(BoardSelectors.SelectActiveRun)
             .Select(run => run.Artifacts.Count + run.Variables.Count == 0 ? Visibility.Visible : Visibility.Collapsed)
             .BindToDependencyProperty(tbEmpty, VisibilityProperty));
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.ActiveRun)
+            .Bind(BoardSelectors.SelectActiveRun)
             .Select(Counts)
             .BindToDependencyProperty(tbCounts, TextBlock.TextProperty));
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.ActiveDiff)
+            .Bind(ComparisonSelectors.SelectValues)
             .Subscribe(ShowBaseline));
 
     }

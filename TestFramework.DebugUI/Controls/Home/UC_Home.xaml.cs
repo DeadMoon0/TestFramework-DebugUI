@@ -11,13 +11,14 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using Microsoft.Win32;
 using Axiom.State;
 using Axiom.Wpf.Extensions;
-using TestFramework.DebugUI.State.Bundles;
-using TestFramework.DebugUI.State;
-
+using Microsoft.Win32;
 using TestFramework.DebugUI.Controls.Dock;
+using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Bundles;
+using TestFramework.DebugUI.State.Runs;
+using TestFramework.DebugUI.State.Shell.Feed;
 
 namespace TestFramework.DebugUI.Controls.Home;
 
@@ -76,18 +77,20 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
     {
         InitializeComponent();
 
-        IObservable<ImmutableList<RunSummary>> runs = StateStore<MainState>.Default.Bind(state => state.Runs);
+        IObservable<ImmutableList<RunSummary>> runs = StateStore<MainState>.Default.Bind(RunsSelectors.SelectAll);
 
         subscriptions.Add(runs
             .CombineLatest(scope, (all, narrowed) => (all, narrowed))
             .Subscribe(pair => Refresh(pair.all, pair.narrowed)));
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => Overview(state.Runs))
+            .Bind(RunsSelectors.SelectAll)
+            .Select(Overview)
             .BindToDependencyProperty(tbOverview, TextBlock.TextProperty));
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.Runs.Count == 0 ? Visibility.Visible : Visibility.Collapsed)
+            .Bind(RunsSelectors.SelectAll)
+            .Select(runs => runs.Count == 0 ? Visibility.Visible : Visibility.Collapsed)
             .BindToDependencyProperty(tbEmpty, VisibilityProperty));
 
     }
@@ -461,7 +464,7 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
         ImmutableList<RunSummary> runs =
         [
             .. StateStore<MainState>.Default
-                .GetValue(state => state.Runs)
+                .GetValue(state => state.Runs.All)
                 .Where(run => narrowed.Covers(run) && !string.IsNullOrWhiteSpace(run.JournalPath))
         ];
 

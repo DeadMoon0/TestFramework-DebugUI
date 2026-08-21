@@ -1,9 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using TestFramework.Core.Artifacts;
 using TestFramework.Core.Debugger;
 using TestFramework.Core.Steps.Options;
-using TestFramework.Core.Artifacts;
 using TestFramework.Core.Variables;
+using TestFramework.DebugUI.State.Board;
 
 namespace TestFramework.DebugUI.State.Tests;
 

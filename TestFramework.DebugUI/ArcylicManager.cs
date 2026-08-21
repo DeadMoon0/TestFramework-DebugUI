@@ -19,10 +19,55 @@ namespace TestFramework.DebugUI
         public enum DwmWindowAttribute
         {
             DWMWA_SYSTEMBACKDROP_TYPE = 38, // This is the attribute for system backdrop type
+
+            /// <summary>Whether Windows rounds the window's corners, and how much.</summary>
+            /// <remarks>
+            /// Asked for rather than drawn. A custom-chromed window keeps square corners unless it says otherwise,
+            /// and a rounded rectangle drawn inside a square frame is not the same thing — the system's own
+            /// rounding clips the frame and casts the shadow to match, which is what makes a window look like a
+            /// window on this version of Windows.
+            /// </remarks>
+            DWMWA_WINDOW_CORNER_PREFERENCE = 33,
+        }
+
+        /// <summary>How Windows should round a window's corners.</summary>
+        public enum DwmCornerPreference
+        {
+            /// <summary>Whatever the system would do by default.</summary>
+            DWMWCP_DEFAULT = 0,
+
+            /// <summary>Square, as a custom-chromed window is without being asked.</summary>
+            DWMWCP_DONOTROUND = 1,
+
+            /// <summary>The full radius the system uses for an ordinary window.</summary>
+            DWMWCP_ROUND = 2,
+
+            /// <summary>The smaller radius the system uses for menus and tooltips.</summary>
+            DWMWCP_ROUNDSMALL = 3,
         }
 
         [DllImport("dwmapi.dll", PreserveSig = false)]
         public static extern void DwmSetWindowAttribute(IntPtr hwnd, DwmWindowAttribute attr, ref int attrValue, uint attrSize);
+
+        /// <summary>Asks Windows to round a window's corners the way it rounds its own.</summary>
+        /// <remarks>
+        /// Ignored on versions that do not know the attribute, which is why the failure is swallowed: a window
+        /// with square corners is a cosmetic difference, and refusing to open one over it would not be.
+        /// </remarks>
+        public static void RoundCorners(IntPtr hwnd, DwmCornerPreference preference = DwmCornerPreference.DWMWCP_ROUND)
+        {
+            if (hwnd == IntPtr.Zero)
+                return;
+
+            try
+            {
+                int value = (int)preference;
+                DwmSetWindowAttribute(hwnd, DwmWindowAttribute.DWMWA_WINDOW_CORNER_PREFERENCE, ref value, sizeof(int));
+            }
+            catch (Exception)
+            {
+            }
+        }
 
 
         [DllImport("user32.dll", EntryPoint = "SetWindowCompositionAttribute")]

@@ -12,10 +12,13 @@ using System.Windows.Threading;
 using Axiom.State;
 using Axiom.Wpf.Extensions;
 using TestFramework.Core.Debugger;
-using TestFramework.DebugUI.Layout;
 using TestFramework.DebugUI.Controls.Annotate;
-using TestFramework.DebugUI.State.Annotations;
+using TestFramework.DebugUI.Layout;
 using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Annotations;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Board.Comparison;
+using TestFramework.DebugUI.State.Runs;
 
 
 namespace TestFramework.DebugUI.Controls.Board;
@@ -97,15 +100,15 @@ public partial class UC_Board : UserControl
         InitializeComponent();
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.ActiveRun)
+            .Bind(BoardSelectors.SelectActiveRun)
             .Subscribe(Render));
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.SelectedStep)
+            .Bind(BoardSelectors.SelectSelectedStep)
             .Subscribe(_ => RefreshAppearance()));
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.ActiveTiming)
+            .Bind(ComparisonSelectors.SelectTiming)
             .Subscribe(compared =>
             {
                 timing = compared;
@@ -113,7 +116,7 @@ public partial class UC_Board : UserControl
             }));
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.ActiveRun.Stages.Count == 0)
+            .Bind(BoardSelectors.SelectIsEmpty)
             .Select(empty => empty ? Visibility.Visible : Visibility.Collapsed)
             .BindToDependencyProperty(tbEmpty, VisibilityProperty));
 
@@ -127,16 +130,14 @@ public partial class UC_Board : UserControl
         // Marks belong to a run, so they are loaded when the run changes rather than when the board redraws -
         // which happens on every event a live run produces.
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.SelectedSessionId)
+            .Bind(RunsSelectors.SelectSelectedSessionId)
             .Subscribe(_ => LoadAnnotations()));
 
         // Breakpoints belong to a test rather than to a session, so the board says which test it is
         // showing and sets its marks against that. A run this window cannot name cannot be marked, which
         // is honest: a mark filed under no name would apply to every other unnamed run.
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.Runs
-                .Find(run => string.Equals(run.SessionId, state.SelectedSessionId, StringComparison.Ordinal))
-                ?.Test ?? string.Empty)
+            .Bind(RunsSelectors.SelectSelectedTest)
             .Subscribe(Breakpoints.NowLookingAt));
 
         // The surface is measured after the run arrives, so this is what actually fits the first
@@ -678,8 +679,8 @@ public partial class UC_Board : UserControl
         if (stepVisuals.Count == 0)
             return;
 
-        RunGraph graph = StateStore<MainState>.Default.GetValue(state => state.ActiveRun);
-        StepSelection? selected = StateStore<MainState>.Default.GetValue(state => state.SelectedStep);
+        RunGraph graph = StateStore<MainState>.Default.GetValue(state => state.Board.ActiveRun);
+        StepSelection? selected = StateStore<MainState>.Default.GetValue(state => state.Board.SelectedStep);
 
         foreach (StageNode stage in graph.Stages)
         {
@@ -944,8 +945,7 @@ public partial class UC_Board : UserControl
         if (annotations is null)
             return;
 
-        RunSummary? run = StateStore<MainState>.Default.GetValue(state =>
-            state.Runs.Find(candidate => string.Equals(candidate.SessionId, state.SelectedSessionId, StringComparison.Ordinal)));
+        RunSummary? run = StateStore<MainState>.Default.GetValue(RunsSelectors.SelectedRunOf);
 
         annotationsJournal = run?.JournalPath;
 
@@ -978,7 +978,7 @@ public partial class UC_Board : UserControl
     /// <summary>Selects the first failed step and pans to it.</summary>
     public void GoToFirstFailure()
     {
-        RunGraph graph = StateStore<MainState>.Default.GetValue(state => state.ActiveRun);
+        RunGraph graph = StateStore<MainState>.Default.GetValue(state => state.Board.ActiveRun);
 
         foreach (StageNode stage in graph.Stages)
         {

@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using Newtonsoft.Json;
 
-namespace TestFramework.DebugUI.State;
+namespace TestFramework.DebugUI.State.Settings;
 
 /// <summary>
 /// Reads and writes <see cref="UiSettings"/> on disk.

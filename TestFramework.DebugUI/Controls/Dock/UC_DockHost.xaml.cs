@@ -232,7 +232,7 @@ public partial class UC_DockHost : UserControl
             // Tabs appear only once a second panel has been dragged in, which is the point at which they mean
             // something.
             UIElement caption = afloat.Panels.Count == 1
-                ? Header(afloat.Panels[0], active: true)
+                ? Header(afloat.Panels[0], active: true, draggable: false)
                 : Strip(afloat);
 
             window.ShowContent(caption, afloat.Active is { } shown ? panels[shown] : new Grid());
@@ -297,6 +297,44 @@ public partial class UC_DockHost : UserControl
 
             if (at >= 0)
                 Arrangement.Apply(layout => layout.MoveFloat(at, bounds));
+        };
+
+        // Moving a float over the main window is the only way a single panel gets docked again: it has no tab to
+        // drag, and its caption belongs to the window. So the system's own move doubles as the drag, and the hint
+        // appears under it exactly as it would for one.
+        window.Dragging += where =>
+        {
+            int at = windows.IndexOf(window);
+
+            if (at < 0 || at >= Arrangement.Current.Floats.Count)
+                return;
+
+            DockFloat afloat = Arrangement.Current.Floats[at];
+
+            ShowHint(afloat.Active is { } carried ? Resolve(where, carried) : null);
+        };
+
+        window.Dropped += where =>
+        {
+            ClearHint();
+
+            int at = windows.IndexOf(window);
+
+            if (at < 0 || at >= Arrangement.Current.Floats.Count)
+                return;
+
+            DockFloat afloat = Arrangement.Current.Floats[at];
+
+            if (afloat.Active is not { } carried || Resolve(where, carried) is not { } drop)
+                return;
+
+            // Only the panel being shown moves. A float carrying tabs is a set of panels the reader grouped on
+            // purpose, and docking the lot of them because the window was dragged over an edge would undo that
+            // without being asked.
+            DockSide side = drop.Side;
+            int index = drop.Index;
+
+            Arrangement.Apply(layout => layout.Move(carried, side, index));
         };
 
         window.CloseRequested += () =>
@@ -670,7 +708,7 @@ public partial class UC_DockHost : UserControl
     }
 
     /// <summary>A stacked panel's header: what it is, and the way to put it away.</summary>
-    private UIElement Header(PanelId panel, bool active)
+    private UIElement Header(PanelId panel, bool active, bool draggable = true)
     {
         PanelDescriptor descriptor = PanelRegistry.Of(panel);
 
@@ -711,14 +749,22 @@ public partial class UC_DockHost : UserControl
             Height = 26,
             Background = Brushes.Transparent,
             Child = row,
-            Cursor = Cursors.Hand
+
+            // A hand only where the header is something to press. In a floating window it is the window's caption:
+            // it moves the window, the system draws the cursor for that, and a hand would promise the wrong thing.
+            Cursor = draggable ? Cursors.Hand : null
         };
 
         // Clicking a header is asking to look at that panel, which in a stack means it takes the attention its
         // title is drawn in. The panels are all visible either way; this is what the title bar's strip lights.
-        header.MouseLeftButtonUp += (_, _) => Arrangement.Apply(layout => layout.Activate(panel));
+        // Left alone in a float, where the same press belongs to the window. Both gestures on one strip meant the
+        // window could not be moved at all, and a popped-out panel is a window first.
+        if (draggable)
+        {
+            header.MouseLeftButtonUp += (_, _) => Arrangement.Apply(layout => layout.Activate(panel));
 
-        MakeDraggable(header, panel);
+            MakeDraggable(header, panel);
+        }
 
         return header;
     }
@@ -900,6 +946,27 @@ public partial class UC_DockHost : UserControl
         Width = 480,
         Height = 560
     }.Sane();
+
+    /// <summary>
+    /// What a point on the screen would do, in the host's own terms.
+    /// </summary>
+    /// <remarks>
+    /// Screen coordinates because that is what a window being dragged reports. Outside the host it answers
+    /// nothing, which is what keeps a float dragged across the desktop from docking itself into a window it is
+    /// nowhere near.
+    /// </remarks>
+    private DockDrop? Resolve(Point onScreen, PanelId carried)
+    {
+        if (!IsVisible || ActualWidth <= 0)
+            return null;
+
+        Point here = PointFromScreen(onScreen);
+
+        if (here.X < 0 || here.Y < 0 || here.X > ActualWidth || here.Y > ActualHeight)
+            return null;
+
+        return DockDrop.Resolve(here, new Size(ActualWidth, ActualHeight), cards, carried);
+    }
 
     /// <summary>The panel a drag is carrying, or null when the drag is not one of ours.</summary>
     private static PanelId? Carried(DragEventArgs e)

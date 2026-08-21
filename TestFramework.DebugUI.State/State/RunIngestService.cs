@@ -97,7 +97,7 @@ public sealed class RunIngestService : IDisposable
 
         // Dispatched outside the lock: the reducer runs synchronously and notifies subscribers, and
         // holding the buffer lock across that would let a subscriber deadlock the ingest path.
-        store.Dispatch(RunActions.IngestBatch, batch);
+        store.Dispatch(MainActions.IngestBatch, batch);
     }
 
     /// <summary>

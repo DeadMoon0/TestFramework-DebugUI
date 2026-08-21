@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,7 +9,7 @@ using TestFramework.Core.Steps;
 using TestFramework.Core.Steps.Options;
 using TestFramework.Core.Timelines;
 using TestFramework.Core.Variables;
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
 
 namespace TestFramework.DebugUI.Layout.Tests;
 

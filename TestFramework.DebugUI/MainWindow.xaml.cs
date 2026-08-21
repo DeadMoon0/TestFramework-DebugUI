@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
@@ -10,18 +11,21 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Shell;
-using System.Windows.Shapes;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Shapes;
+using System.Windows.Shell;
 using System.Windows.Threading;
 using Axiom.State;
 using TestFramework.Core.Debugger;
-using System.Collections.Immutable;
-using TestFramework.DebugUI.State.Bundles;
-using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.Controls.Dock;
 using TestFramework.DebugUI.Docking;
+using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Bundles;
+using TestFramework.DebugUI.State.Runs;
+using TestFramework.DebugUI.State.Settings;
+using TestFramework.DebugUI.State.Shell.Feed;
 using TestFramework.DebugUI.State.Transport;
 using static TestFramework.DebugUI.NativeMethods;
 
@@ -76,8 +80,14 @@ public partial class MainWindow : Window
     /// <summary>Creates the window and the store behind it.</summary>
     public MainWindow()
     {
-        StateStore<MainState>.Create()
-            .AddReducer(new MainReducer())
+        // The reducers are listed by MainStore, so this window and the tests build the same store.
+        // The effects are given their collaborators rather than reaching for them: the comparison
+        // needs to read earlier runs off disk, and the re-run needs to build and start a test host.
+        // Both are constructed before the store because the store is what they report into.
+        string? runsDirectory = ShellController.DefaultRunsDirectory();
+        TestRerunner rerunner = new(entry => StateStore<MainState>.Default.Dispatch(FeedActions.AppendEntry, entry));
+
+        MainStore.Create(new BaselineResolver(runsDirectory), rerunner)
             .UseSynchronizationContext(SynchronizationContext.Current!)
             .BuildAndMakeDefault();
 
@@ -144,7 +154,7 @@ public partial class MainWindow : Window
         // merely informing them — so this gets out of the way rather than leaving the mark behind a page.
         // Only on the transition into waiting, so closing the page and reopening it does not fight this.
         halts = StateStore<MainState>.Default
-            .Bind(state => state.ActiveRun.Stages.Any(stage => stage.Steps.Any(step => step.IsWaitingAtBreakpoint)))
+            .Bind(BoardSelectors.SelectIsWaitingAtBreakpoint)
             .DistinctUntilChanged()
             .Subscribe(waiting =>
             {
@@ -192,10 +202,10 @@ public partial class MainWindow : Window
         ucFeed.Closed += () => ShowNotificationState();
 
         notifications = StateStore<MainState>.Default
-            .Bind(state => new Unread(
-                state.Shell.UnreadFeedCount,
-                state.Shell.Feed
-                    .Skip(System.Math.Max(0, state.Shell.Feed.Count - state.Shell.UnreadFeedCount))
+            .Bind(FeedSelectors.SelectFeed)
+            .Select(feed => new Unread(
+                feed.UnreadCount,
+                FeedSelectors.UnreadOf(feed)
                     .Select(entry => entry.Severity)
                     .DefaultIfEmpty(FeedSeverity.Info)
                     .Max()))
@@ -316,7 +326,7 @@ public partial class MainWindow : Window
         Bind(Shortcuts.ToggleWatch, () => ApplyWatchMode(!saved.Watch.Enabled, announce: true));
         Bind(Shortcuts.CloseTopmost, CloseTopmost);
 
-        Bind(Shortcuts.Rerun, () => _ = Shell.RerunSelectedAsync());
+        Bind(Shortcuts.Rerun, Shell.RerunSelected);
         Bind(Shortcuts.Stop, () => _ = Shell.CancelSelectedRunAsync());
         Bind(Shortcuts.Continue, () => _ = Shell.ContinueSelectedRunAsync());
         Bind(Shortcuts.StepForward, () => _ = Controls.Shell.UC_RunBar.StepAsync());
@@ -647,6 +657,9 @@ public partial class MainWindow : Window
 
     private void Window_SourceInitialized(object sender, EventArgs e)
     {
+        // Asked for once the handle exists, so the window and its popped-out panels are rounded the same way.
+        ArcylicManager.RoundCorners(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+
         IntPtr mWindowHandle = new WindowInteropHelper(this).Handle;
         HwndSource.FromHwnd(mWindowHandle).AddHook(new HwndSourceHook(WindowProc));
 
@@ -807,8 +820,7 @@ public partial class MainWindow : Window
     /// <summary>Offers to share the run being watched.</summary>
     private void ShareSelectedRun()
     {
-        RunSummary? run = StateStore<MainState>.Default.GetValue(state =>
-            state.Runs.Find(candidate => string.Equals(candidate.SessionId, state.SelectedSessionId, StringComparison.Ordinal)));
+        RunSummary? run = StateStore<MainState>.Default.GetValue(RunsSelectors.SelectedRunOf);
 
         // A live run has nothing on disk yet. Sharing it would send a journal that is still being written.
         if (run?.JournalPath is not { Length: > 0 } journal)

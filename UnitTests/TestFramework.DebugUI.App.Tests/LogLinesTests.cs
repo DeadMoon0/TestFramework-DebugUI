@@ -1,7 +1,7 @@
-using System;
+﻿using System;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.Controls.Detail;
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
 
 namespace TestFramework.DebugUI.App.Tests;
 

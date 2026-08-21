@@ -4,7 +4,9 @@ using System.Collections.Immutable;
 using System.Linq;
 using TestFramework.Core.Debugger;
 using TestFramework.Core.Steps.Options;
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Board.Comparison;
+using TestFramework.DebugUI.State.Runs;
 
 namespace TestFramework.DebugUI.State.Tests;
 

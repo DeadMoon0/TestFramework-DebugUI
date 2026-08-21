@@ -1,10 +1,12 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Reactive.Disposables;
 using Axiom.State;
 using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Runs;
+using TestFramework.DebugUI.State.Settings;
 
 namespace TestFramework.DebugUI;
 
@@ -35,7 +37,7 @@ public sealed class WatchNotifier : IDisposable
     public WatchNotifier()
     {
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.Runs)
+            .Bind(RunsSelectors.SelectAll)
             .Subscribe(OnRuns));
     }
 

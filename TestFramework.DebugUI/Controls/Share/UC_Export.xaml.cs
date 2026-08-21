@@ -1,12 +1,12 @@
-using System;
+﻿using System;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
-using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Bundles;
+using TestFramework.DebugUI.State.Shell.Feed;
 
 namespace TestFramework.DebugUI.Controls.Share;
 

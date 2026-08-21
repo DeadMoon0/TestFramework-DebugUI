@@ -14,10 +14,20 @@
         where a reader already expects each of them.
     -->
     <shell:WindowChrome.WindowChrome>
-        <shell:WindowChrome CaptionHeight="30" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="0"/>
+        <!--
+            No GlassFrameThickness override. Setting it to zero takes the DWM frame away, and the frame is what
+            Windows rounds and casts a shadow from — so the corner preference asked for in code had nothing left
+            to round. Left at its default, the window is framed and rounded the way the main one is.
+        -->
+        <shell:WindowChrome CaptionHeight="30" ResizeBorderThickness="6"/>
     </shell:WindowChrome.WindowChrome>
 
-    <Border BorderThickness="1" BorderBrush="{StaticResource IconGroupEdge}">
+    <!--
+        No border of its own. Windows draws the frame and rounds the corners — asked for once the handle exists —
+        so a border painted in here would be a second frame inside the real one, square where the real one is
+        round. The panel's card chrome is gone for the same reason: in a window, the window is the card.
+    -->
+    <Border>
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>

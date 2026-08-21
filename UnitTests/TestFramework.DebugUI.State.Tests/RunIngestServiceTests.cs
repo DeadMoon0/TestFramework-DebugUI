@@ -8,7 +8,6 @@ using TestFramework.Core.Artifacts;
 using TestFramework.Core.Debugger;
 using TestFramework.Core.Steps.Options;
 using TestFramework.Core.Variables;
-using TestFramework.DebugUI.State;
 
 namespace TestFramework.DebugUI.State.Tests;
 
@@ -27,11 +26,11 @@ public class RunIngestServiceTests : IDisposable
 
     private (StateStore<MainState> Store, RunIngestService Ingest, Counter Counter) Create(TimeSpan? window = null)
     {
-        StateStore<MainState> store = StateStore<MainState>.Create().AddReducer(new MainReducer()).Build();
+        StateStore<MainState> store = MainStore.Create().Build();
         RunIngestService ingest = new(store, window ?? TimeSpan.FromMilliseconds(30));
 
         Counter counter = new();
-        store.Bind(state => state.Runs).Subscribe(_ => counter.Increment());
+        store.Bind(state => state.Runs.All).Subscribe(_ => counter.Increment());
 
         disposables.Add(ingest);
         disposables.Add(store);
@@ -55,7 +54,7 @@ public class RunIngestServiceTests : IDisposable
         ingest.Flush();
 
         Assert.Equal(1, counter.Count);
-        Assert.Single(store.GetValue(state => state.Runs));
+        Assert.Single(store.GetValue(state => state.Runs.All));
     }
 
     [Fact]
@@ -69,7 +68,7 @@ public class RunIngestServiceTests : IDisposable
         ingest.Accept(Breakpoint("s1"));
 
         // No flush, and a window far longer than this test would wait.
-        Assert.True(store.GetValue(state => state.Runs)[0].IsWaitingAtBreakpoint);
+        Assert.True(store.GetValue(state => state.Runs.All)[0].IsWaitingAtBreakpoint);
     }
 
     [Fact]
@@ -82,8 +81,8 @@ public class RunIngestServiceTests : IDisposable
         ingest.Accept(StepRunning("s1", at: 1));
         ingest.Accept(Breakpoint("s1"));
 
-        Assert.Equal(DebugLifecycleState.Running, store.GetValue(state => state.ActiveRun).Stages[0].Steps[0].Lifecycle);
-        Assert.True(store.GetValue(state => state.ActiveRun).Stages[0].Steps[0].IsWaitingAtBreakpoint);
+        Assert.Equal(DebugLifecycleState.Running, store.GetValue(state => state.Board.ActiveRun).Stages[0].Steps[0].Lifecycle);
+        Assert.True(store.GetValue(state => state.Board.ActiveRun).Stages[0].Steps[0].IsWaitingAtBreakpoint);
     }
 
     [Fact]
@@ -95,10 +94,10 @@ public class RunIngestServiceTests : IDisposable
 
         // No explicit flush: the timer is what has to deliver this.
         DateTimeOffset deadline = DateTimeOffset.UtcNow.AddSeconds(5);
-        while (store.GetValue(state => state.Runs.Count) == 0 && DateTimeOffset.UtcNow < deadline)
+        while (store.GetValue(state => state.Runs.All.Count) == 0 && DateTimeOffset.UtcNow < deadline)
             await Task.Delay(10);
 
-        Assert.Single(store.GetValue(state => state.Runs));
+        Assert.Single(store.GetValue(state => state.Runs.All));
     }
 
     [Fact]
@@ -123,7 +122,7 @@ public class RunIngestServiceTests : IDisposable
         ingest.Accept(Init("s1"));
         ingest.Dispose();
 
-        Assert.Single(store.GetValue(state => state.Runs));
+        Assert.Single(store.GetValue(state => state.Runs.All));
     }
 
     private sealed class Counter

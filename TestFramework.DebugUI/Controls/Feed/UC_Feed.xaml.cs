@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using Axiom.State;
 using Axiom.Wpf.Extensions;
 using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Shell.Feed;
 
 namespace TestFramework.DebugUI.Controls.Feed;
 
@@ -36,13 +37,14 @@ public partial class UC_Feed : UserControl
         InitializeComponent();
 
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.Shell.Feed)
+            .Bind(FeedSelectors.SelectEntries)
             .Select(entries => (IEnumerable<FeedEntry>)[.. entries.Reverse()])
             .BindToCollection(spEntries.Children, entry => entry, entry => new UC_FeedItem(entry)));
 
         // An empty panel with a heading and nothing under it reads as a panel that failed to load.
         subscriptions.Add(StateStore<MainState>.Default
-            .Bind(state => state.Shell.Feed.Count)
+            .Bind(FeedSelectors.SelectEntries)
+            .Select(entries => entries.Count)
             .Subscribe(ShowCount));
 
         Unloaded += (_, _) => subscriptions.Dispose();
@@ -66,7 +68,7 @@ public partial class UC_Feed : UserControl
     public void Open()
     {
         Visibility = Visibility.Visible;
-        StateStore<MainState>.Default.Dispatch(RunActions.ClearUnreadFeed);
+        StateStore<MainState>.Default.Dispatch(FeedActions.ClearUnread);
     }
 
     /// <summary>Puts the panel away.</summary>

@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Immutable;
 using System.Linq;
+using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Runs;
 
 namespace TestFramework.DebugUI.State.Tests;
 

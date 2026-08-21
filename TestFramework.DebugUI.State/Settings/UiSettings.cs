@@ -1,7 +1,7 @@
 ﻿using System.Collections.Immutable;
 using TestFramework.DebugUI.Docking;
 
-namespace TestFramework.DebugUI.State;
+namespace TestFramework.DebugUI.State.Settings;
 
 /// <summary>
 /// Everything the tool remembers between sessions.

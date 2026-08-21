@@ -12,7 +12,7 @@ using TestFramework.Core.Steps;
 using TestFramework.Core.Steps.Options;
 using TestFramework.Core.Timelines;
 using TestFramework.Core.Variables;
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Transport;
 
 namespace TestFramework.DebugUI.State.Tests;
@@ -62,7 +62,7 @@ public class JournalRunEventSourceTests(JournalFixture fixture)
 
         AvailableRun run = JournalRunEventSource.ListRuns(RunsDirectory)[0];
 
-        using StateStore<MainState> store = StateStore<MainState>.Create().AddReducer(new MainReducer()).Build();
+        using StateStore<MainState> store = MainStore.Create().Build();
         using RunIngestService ingest = new(store, TimeSpan.FromMilliseconds(10));
 
         JournalRunEventSource source = new(run.JournalPath);
@@ -70,10 +70,10 @@ public class JournalRunEventSourceTests(JournalFixture fixture)
         source.Start();
         ingest.Flush();
 
-        Assert.Single(store.GetValue(state => state.Runs));
-        Assert.True(store.GetValue(state => state.ActiveRun).IsFinished);
+        Assert.Single(store.GetValue(state => state.Runs.All));
+        Assert.True(store.GetValue(state => state.Board.ActiveRun).IsFinished);
 
-        StepNode step = store.GetValue(state => state.ActiveRun)
+        StepNode step = store.GetValue(state => state.Board.ActiveRun)
             .Stages
             .SelectMany(stage => stage.Steps)
             .Single(candidate => candidate.DisplayName == "replayed");

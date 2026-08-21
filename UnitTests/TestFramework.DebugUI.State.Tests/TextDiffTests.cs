@@ -1,7 +1,7 @@
-using System;
+﻿using System;
 using System.Collections.Immutable;
 using System.Linq;
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Board.Comparison;
 
 namespace TestFramework.DebugUI.State.Tests;
 

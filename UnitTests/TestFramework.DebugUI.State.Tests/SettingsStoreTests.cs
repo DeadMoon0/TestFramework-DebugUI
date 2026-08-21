@@ -1,9 +1,8 @@
 ﻿using System;
 using System.Collections.Immutable;
 using System.IO;
-using TestFramework.DebugUI.State;
-
 using TestFramework.DebugUI.Docking;
+using TestFramework.DebugUI.State.Settings;
 
 namespace TestFramework.DebugUI.State.Tests;
 

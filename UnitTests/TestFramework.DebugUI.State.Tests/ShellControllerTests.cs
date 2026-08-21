@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -12,7 +12,7 @@ using TestFramework.Core.Steps;
 using TestFramework.Core.Steps.Options;
 using TestFramework.Core.Timelines;
 using TestFramework.Core.Variables;
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Shell.Feed;
 using TestFramework.DebugUI.State.Transport;
 
 namespace TestFramework.DebugUI.State.Tests;
@@ -40,8 +40,8 @@ public sealed class ShellControllerTests(JournalFixture fixture)
         using Harness harness = new(RunsDirectory);
         harness.Controller.RefreshRecordedRuns();
 
-        Assert.NotEmpty(harness.Store.GetValue(state => state.Runs));
-        Assert.All(harness.Store.GetValue(state => state.Runs), run => Assert.False(run.IsLive));
+        Assert.NotEmpty(harness.Store.GetValue(state => state.Runs.All));
+        Assert.All(harness.Store.GetValue(state => state.Runs.All), run => Assert.False(run.IsLive));
     }
 
     [Fact]
@@ -92,12 +92,12 @@ public sealed class ShellControllerTests(JournalFixture fixture)
         using Harness harness = new(RunsDirectory);
 
         harness.Controller.RefreshRecordedRuns();
-        int afterFirst = harness.Store.GetValue(state => state.Runs).Count;
+        int afterFirst = harness.Store.GetValue(state => state.Runs.All).Count;
 
         harness.Controller.RefreshRecordedRuns();
         harness.Controller.RefreshRecordedRuns();
 
-        Assert.Equal(afterFirst, harness.Store.GetValue(state => state.Runs).Count);
+        Assert.Equal(afterFirst, harness.Store.GetValue(state => state.Runs.All).Count);
     }
 
     [Fact]
@@ -110,7 +110,7 @@ public sealed class ShellControllerTests(JournalFixture fixture)
         harness.Controller.SelectRun("never-existed");
 
         Assert.Contains(
-            harness.Store.GetValue(state => state.Shell.Feed),
+            harness.Store.GetValue(state => state.Shell.Feed.Entries),
             entry => entry.Severity != FeedSeverity.Info && entry.SessionId == "never-existed");
     }
 
@@ -132,7 +132,7 @@ public sealed class ShellControllerTests(JournalFixture fixture)
         await RunTimelineAsync("watched");
         await RunTimelineAsync("ignored");
 
-        await WaitForAsync(() => harness.Store.GetValue(state => state.Runs).Count >= 2, "Both runs should have attached.");
+        await WaitForAsync(() => harness.Store.GetValue(state => state.Runs.All).Count >= 2, "Both runs should have attached.");
 
         Assert.Contains("watched", StepsOfEveryRun(harness));
         Assert.Contains("ignored", StepsOfEveryRun(harness));
@@ -222,7 +222,7 @@ public sealed class ShellControllerTests(JournalFixture fixture)
         await RunTimelineAsync("fine");
 
         await WaitForAsync(
-            () => harness.Store.GetValue(state => state.Runs).Count > 0,
+            () => harness.Store.GetValue(state => state.Runs.All).Count > 0,
             "The run should have attached.");
 
         lock (broken)
@@ -235,13 +235,13 @@ public sealed class ShellControllerTests(JournalFixture fixture)
         using Harness harness = new(RunsDirectory);
 
         harness.Controller.SelectStep("Main", 3);
-        Assert.Equal(3, harness.Store.GetValue(state => state.SelectedStep)?.StepId);
+        Assert.Equal(3, harness.Store.GetValue(state => state.Board.SelectedStep)?.StepId);
 
         harness.Controller.SelectRun("another");
 
         // A stage and an index mean nothing in a different run, so keeping them would open the
         // detail panel on whatever happened to sit at that index.
-        Assert.Null(harness.Store.GetValue(state => state.SelectedStep));
+        Assert.Null(harness.Store.GetValue(state => state.Board.SelectedStep));
     }
 
     [Fact]
@@ -274,12 +274,12 @@ public sealed class ShellControllerTests(JournalFixture fixture)
     }
 
     private static string[] SessionIds(Harness harness)
-        => [.. harness.Store.GetValue(state => state.Runs).Select(run => run.SessionId)];
+        => [.. harness.Store.GetValue(state => state.Runs.All).Select(run => run.SessionId)];
 
     private static string[] StepsOfSelectedRun(Harness harness)
         =>
         [
-            .. harness.Store.GetValue(state => state.ActiveRun).Stages
+            .. harness.Store.GetValue(state => state.Board.ActiveRun).Stages
                 .SelectMany(stage => stage.Steps)
                 .Select(step => step.DisplayName)
         ];
@@ -348,7 +348,7 @@ public sealed class ShellControllerTests(JournalFixture fixture)
     {
         internal Harness(string runsDirectory, string? pipeName = null)
         {
-            Store = StateStore<MainState>.Create().AddReducer(new MainReducer()).Build();
+            Store = MainStore.Create().Build();
 
             // A pipe name of this test's own, so a controller never attaches to a real UI's pipe or
             // to another test's.

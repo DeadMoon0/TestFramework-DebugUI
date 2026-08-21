@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
@@ -6,6 +6,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Security.Cryptography;
 using Newtonsoft.Json;
+using TestFramework.DebugUI.State.Annotations;
 
 namespace TestFramework.DebugUI.State.Bundles;
 

@@ -18,7 +18,7 @@
   <ItemGroup>
     <PackageReference Include="TestFramework.Core" Version="0.2.0" />
     <PackageReference Include="TestFramework.Simple" Version="0.2.0" />
-    <ProjectReference Include="..\..\..\TestFramework-LocalIO\TestFramework.LocalIO\TestFramework.LocalIO.csproj" />
+    <PackageReference Include="TestFramework.LocalIO" Version="0.2.0" />
   </ItemGroup>
 
   <ItemGroup>

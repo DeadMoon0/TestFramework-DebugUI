@@ -71,6 +71,23 @@ public sealed record StepFailureNotice
 }
 
 /// <summary>
+/// A session whose connection has gone, and whether its run finished before it went.
+/// </summary>
+/// <remarks>
+/// Both endings are reported through one event, because what is kept for a session has to be released
+/// on either. <see cref="Finished"/> is what tells them apart for anything that cares: a run that
+/// finished said so, and a run that did not was killed, crashed, or lost its pipe.
+/// </remarks>
+public sealed record SessionEnded
+{
+    /// <summary>Gets the run whose connection has gone.</summary>
+    public required string SessionId { get; init; }
+
+    /// <summary>Gets a value indicating whether the run reported finishing before disconnecting.</summary>
+    public required bool Finished { get; init; }
+}
+
+/// <summary>
 /// A run the UI can open, as listed for the run picker.
 /// </summary>
 public sealed record AvailableRun

@@ -26,6 +26,7 @@ public sealed class RunIngestService : IDisposable
     private readonly StateStore<MainState> store;
     private readonly TimeSpan window;
     private readonly object gate = new();
+    private readonly object dispatchOrder = new();
     private readonly List<DebugEnvelope> pending = [];
 
     private Timer? timer;
@@ -76,28 +77,42 @@ public sealed class RunIngestService : IDisposable
     /// Dispatches everything buffered so far.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Called on the timer, on a breakpoint, and by a caller that wants the state settled — a test,
     /// or a transport that has reached the end of a journal.
+    /// </para>
+    /// <para>
+    /// Three threads reach this: the timer, the pipe reader on a breakpoint, and the UI thread
+    /// selecting a run. Taking the batch and dispatching it has to be one indivisible act for all of
+    /// them, because the reducer folds transitions in the order it receives them — a thread that
+    /// takes an older batch and is preempted before dispatching would let a newer batch land first,
+    /// and a step already reported complete would go back to running.
+    /// </para>
     /// </remarks>
     public void Flush()
     {
-        ImmutableList<DebugEnvelope> batch;
-
-        lock (gate)
+        // Ordering lock, held across the dispatch; the buffer lock is not, because the reducer runs
+        // synchronously and notifies subscribers, and holding the buffer across that would let a
+        // subscriber deadlock the ingest path. A subscriber that flushes re-enters this lock on its
+        // own thread, which is why it is a monitor rather than a semaphore.
+        lock (dispatchOrder)
         {
-            timer?.Dispose();
-            timer = null;
+            ImmutableList<DebugEnvelope> batch;
 
-            if (pending.Count == 0)
-                return;
+            lock (gate)
+            {
+                timer?.Dispose();
+                timer = null;
 
-            batch = [.. pending];
-            pending.Clear();
+                if (pending.Count == 0)
+                    return;
+
+                batch = [.. pending];
+                pending.Clear();
+            }
+
+            store.Dispatch(MainActions.IngestBatch, batch);
         }
-
-        // Dispatched outside the lock: the reducer runs synchronously and notifies subscribers, and
-        // holding the buffer lock across that would let a subscriber deadlock the ingest path.
-        store.Dispatch(MainActions.IngestBatch, batch);
     }
 
     /// <summary>

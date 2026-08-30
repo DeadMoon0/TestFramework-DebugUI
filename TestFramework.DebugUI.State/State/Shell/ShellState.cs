@@ -11,6 +11,16 @@ public record struct ShellState()
     public TransportStatus Transport = TransportStatus.Idle;
 
     /// <summary>
+    /// What the transport is doing, in the detail the status popup reports.
+    /// </summary>
+    /// <remarks>
+    /// Put in the state rather than read off the transport when the popup opens. A surface that reached
+    /// through to the pipe would be a surface that only works while a shell exists, and it would show
+    /// whatever happened to be true at the instant it was asked instead of following the run count.
+    /// </remarks>
+    public TransportDetails Details = TransportDetails.Unknown;
+
+    /// <summary>
     /// The test a re-run was asked for, until its run arrives.
     /// </summary>
     /// <remarks>
@@ -23,4 +33,15 @@ public record struct ShellState()
 
     /// <summary>The running record of what every session is doing, including unselected ones.</summary>
     public FeedState Feed = new();
+
+    /// <summary>
+    /// How many events arrived but could not be read.
+    /// </summary>
+    /// <remarks>
+    /// An event whose payload will not decode is dropped, because one bad record must not cost the
+    /// run that is already on screen. Counted rather than passed over in silence: the transport says
+    /// so for what it reads itself, and a journal replayed from disk has no such voice — so without
+    /// this a recorded run could quietly be missing part of what it did.
+    /// </remarks>
+    public int UnreadableEvents = 0;
 }

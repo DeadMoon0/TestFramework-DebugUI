@@ -12,6 +12,7 @@ using TestFramework.DebugUI.State.Board.Comparison;
 using TestFramework.DebugUI.State.Runs;
 using TestFramework.DebugUI.State.Shell;
 using TestFramework.DebugUI.State.Shell.Feed;
+using TestFramework.DebugUI.State.Diagnostics;
 
 namespace TestFramework.DebugUI.State.Transport;
 
@@ -30,7 +31,7 @@ namespace TestFramework.DebugUI.State.Transport;
 /// twenty timelines at once without the board of the one being watched slowing down.
 /// </para>
 /// </remarks>
-public sealed class ShellController : IDisposable
+public sealed class ShellController : IShellCommands, IDisposable
 {
     /// <summary>
     /// How many events of an unselected live run are kept so it can be shown if selected.
@@ -61,13 +62,6 @@ public sealed class ShellController : IDisposable
     private bool disposed;
 
     /// <summary>
-    /// Creates a controller over a store.
-    /// </summary>
-    /// <param name="store">The store to drive.</param>
-    /// <param name="runsDirectory">Where recorded runs live. Defaults to the framework's journal.</param>
-    /// <param name="pipeName">The pipe to listen on. Defaults to the framework's well-known name.</param>
-    /// <param name="ingestWindow">How long to coalesce events before dispatching.</param>
-    /// <summary>
     /// Gets where recorded runs are read from, when there is somewhere.
     /// </summary>
     /// <remarks>
@@ -76,6 +70,13 @@ public sealed class ShellController : IDisposable
     /// </remarks>
     public string? RunsDirectory => runsDirectory;
 
+    /// <summary>
+    /// Creates a controller over a store.
+    /// </summary>
+    /// <param name="store">The store to drive.</param>
+    /// <param name="runsDirectory">Where recorded runs live. Defaults to the framework's journal.</param>
+    /// <param name="pipeName">The pipe to listen on. Defaults to the framework's well-known name.</param>
+    /// <param name="ingestWindow">How long to coalesce events before dispatching.</param>
     public ShellController(StateStore<MainState> store, string? runsDirectory = null, string? pipeName = null, TimeSpan? ingestWindow = null)
     {
         this.store = store ?? throw new ArgumentNullException(nameof(store));
@@ -87,11 +88,22 @@ public sealed class ShellController : IDisposable
         pipe.EnvelopeReceived += OnLiveEnvelope;
         pipe.Notice += Report;
         pipe.ConnectionsChanged += OnConnectionsChanged;
+        pipe.SessionEnded += OnSessionEnded;
         pipe.PauseAtBreakpoint = ShouldPause;
     }
 
     /// <summary>Gets the live transport, for the window to drive breakpoints and cancellation.</summary>
     public PipeRunEventSource Pipe => pipe;
+
+    /// <summary>
+    /// How many runs are still holding their events in memory.
+    /// </summary>
+    /// <remarks>
+    /// Internal because it is a fact about the implementation rather than about any run, and no
+    /// surface should draw it. It exists so that holding on to a session too long is a test failure
+    /// rather than something noticed as memory growth after a week of watch mode.
+    /// </remarks>
+    internal int RetainedSessionCount => histories.Count;
 
     /// <summary>
     /// Gets or sets the test of whether a step should be held at its breakpoint.
@@ -122,6 +134,7 @@ public sealed class ShellController : IDisposable
 
         pipe.Start();
         store.Dispatch(ShellActions.SetTransportStatus, TransportStatus.Listening);
+        PublishTransportDetails();
 
         RefreshRecordedRuns();
         ReportRecordingsFromOtherBuilds();
@@ -204,7 +217,7 @@ public sealed class ShellController : IDisposable
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             Report(Notice(FeedSeverity.Error, "Recorded runs could not be listed.", e.Message, FeedSource.Journal));
         }
     }
@@ -368,6 +381,7 @@ public sealed class ShellController : IDisposable
         pipe.EnvelopeReceived -= OnLiveEnvelope;
         pipe.Notice -= Report;
         pipe.ConnectionsChanged -= OnConnectionsChanged;
+        pipe.SessionEnded -= OnSessionEnded;
 
         pipe.Dispose();
         ingest.Dispose();
@@ -386,6 +400,8 @@ public sealed class ShellController : IDisposable
         if (disposed)
             return;
 
+        PublishTransportDetails();
+
         TransportStatus current = store.GetValue(state => state.Shell.Transport);
 
         if (current == TransportStatus.Faulted || current == TransportStatus.Idle)
@@ -396,6 +412,22 @@ public sealed class ShellController : IDisposable
         if (next != current)
             store.Dispatch(ShellActions.SetTransportStatus, next);
     }
+
+    /// <summary>
+    /// Puts what the transport is doing into the state, for whatever draws it.
+    /// </summary>
+    /// <remarks>
+    /// So that no surface has to hold the transport to describe it. The count changes on every attach and
+    /// detach; the other two are facts about this transport and are sent along with it rather than being
+    /// fetched separately by whoever happens to need them.
+    /// </remarks>
+    private void PublishTransportDetails()
+        => store.Dispatch(ShellActions.SetTransportDetails, new TransportDetails
+        {
+            AttachedRuns = pipe.AttachedRunCount,
+            MaxConcurrentRuns = pipe.MaxConcurrentRuns,
+            PipeName = pipe.PipeName
+        });
 
     private void OnLiveEnvelope(DebugEnvelope envelope)
     {
@@ -421,6 +453,39 @@ public sealed class ShellController : IDisposable
             ingest.Flush();
             RefreshDiff(envelope.SessionId);
         }
+
+        if (envelope.Kind == PipeSignalKind.TimelineRunFinished)
+            ReleaseHistory(envelope.SessionId);
+    }
+
+    /// <summary>
+    /// Lets go of what was kept for a session whose connection has gone.
+    /// </summary>
+    /// <remarks>
+    /// The finish signal already released a healthy run's history, so what this adds is the run that
+    /// never sent one — a killed or crashed host, whose entry would otherwise be held for the life of
+    /// the process. Under watch mode that is measured in days and thousands of runs.
+    /// </remarks>
+    private void OnSessionEnded(SessionEnded ended)
+    {
+        tests.TryRemove(ended.SessionId, out _);
+        ReleaseHistory(ended.SessionId);
+    }
+
+    /// <summary>
+    /// Drops a run's retained events once its journal can answer for them instead.
+    /// </summary>
+    /// <remarks>
+    /// The events are kept so an unselected run can still be opened, and selecting a recorded run
+    /// replays its journal from scratch anyway — so once a recording exists the memory is a second
+    /// copy of it. Without one it is the only record there will ever be, and it stays.
+    /// </remarks>
+    private void ReleaseHistory(string sessionId)
+    {
+        if (runsDirectory is null || !JournalRunEventSource.HasRun(runsDirectory, sessionId))
+            return;
+
+        histories.TryRemove(sessionId, out _);
     }
 
     private void ReplayRecorded(string sessionId)
@@ -454,7 +519,7 @@ public sealed class ShellController : IDisposable
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             Report(Notice(FeedSeverity.Error, "The recorded run could not be replayed.", e.Message, FeedSource.Journal, sessionId));
         }
         finally
@@ -568,7 +633,7 @@ public sealed class ShellController : IDisposable
         {
             // A frame this build cannot read must not take the transport down with it. Losing the test name
             // costs the run its breakpoints; throwing here would cost it the whole connection.
-            Debug.WriteLine(e);
+            Log.Write(e);
         }
     }
 
@@ -596,7 +661,7 @@ public sealed class ShellController : IDisposable
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             return null;
         }
     }

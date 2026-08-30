@@ -2,11 +2,11 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.Linq;
 using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Board.Comparison;
 using TestFramework.DebugUI.State.Runs;
+using TestFramework.DebugUI.State.Diagnostics;
 
 namespace TestFramework.DebugUI.State.Transport;
 
@@ -84,7 +84,7 @@ public sealed class BaselineResolver(string? runsDirectory)
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             return RunComparison.Unavailable("The recorded runs could not be listed, so no baseline could be read.");
         }
 
@@ -108,7 +108,7 @@ public sealed class BaselineResolver(string? runsDirectory)
             catch (Exception e)
             {
                 // One unreadable journal is not a reason to stop looking; an older run may still serve.
-                Debug.WriteLine(e);
+                Log.Write(e);
                 continue;
             }
 

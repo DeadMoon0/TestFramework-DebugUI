@@ -10,6 +10,8 @@ using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using TestFramework.DebugUI.Docking;
 
+using TestFramework.DebugUI.State.Transport;
+
 namespace TestFramework.DebugUI.Controls.Dock;
 
 /// <summary>
@@ -110,9 +112,6 @@ public partial class UC_DockHost : UserControl
     {
         InitializeComponent();
 
-        foreach (PanelDescriptor descriptor in PanelRegistry.All)
-            panels[descriptor.Id] = descriptor.Create();
-
         Arrangement.Changed += Show;
 
         // The host takes the drop rather than each card, because most of the answers are about the space between
@@ -143,8 +142,33 @@ public partial class UC_DockHost : UserControl
     /// </remarks>
     public event Action<DockInsets>? InsetsChanged;
 
+    /// <summary>
+    /// Builds the panels, giving each of them what it can ask the shell to do.
+    /// </summary>
+    /// <remarks>
+    /// Not the constructor, because this host is declared in the window's markup and WPF builds those with
+    /// no arguments. So the window hands the panels their collaborator the moment it has one, and this is
+    /// the one place in the tool where something has to happen before something else — the panels
+    /// themselves take it in their constructors and cannot be built without it.
+    /// </remarks>
+    public void UseCommands(IShellCommands commands)
+    {
+        ArgumentNullException.ThrowIfNull(commands);
+
+        if (panels.Count > 0)
+            return;
+
+        foreach (PanelDescriptor descriptor in PanelRegistry.All)
+            panels[descriptor.Id] = descriptor.Create(commands);
+
+        Show();
+    }
+
     /// <summary>One panel, for the window to wire its events to.</summary>
-    public T Get<T>(PanelId panel) where T : UserControl => (T)panels[panel];
+    public T Get<T>(PanelId panel) where T : UserControl
+        => panels.TryGetValue(panel, out UserControl? found)
+            ? (T)found
+            : throw new InvalidOperationException($"The panels have not been built yet; {nameof(UseCommands)} comes first.");
 
     /// <summary>Draws the arrangement, rebuilding only what has actually changed shape.</summary>
     private void Show()
@@ -176,7 +200,7 @@ public partial class UC_DockHost : UserControl
         // so emptying the top only unparents the chrome and WPF then refuses the panel with "already the logical
         // child of another element" halfway through the rebuild, leaving the window blank.
         foreach (UserControl panel in panels.Values)
-            Detach(panel);
+            PanelActions.Detach(panel);
 
         gWells.Children.Clear();
         cards.Clear();
@@ -414,27 +438,6 @@ public partial class UC_DockHost : UserControl
     /// and the rest nowhere: every tool window in the application disappeared at once, and the only way to get
     /// them back was to restart. Dragging a panel out of a float and back in is exactly the gesture that hit it.
     /// </remarks>
-    private static void Detach(UserControl panel)
-    {
-        switch (panel.Parent)
-        {
-            case Panel holder:
-                holder.Children.Remove(panel);
-                break;
-
-            // A Border is a Decorator, which is how a float holds its panel.
-            case Decorator decorator:
-                decorator.Child = null;
-                break;
-
-            case ContentControl content:
-                content.Content = null;
-                break;
-
-            default:
-                break;
-        }
-    }
 
     /// <summary>
     /// Puts a well in its cell.

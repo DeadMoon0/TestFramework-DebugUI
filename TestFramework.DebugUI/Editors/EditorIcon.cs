@@ -1,10 +1,10 @@
 using System;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using TestFramework.DebugUI.State.Diagnostics;
 
 namespace TestFramework.DebugUI.Editors;
 
@@ -63,7 +63,7 @@ internal static class EditorIcon
         catch (Exception e) when (e is COMException or ArgumentException or InvalidOperationException)
         {
             // A button with no picture is a small problem. Failing to open the window is not.
-            Debug.WriteLine(e);
+            Log.Write(e);
             return null;
         }
         finally

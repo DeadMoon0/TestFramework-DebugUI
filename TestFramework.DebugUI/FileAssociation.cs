@@ -1,8 +1,8 @@
 ﻿using System;
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using TestFramework.DebugUI.State.Bundles;
+using TestFramework.DebugUI.State.Diagnostics;
 
 namespace TestFramework.DebugUI;
 
@@ -57,7 +57,7 @@ public static class FileAssociation
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
 
             return false;
         }
@@ -74,7 +74,7 @@ public static class FileAssociation
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
 
             return null;
         }
@@ -112,7 +112,7 @@ public static class FileAssociation
         {
             // A locked-down account can refuse even its own classes key. Losing the association is a smaller
             // problem than a settings toggle that takes the window down.
-            Debug.WriteLine(e);
+            Log.Write(e);
 
             return false;
         }
@@ -138,7 +138,7 @@ public static class FileAssociation
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
 
             return false;
         }
@@ -173,7 +173,7 @@ public static class FileAssociation
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
         }
     }
 

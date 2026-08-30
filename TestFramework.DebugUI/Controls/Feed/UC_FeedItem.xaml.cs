@@ -20,11 +20,15 @@ namespace TestFramework.DebugUI.Controls.Feed;
 public partial class UC_FeedItem : UserControl
 {
     private readonly FeedEntry entry;
+    private readonly Action<FeedEntry>? picked;
 
     /// <summary>Creates a row for one entry.</summary>
-    public UC_FeedItem(FeedEntry entry)
+    /// <param name="entry">What the row shows.</param>
+    /// <param name="picked">Told when the row is clicked, for whoever can act on it.</param>
+    public UC_FeedItem(FeedEntry entry, Action<FeedEntry>? picked = null)
     {
         this.entry = entry;
+        this.picked = picked;
 
         InitializeComponent();
 
@@ -60,9 +64,6 @@ public partial class UC_FeedItem : UserControl
         if (entry.SessionId is null)
             return;
 
-        MainWindow.Shell.SelectRun(entry.SessionId);
-
-        if (entry.Stage is not null && entry.StepId is not null)
-            MainWindow.Shell.SelectStep(entry.Stage, entry.StepId.Value);
+        picked?.Invoke(entry);
     }
 }

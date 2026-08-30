@@ -1,10 +1,10 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Threading;
 using System.Threading.Tasks;
 using TestFramework.Core.Debugger;
+using TestFramework.DebugUI.State.Diagnostics;
 
 namespace TestFramework.DebugUI.State.Transport;
 
@@ -69,7 +69,7 @@ internal sealed class PipeFrameStream(PipeStream stream)
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             End(e.Message, failure: true);
             return null;
         }
@@ -101,7 +101,7 @@ internal sealed class PipeFrameStream(PipeStream stream)
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             End(e.Message, failure: true);
             return false;
         }

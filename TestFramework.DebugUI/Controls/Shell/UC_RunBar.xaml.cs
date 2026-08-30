@@ -26,9 +26,9 @@ namespace TestFramework.DebugUI.Controls.Shell;
 /// belongs next to them.
 /// </para>
 /// <para>
-/// The three that change the run call the controller directly, as the plate on the board did. The three
-/// that change the view are raised as events, because what they act on is the board, and reaching across
-/// to it from here would make two controls responsible for one canvas.
+/// Every button says what was asked for and nothing else. What acts on the run lives with whoever holds
+/// the run — the window — and what moves the board lives with the board; either way, a bar that reached
+/// across to do the work itself would make two controls responsible for one thing.
 /// </para>
 /// </remarks>
 public partial class UC_RunBar : UserControl
@@ -129,37 +129,25 @@ public partial class UC_RunBar : UserControl
     /// <summary>Raised when the reader asks to share the selected run.</summary>
     public event Action? ShareRequested;
 
-    private async void btContinue_Click(object sender, RoutedEventArgs e)
-        => await MainWindow.Shell.ContinueSelectedRunAsync();
+    /// <summary>Raised when the reader asks to release the run from its breakpoint.</summary>
+    public event Action? ContinueRequested;
 
-    private async void btStep_Click(object sender, RoutedEventArgs e) => await StepAsync();
+    /// <summary>Raised when the reader asks the run to take one step.</summary>
+    public event Action? StepRequested;
 
-    /// <summary>
-    /// Releases the run and has it stop again at its next step.
-    /// </summary>
-    /// <remarks>
-    /// Armed before the release, not after: a run let go first can reach its next step and ask about it
-    /// before this side has said anything, and would then run to the end. If the release fails the arming
-    /// is withdrawn, so a run that was never let go does not stop unbidden later.
-    /// </remarks>
-    internal static async Task StepAsync()
-    {
-        string? sessionId = StateStore<MainState>.Default.GetValue(state => state.Runs.SelectedSessionId);
+    /// <summary>Raised when the reader asks the run to stop.</summary>
+    public event Action? StopRequested;
 
-        if (sessionId is null)
-            return;
+    /// <summary>Raised when the reader asks for the run's test to be run again.</summary>
+    public event Action? RerunRequested;
 
-        Breakpoints.StepOnce(sessionId);
+    private void btContinue_Click(object sender, RoutedEventArgs e) => ContinueRequested?.Invoke();
 
-        if (!await MainWindow.Shell.ContinueSelectedRunAsync())
-            Breakpoints.CancelStep(sessionId);
-    }
+    private void btStep_Click(object sender, RoutedEventArgs e) => StepRequested?.Invoke();
 
-    private async void btStop_Click(object sender, RoutedEventArgs e)
-        => await MainWindow.Shell.CancelSelectedRunAsync();
+    private void btStop_Click(object sender, RoutedEventArgs e) => StopRequested?.Invoke();
 
-    private void btRerun_Click(object sender, RoutedEventArgs e)
-        => MainWindow.Shell.RerunSelected();
+    private void btRerun_Click(object sender, RoutedEventArgs e) => RerunRequested?.Invoke();
 
     /// <summary>
     /// Shows a button for each editor that is actually installed.
@@ -251,7 +239,7 @@ public partial class UC_RunBar : UserControl
 
         if (arguments.Count == 0)
         {
-            MainWindow.Shell.Report(new FeedEntry
+            StateStore<MainState>.Default.Dispatch(FeedActions.AppendEntry, new FeedEntry
             {
                 AtUtc = DateTimeOffset.UtcNow,
                 Severity = FeedSeverity.Warning,
@@ -265,7 +253,7 @@ public partial class UC_RunBar : UserControl
 
         if (!ExternalEditors.TryOpen(editor, arguments))
         {
-            MainWindow.Shell.Report(new FeedEntry
+            StateStore<MainState>.Default.Dispatch(FeedActions.AppendEntry, new FeedEntry
             {
                 AtUtc = DateTimeOffset.UtcNow,
                 Severity = FeedSeverity.Warning,

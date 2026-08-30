@@ -16,6 +16,8 @@ using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Board.Comparison;
 using TestFramework.DebugUI.State.Runs;
 
+using TestFramework.DebugUI.State.Transport;
+
 namespace TestFramework.DebugUI.Controls.Detail;
 
 /// <summary>
@@ -42,8 +44,15 @@ public partial class UC_RunSummary : UserControl, IDisposable
     private long? recorded;
 
     /// <summary>Creates the page and binds it.</summary>
-    public UC_RunSummary()
+        /// <summary>What this page can ask the shell to do.</summary>
+    private readonly IShellCommands commands;
+
+    /// <param name="commands">What this page can ask the shell to do.</param>
+    public UC_RunSummary(IShellCommands commands)
     {
+        ArgumentNullException.ThrowIfNull(commands);
+        this.commands = commands;
+
         InitializeComponent();
 
         // No copy buttons here. The verdict is one word and the counts are five numbers - quicker to
@@ -209,7 +218,7 @@ public partial class UC_RunSummary : UserControl, IDisposable
             string stage = failure.StageName;
             int stepId = failure.StepId;
 
-            row.MouseLeftButtonUp += (_, _) => MainWindow.Shell.SelectStep(stage, stepId);
+            row.MouseLeftButtonUp += (_, _) => commands.SelectStep(stage, stepId);
 
             spFailures.Children.Add(row);
         }
@@ -305,8 +314,8 @@ public partial class UC_RunSummary : UserControl, IDisposable
             TextBlock detail = new()
             {
                 Text = step.Ratio is { } ratio
-                    ? $"{Took(step.Then ?? TimeSpan.Zero)} → {Took(step.Now ?? TimeSpan.Zero)}   ({ratio:0.#}×)"
-                    : $"{Took(step.Then ?? TimeSpan.Zero)} → {Took(step.Now ?? TimeSpan.Zero)}",
+                    ? $"{DurationText.Compact(step.Then ?? TimeSpan.Zero)} → {DurationText.Compact(step.Now ?? TimeSpan.Zero)}   ({ratio:0.#}×)"
+                    : $"{DurationText.Compact(step.Then ?? TimeSpan.Zero)} → {DurationText.Compact(step.Now ?? TimeSpan.Zero)}",
 
                 // Amber for slower, green for quicker. Never red: a step taking longer is worth seeing and
                 // is not a failure, and red on this page means something broke.
@@ -329,7 +338,7 @@ public partial class UC_RunSummary : UserControl, IDisposable
             string stage = step.StageName;
             int stepId = step.StepId;
 
-            row.MouseLeftButtonUp += (_, _) => MainWindow.Shell.SelectStep(stage, stepId);
+            row.MouseLeftButtonUp += (_, _) => commands.SelectStep(stage, stepId);
 
             spTiming.Children.Add(row);
         }
@@ -357,7 +366,7 @@ public partial class UC_RunSummary : UserControl, IDisposable
                 : $"{compared.FasterCount} step(s) were quicker than {against}.";
         }
 
-        string span = $"{Took(compared.Then.Value)} → {Took(compared.Now.Value)}";
+        string span = $"{DurationText.Compact(compared.Then.Value)} → {DurationText.Compact(compared.Now.Value)}";
 
         if (!compared.RunMovedMaterially)
             return $"Overall the run took about the same ({span}), but some of it moved.";
@@ -365,15 +374,11 @@ public partial class UC_RunSummary : UserControl, IDisposable
         string detail = compared.Ratio is { } ratio ? $"({ratio:0.#}×, {span})" : $"({span})";
 
         return compared.Delta > TimeSpan.Zero
-            ? $"This run took {Took(compared.Delta)} longer than {against} {detail}."
-            : $"This run was {Took(compared.Delta.Duration())} quicker than {against} {detail}.";
+            ? $"This run took {DurationText.Compact(compared.Delta)} longer than {against} {detail}."
+            : $"This run was {DurationText.Compact(compared.Delta.Duration())} quicker than {against} {detail}.";
     }
 
     /// <summary>A duration as a reader says it, in the same shape the run list uses.</summary>
-    private static string Took(TimeSpan took)
-        => took < TimeSpan.FromSeconds(1) ? $"{took.TotalMilliseconds:F0} ms"
-            : took < TimeSpan.FromMinutes(1) ? $"{took.TotalSeconds:F1} s"
-            : $"{(int)took.TotalMinutes}m {took.Seconds}s";
 
 
     /// <summary>

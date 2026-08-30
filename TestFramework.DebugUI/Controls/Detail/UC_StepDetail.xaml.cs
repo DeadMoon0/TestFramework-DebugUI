@@ -136,7 +136,7 @@ public partial class UC_StepDetail : UserControl, IDisposable
 
         if (compared?.Then is not { } before)
         {
-            tbTiming.Text = $"took {Duration(took)}";
+            tbTiming.Text = $"took {DurationText.Compact(took)}";
             tbTiming.Foreground = (Brush)FindResource("TextSecondary");
             return;
         }
@@ -145,9 +145,9 @@ public partial class UC_StepDetail : UserControl, IDisposable
 
         tbTiming.Text = compared.Change switch
         {
-            StepTimingChange.Slower => $"took {Duration(took)} — {Duration(compared.Delta)} longer than when this test last passed{ratio}",
-            StepTimingChange.Faster => $"took {Duration(took)} — {Duration(compared.Delta.Duration())} quicker than when this test last passed{ratio}",
-            _ => $"took {Duration(took)}, about the same as the {Duration(before)} it took when this test last passed"
+            StepTimingChange.Slower => $"took {DurationText.Compact(took)} — {DurationText.Compact(compared.Delta)} longer than when this test last passed{ratio}",
+            StepTimingChange.Faster => $"took {DurationText.Compact(took)} — {DurationText.Compact(compared.Delta.Duration())} quicker than when this test last passed{ratio}",
+            _ => $"took {DurationText.Compact(took)}, about the same as the {DurationText.Compact(before)} it took when this test last passed"
         };
 
         tbTiming.Foreground = (Brush)FindResource(compared.Change switch
@@ -183,7 +183,7 @@ public partial class UC_StepDetail : UserControl, IDisposable
             wpPolicy.Children.Add(Chip($"retries from {retriesFrom}"));
 
         if (policy.TimeOut is TimeSpan timeout)
-            wpPolicy.Children.Add(Chip($"times out after {Duration(timeout)}"));
+            wpPolicy.Children.Add(Chip($"times out after {DurationText.Compact(timeout)}"));
         else if (policy.TimeOutVariable is string timeoutFrom)
             wpPolicy.Children.Add(Chip($"timeout from {timeoutFrom}"));
 
@@ -210,19 +210,6 @@ public partial class UC_StepDetail : UserControl, IDisposable
     };
 
     /// <summary>A duration as a reader would say it, rather than as 00:00:30.</summary>
-    private static string Duration(TimeSpan value)
-    {
-        if (value.TotalSeconds < 1)
-            return $"{value.TotalMilliseconds:0} ms";
-
-        if (value.TotalMinutes < 1)
-            return $"{value.TotalSeconds:0.#} s";
-
-        return value.TotalHours < 1
-            ? $"{value.TotalMinutes:0.#} min"
-            : $"{value.TotalHours:0.#} h";
-    }
-
     private void ShowAttempts()
     {
         spAttempts.Children.Clear();

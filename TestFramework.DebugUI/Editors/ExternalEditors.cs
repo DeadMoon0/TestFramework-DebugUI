@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Media;
+using TestFramework.DebugUI.State.Diagnostics;
 
 namespace TestFramework.DebugUI.Editors;
 
@@ -85,7 +86,7 @@ public static class ExternalEditors
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             return false;
         }
     }
@@ -99,7 +100,7 @@ public static class ExternalEditors
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             return [];
         }
     }
@@ -188,7 +189,7 @@ public static class ExternalEditors
         }
         catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             return null;
         }
     }

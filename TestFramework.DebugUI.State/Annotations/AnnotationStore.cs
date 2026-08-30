@@ -1,7 +1,7 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using Newtonsoft.Json;
+using TestFramework.DebugUI.State.Diagnostics;
 
 namespace TestFramework.DebugUI.State.Annotations;
 
@@ -81,7 +81,7 @@ public sealed class AnnotationStore
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             report?.Invoke("The annotations on this run could not be read.");
 
             return empty;
@@ -124,7 +124,7 @@ public sealed class AnnotationStore
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             report?.Invoke("The annotations on this run could not be saved.");
 
             return false;

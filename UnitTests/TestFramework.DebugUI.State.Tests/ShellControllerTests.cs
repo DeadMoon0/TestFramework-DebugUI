@@ -139,6 +139,47 @@ public sealed class ShellControllerTests(JournalFixture fixture)
     }
 
     [Fact]
+    public async Task AFinishedRunStopsBeingHeldOnceItsJournalCanAnswerForIt()
+    {
+        // The events are kept so an unselected run can still be opened, and a recorded run is
+        // replayed from its journal anyway — so holding both is holding the same run twice, for the
+        // life of a process that watch mode keeps alive for days.
+        using PipeScope scope = new();
+
+        using Harness harness = new(RunsDirectory, scope.PipeName);
+        harness.Controller.Start();
+
+        await RunTimelineAsync("released");
+
+        await WaitForAsync(
+            () => harness.Controller.RetainedSessionCount == 0,
+            "A finished run's events were still held after its journal had them.");
+
+        // And the run is no worse off for it: opening it rebuilds the board from the journal.
+        Assert.Contains("released", StepsOfEveryRun(harness));
+    }
+
+    [Fact]
+    public async Task ARunWithNoJournalIsStillHeldAfterItFinishes()
+    {
+        // The other half of the same rule. With nothing recorded, the events in memory are the only
+        // record there will ever be, and letting go of them would lose the run entirely.
+        using PipeScope scope = new();
+
+        string empty = Path.Combine(Path.GetTempPath(), "tf-shell-tests", Guid.NewGuid().ToString("N"));
+
+        using Harness harness = new(empty, scope.PipeName);
+        harness.Controller.Start();
+
+        await RunTimelineAsync("kept");
+
+        await WaitForAsync(() => harness.Store.GetValue(state => state.Runs.All).Count >= 1, "The run should have attached.");
+
+        Assert.Equal(1, harness.Controller.RetainedSessionCount);
+        Assert.Contains("kept", StepsOfEveryRun(harness));
+    }
+
+    [Fact]
     public async Task AStepAskingAboutABreakpointIsToldWhichTestItBelongsTo()
     {
         // A breakpoint is keyed by test, and this is where the test comes from: read off the run's own

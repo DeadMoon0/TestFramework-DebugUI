@@ -7,6 +7,7 @@ using Newtonsoft.Json;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.State.Runs;
 using TestFramework.DebugUI.State.Shell.Feed;
+using TestFramework.DebugUI.State.Diagnostics;
 
 namespace TestFramework.DebugUI.State.Transport;
 
@@ -140,6 +141,52 @@ public sealed class JournalRunEventSource : IRunEventSource
     }
 
     /// <summary>
+    /// Whether one run is recorded under a journal root, and so can be replayed from disk.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Asked before letting go of what is held in memory for a run: a recording is the same events
+    /// from the same protocol, so once one exists the memory is a duplicate, and without one it is
+    /// the only record there will ever be.
+    /// </para>
+    /// <para>
+    /// The sidecar's name carries the session id, so the answer is usually a directory listing and no
+    /// file read at all; a candidate is confirmed by its content rather than its name. Anything this
+    /// cannot answer reads as "not recorded", which keeps whatever the caller was going to release.
+    /// </para>
+    /// </remarks>
+    public static bool HasRun(string runsDirectory, string sessionId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(runsDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
+        if (!Directory.Exists(runsDirectory))
+            return false;
+
+        try
+        {
+            foreach (string metaPath in Directory.EnumerateFiles(runsDirectory, "*.meta.json"))
+            {
+                if (!Path.GetFileName(metaPath).Contains(sessionId, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (ReadMetadata(metaPath) is { } metadata
+                    && string.Equals(metadata.SessionId, sessionId, StringComparison.Ordinal)
+                    && metadata.ProtocolVersion == DebugProtocol.Version)
+                {
+                    return true;
+                }
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// How many recordings under this root were made against another protocol version.
     /// </summary>
     /// <remarks>
@@ -239,7 +286,7 @@ public sealed class JournalRunEventSource : IRunEventSource
         }
         catch (Exception e)
         {
-            System.Diagnostics.Debug.WriteLine(e);
+            Log.Write(e);
         }
     }
 

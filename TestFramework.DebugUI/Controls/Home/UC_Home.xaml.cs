@@ -20,6 +20,8 @@ using TestFramework.DebugUI.State.Bundles;
 using TestFramework.DebugUI.State.Runs;
 using TestFramework.DebugUI.State.Shell.Feed;
 
+using TestFramework.DebugUI.State.Transport;
+
 namespace TestFramework.DebugUI.Controls.Home;
 
 /// <summary>
@@ -73,8 +75,15 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
     private string shape = string.Empty;
 
     /// <summary>Creates the page and binds it.</summary>
-    public UC_Home()
+        /// <summary>What this page can ask the shell to do.</summary>
+    private readonly IShellCommands commands;
+
+    /// <param name="commands">What this page can ask the shell to do.</param>
+    public UC_Home(IShellCommands commands)
     {
+        ArgumentNullException.ThrowIfNull(commands);
+        this.commands = commands;
+
         InitializeComponent();
 
         IObservable<ImmutableList<RunSummary>> runs = StateStore<MainState>.Default.Bind(RunsSelectors.SelectAll);
@@ -411,27 +420,12 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
         content.Children.Add(name);
         content.Children.Add(tally);
 
-        Border row = new()
-        {
-            CornerRadius = new CornerRadius(4),
-            Background = selected ? (Brush)FindResource("SurfaceRaised") : Brushes.Transparent,
-            Padding = new Thickness(6, 5, 8, 5),
-            Margin = new Thickness(indent, 0, 0, 2),
-            Cursor = Cursors.Hand,
-            ToolTip = tip,
-            Child = content
-        };
-
-        row.MouseLeftButtonUp += (_, _) => open();
-        row.MouseEnter += (_, _) => { if (!selected) row.Background = (Brush)FindResource("SurfaceRaised"); };
-        row.MouseLeave += (_, _) => { if (!selected) row.Background = Brushes.Transparent; };
-
-        return row;
+        return InteractiveRow.Wrap(this, content, indent, selected, tip, open);
     }
 
     private UC_HomeCard Card(string sessionId)
     {
-        UC_HomeCard card = new(sessionId);
+        UC_HomeCard card = new(sessionId, commands);
 
         // Opening a run means going to look at it, so the page gets out of the way rather than
         // leaving the reader to close what they just navigated away from.
@@ -442,7 +436,7 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
 
     private UC_RunRow RowFor(string sessionId)
     {
-        UC_RunRow row = new(sessionId);
+        UC_RunRow row = new(sessionId, commands);
 
         row.Opened += () => Closed?.Invoke();
 
@@ -470,7 +464,7 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
 
         if (runs.Count == 0)
         {
-            MainWindow.Shell.Report(new FeedEntry
+            StateStore<MainState>.Default.Dispatch(FeedActions.AppendEntry, new FeedEntry
             {
                 AtUtc = DateTimeOffset.UtcNow,
                 Severity = FeedSeverity.Warning,
@@ -507,11 +501,11 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
         if (dialog.ShowDialog() != true)
             return;
 
-        if (BundleImport.Open(dialog.FileName))
+        if (BundleImport.Open(dialog.FileName, commands))
             Closed?.Invoke();
     }
 
-    private void btRefresh_Click(object sender, RoutedEventArgs e) => MainWindow.Shell.RefreshRecordedRuns();
+    private void btRefresh_Click(object sender, RoutedEventArgs e) => commands.RefreshRecordedRuns();
 
 
     /// <summary>

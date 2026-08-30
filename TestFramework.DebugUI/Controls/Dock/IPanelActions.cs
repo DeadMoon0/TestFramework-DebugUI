@@ -40,20 +40,29 @@ internal static class PanelActions
 {
     /// <summary>Takes an element out of whatever currently holds it, wherever that is.</summary>
     /// <remarks>
-    /// One control has one parent, so the actions have to leave the header before they can go back into the panel
-    /// and vice versa. Handles either kind of holder because a header is a grid and the panel's own slot is a
-    /// border.
+    /// <para>
+    /// One control has one parent, so a thing has to leave where it is before it can go anywhere else —
+    /// the actions leaving a header before they go back into their panel, and a panel leaving its card
+    /// before the arrangement is redrawn around it.
+    /// </para>
+    /// <para>
+    /// Every kind of holder, because there are three and which one is holding a given thing depends on
+    /// where the reader last dragged it: a header is a panel, a card and a float are decorators, and a
+    /// tab is a content control. Written twice once, and the second copy had a narrower case than the
+    /// first — <see cref="Border"/> rather than <see cref="Decorator"/> — which is exactly the kind of
+    /// difference two copies grow.
+    /// </para>
     /// </remarks>
-    public static void Detach(FrameworkElement actions)
+    public static void Detach(FrameworkElement? element)
     {
-        switch (actions?.Parent)
+        switch (element?.Parent)
         {
             case Panel holder:
-                holder.Children.Remove(actions);
+                holder.Children.Remove(element);
                 break;
 
-            case Border border:
-                border.Child = null;
+            case Decorator decorator:
+                decorator.Child = null;
                 break;
 
             case ContentControl content:

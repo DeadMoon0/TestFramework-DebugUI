@@ -10,6 +10,8 @@ using Axiom.State;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Runs;
 
+using TestFramework.DebugUI.State.Transport;
+
 namespace TestFramework.DebugUI.Controls.Home;
 
 /// <summary>
@@ -22,14 +24,22 @@ namespace TestFramework.DebugUI.Controls.Home;
 /// </remarks>
 public partial class UC_RunRow : UserControl
 {
+    /// <summary>What this row can ask the shell to do.</summary>
+    private readonly IShellCommands commands;
+
     private readonly CompositeDisposable subscriptions = [];
 
     private bool hovered;
 
     /// <summary>Creates a row for one session.</summary>
-    public UC_RunRow(string sessionId)
+    public UC_RunRow(string sessionId, IShellCommands commands)
     {
         SessionId = sessionId;
+
+        ArgumentNullException.ThrowIfNull(commands);
+
+        this.commands = commands;
+
 
         InitializeComponent();
 
@@ -62,7 +72,7 @@ public partial class UC_RunRow : UserControl
         tbWhen.Text = run.StartedAtUtc == default
             ? "—"
             : run.StartedAtUtc.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture);
-        tbTook.Text = run.Duration is { } took ? Took(took) : "—";
+        tbTook.Text = run.Duration is { } took ? DurationText.Compact(took) : "—";
         tbSteps.Text = Steps(run.Progress);
         tbChecks.Text = Checks(run.Progress);
 
@@ -119,10 +129,6 @@ public partial class UC_RunRow : UserControl
             : $"{progress.AssertionsPassed} held";
     }
 
-    private static string Took(TimeSpan took)
-        => took < TimeSpan.FromSeconds(1) ? $"{took.TotalMilliseconds:F0} ms"
-            : took < TimeSpan.FromMinutes(1) ? $"{took.TotalSeconds:F1} s"
-            : $"{(int)took.TotalMinutes}m {took.Seconds}s";
 
     private void Paint()
         => bRoot.Background = IsSelected || hovered
@@ -143,7 +149,7 @@ public partial class UC_RunRow : UserControl
 
     private void Root_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        MainWindow.Shell.SelectRun(SessionId);
+        commands.SelectRun(SessionId);
         Opened?.Invoke();
     }
 }

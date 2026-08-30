@@ -11,6 +11,10 @@ public static class ShellActions
     public static readonly StateAction<TransportStatus> SetTransportStatus =
         new(nameof(ShellActions), nameof(SetTransportStatus));
 
+    /// <summary>Records what the transport is and how busy it is.</summary>
+    public static readonly StateAction<TransportDetails> SetTransportDetails =
+        new(nameof(ShellActions), nameof(SetTransportDetails));
+
     /// <summary>
     /// Records that a re-run of one test was asked for, so its run is shown when it arrives.
     /// </summary>

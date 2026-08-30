@@ -94,6 +94,16 @@ public partial class UC_Board : UserControl
     /// <summary>Set when a board is waiting for the surface to have a size it can be fitted to.</summary>
     private bool needsFit;
 
+    /// <summary>
+    /// The marks this board draws and sets, once the window has given it them.
+    /// </summary>
+    /// <remarks>
+    /// Null until then, and every read of it treats that as "no marks" rather than as an error. A board
+    /// with no breakpoints behind it is a board nobody can mark, which is a truthful thing for it to
+    /// show; throwing would turn a wiring mistake into a crash while a run is being watched.
+    /// </remarks>
+    private BreakpointService? breakpoints;
+
     /// <summary>Creates the board and binds it.</summary>
     public UC_Board()
     {
@@ -133,13 +143,6 @@ public partial class UC_Board : UserControl
             .Bind(RunsSelectors.SelectSelectedSessionId)
             .Subscribe(_ => LoadAnnotations()));
 
-        // Breakpoints belong to a test rather than to a session, so the board says which test it is
-        // showing and sets its marks against that. A run this window cannot name cannot be marked, which
-        // is honest: a mark filed under no name would apply to every other unnamed run.
-        subscriptions.Add(StateStore<MainState>.Default
-            .Bind(RunsSelectors.SelectSelectedTest)
-            .Subscribe(Breakpoints.NowLookingAt));
-
         // The surface is measured after the run arrives, so this is what actually fits the first
         // board; the attempt in Render is just the case where a size already exists.
         bSurface.SizeChanged += (_, _) =>
@@ -148,12 +151,34 @@ public partial class UC_Board : UserControl
                 Fit();
         };
 
-        Breakpoints.Changed += RefreshAppearance;
         Unloaded += (_, _) =>
         {
-            Breakpoints.Changed -= RefreshAppearance;
+            if (breakpoints is not null)
+                breakpoints.Changed -= RefreshAppearance;
+
             subscriptions.Dispose();
         };
+    }
+
+    /// <summary>
+    /// Gives the board the marks it draws.
+    /// </summary>
+    /// <remarks>
+    /// Which test those marks belong to is the service's own business — it follows the selected run.
+    /// The board used to tell it, which meant marks worked only because this one control existed and
+    /// happened to subscribe in its constructor.
+    /// </remarks>
+    public void UseBreakpoints(BreakpointService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+
+        if (breakpoints is not null)
+            breakpoints.Changed -= RefreshAppearance;
+
+        breakpoints = service;
+        breakpoints.Changed += RefreshAppearance;
+
+        RefreshAppearance();
     }
 
     private void Render(RunGraph graph)
@@ -204,7 +229,9 @@ public partial class UC_Board : UserControl
     /// </summary>
     /// <remarks>
     /// A run is far wider and taller than any window, so opening at full size shows two steps and no
-    /// context. Never scales past 1:1 — a two-step run blown up to fill the window looks broken.
+    /// context. A board smaller than the window is magnified to use the space, but only up to
+    /// <see cref="MaximumFitZoom"/> — past roughly double it stops looking fitted and starts looking
+    /// blown up.
     /// </remarks>
     private void Fit()
     {
@@ -410,9 +437,6 @@ public partial class UC_Board : UserControl
         TextBlock note = new() { Foreground = (Brush)FindResource("TextSecondary"), FontSize = 11, Margin = new Thickness(0, 4, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
         TextBlock outputs = new() { Foreground = (Brush)FindResource("TextFaint"), FontSize = 11, Margin = new Thickness(0, 8, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
 
-        // The last log line lives in the panel on the right, not on the card. It was the single
-        // biggest consumer of card height and the least likely thing to be read at board scale.
-        TextBlock log = new();
 
         // The heading's right-hand end is the emptiest part of a card and the timing is what a reader
         // scans down a column for, so it goes there rather than at the end of the status line where
@@ -466,7 +490,7 @@ public partial class UC_Board : UserControl
         box.MouseLeftButtonUp += (_, e) =>
         {
             e.Handled = true;
-            MainWindow.Shell.SelectStep(stageName, stepId);
+            StepSelected?.Invoke(stageName, stepId);
         };
 
         // Right-click still sets a breakpoint anywhere on the card. The marker is the discoverable way
@@ -474,7 +498,7 @@ public partial class UC_Board : UserControl
         box.MouseRightButtonUp += (_, e) =>
         {
             e.Handled = true;
-            Breakpoints.Toggle(stageName, stepId);
+            breakpoints?.Toggle(stageName, stepId);
         };
 
         Border breakpoint = BuildBreakpointMarker(stageName, stepId);
@@ -487,7 +511,7 @@ public partial class UC_Board : UserControl
         host.Children.Add(box);
         host.Children.Add(breakpoint);
 
-        stepVisuals[node.Id] = new StepVisual(box, status, name, note, outputs, log, elapsed, breakpoint);
+        stepVisuals[node.Id] = new StepVisual(box, status, name, note, outputs, elapsed, breakpoint);
         return host;
     }
 
@@ -527,11 +551,11 @@ public partial class UC_Board : UserControl
             // Handled, so toggling a breakpoint does not also select the step underneath. The surface
             // ends its pan on the tunnelling event, so marking this one handled cannot strand it.
             e.Handled = true;
-            Breakpoints.Toggle(stageName, stepId);
+            breakpoints?.Toggle(stageName, stepId);
         };
 
         marker.MouseEnter += (_, _) => marker.Opacity = 1;
-        marker.MouseLeave += (_, _) => marker.Opacity = Breakpoints.IsSet(stageName, stepId) ? 1 : RestingMarkerOpacity;
+        marker.MouseLeave += (_, _) => marker.Opacity = breakpoints?.IsSet(stageName, stepId) == true ? 1 : RestingMarkerOpacity;
 
         return marker;
     }
@@ -694,7 +718,6 @@ public partial class UC_Board : UserControl
                 ShowElapsed(visual.Elapsed, stage.Name, step);
                 visual.Status.Background = BrushFor(step);
                 visual.Outputs.Text = Describe(step);
-                visual.Log.Text = LastLine(step);
 
                 bool isSelected = selected is not null
                                   && selected.StepId == step.StepId
@@ -704,7 +727,7 @@ public partial class UC_Board : UserControl
                 // what is happening now without hunting through everything that is merely declared.
                 visual.Box.Opacity = HasRun(step) ? 1 : DormantOpacity;
 
-                ShowBreakpoint(visual.Breakpoint, Breakpoints.IsSet(stage.Name, step.StepId));
+                ShowBreakpoint(visual.Breakpoint, breakpoints?.IsSet(stage.Name, step.StepId) == true);
 
                 // The halt outranks the selection. A run stopped somewhere is the most important thing on
                 // the board and lasts only until it is released, whereas which step a reader last clicked
@@ -798,23 +821,23 @@ public partial class UC_Board : UserControl
 
         if (compared is null || !compared.IsInteresting)
         {
-            elapsed.Text = Elapsed(duration);
-            elapsed.ToolTip = compared?.Then is { } unchanged ? $"About the same as last time: {Elapsed(unchanged)}" : null;
+            elapsed.Text = DurationText.Compact(duration);
+            elapsed.ToolTip = compared?.Then is { } unchanged ? $"About the same as last time: {DurationText.Compact(unchanged)}" : null;
             elapsed.Foreground = (Brush)FindResource("TextFaint");
             return;
         }
 
         bool slower = compared.Change == StepTimingChange.Slower;
 
-        elapsed.Text = $"{Elapsed(duration)}  {(slower ? "+" : "−")}{Elapsed(compared.Delta.Duration())}";
+        elapsed.Text = $"{DurationText.Compact(duration)}  {(slower ? "+" : "−")}{DurationText.Compact(compared.Delta.Duration())}";
 
         // Amber rather than red. A slower step is worth noticing and is not a failure, and red on this board
         // already means the step broke.
         elapsed.Foreground = (Brush)FindResource(slower ? "StateTimeout" : "StateComplete");
 
         elapsed.ToolTip = compared.Ratio is { } ratio
-            ? $"Was {Elapsed(compared.Then ?? TimeSpan.Zero)} when this test last passed — {ratio:0.#}× that now."
-            : $"Was {Elapsed(compared.Then ?? TimeSpan.Zero)} when this test last passed.";
+            ? $"Was {DurationText.Compact(compared.Then ?? TimeSpan.Zero)} when this test last passed — {ratio:0.#}× that now."
+            : $"Was {DurationText.Compact(compared.Then ?? TimeSpan.Zero)} when this test last passed.";
     }
 
     /// <summary>
@@ -824,16 +847,6 @@ public partial class UC_Board : UserControl
     /// Whole units, and never more than three significant figures: the board is scanned for the step
     /// that stands out, and 1.4 s against 12 ms says that immediately where 1402.318 ms does not.
     /// </remarks>
-    private static string Elapsed(TimeSpan duration) => duration.TotalMilliseconds switch
-    {
-        // Rounding a sub-millisecond step to "0 ms" reads as a step that did not run. Saying it was
-        // under a millisecond says the true thing: too fast to have a number worth comparing.
-        < 1 => "<1 ms",
-        < 1000 => $"{duration.TotalMilliseconds:0} ms",
-        < 60_000 => $"{duration.TotalSeconds:0.#} s",
-        _ => $"{(int)duration.TotalMinutes}m {duration.Seconds:00}s"
-    };
-
     /// <summary>What the step declared it takes and gives, which is the shape of its connectors.</summary>
     private static string Describe(StepNode step)
     {
@@ -843,18 +856,6 @@ public partial class UC_Board : UserControl
         return $"in  {inputs}\nout {outputs}";
     }
 
-    /// <summary>
-    /// The most recent thing the step said.
-    /// </summary>
-    /// <remarks>
-    /// One line, not the log: the card is a summary, and the panel on the right is where the whole
-    /// log lives. The last line is the useful one — it is what the step was doing when it stopped.
-    /// </remarks>
-    private static string LastLine(StepNode step)
-    {
-        LogNode? last = step.Attempts.LastOrDefault()?.Logs.LastOrDefault();
-        return last is null ? "> …" : "> " + last.Render();
-    }
 
     private Brush BrushFor(StepNode step)
     {
@@ -876,6 +877,16 @@ public partial class UC_Board : UserControl
     /// Raised when the reader asks for the run's summary by clicking the verdict drawn on the board.
     /// </summary>
     public event Action? SummaryRequested;
+
+    /// <summary>
+    /// Raised when the reader picks a step, by its stage and its index within it.
+    /// </summary>
+    /// <remarks>
+    /// The board says which step was picked; what showing a step means is the window's business. The
+    /// board reached for the controller directly before, which made every card's click handler depend
+    /// on a window having been built first.
+    /// </remarks>
+    public event Action<string, int>? StepSelected;
 
     /// <summary>Asks for the summary, as clicking the verdict does.</summary>
     /// <remarks>
@@ -986,7 +997,7 @@ public partial class UC_Board : UserControl
             {
                 if (step.Lifecycle is DebugLifecycleState.Error or DebugLifecycleState.Timeout)
                 {
-                    MainWindow.Shell.SelectStep(stage.Name, step.StepId);
+                    StepSelected?.Invoke(stage.Name, step.StepId);
                     BringIntoView(stage.Name, step.StepId);
                     return;
                 }
@@ -1140,7 +1151,6 @@ public partial class UC_Board : UserControl
         TextBlock Name,
         TextBlock Note,
         TextBlock Outputs,
-        TextBlock Log,
         TextBlock Elapsed,
         Border Breakpoint);
 

@@ -16,4 +16,8 @@
 		<ProjectReference Include="..\TestFramework.DebugUI.Docking\TestFramework.DebugUI.Docking.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+		<InternalsVisibleTo Include="TestFramework.DebugUI.State.Tests" />
+	</ItemGroup>
+
 </Project>

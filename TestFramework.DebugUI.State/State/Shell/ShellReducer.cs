@@ -14,6 +14,7 @@ public sealed class ShellReducer : Reducer<MainState>
     {
         Scope(MainSelectors.SelectShell)
             .On(ShellActions.SetTransportStatus, (state, status) => state with { Transport = status })
+            .On(ShellActions.SetTransportDetails, (state, details) => state with { Details = details })
             .On(ShellActions.AwaitRerun, (state, test) => state with { AwaitedRerun = test });
     }
 }

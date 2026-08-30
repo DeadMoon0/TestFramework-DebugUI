@@ -17,6 +17,8 @@ using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Runs;
 
+using TestFramework.DebugUI.State.Transport;
+
 namespace TestFramework.DebugUI.Controls.Runs;
 
 /// <summary>
@@ -61,8 +63,15 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
     private string? selected;
 
     /// <summary>Creates the tree and binds it.</summary>
-    public UC_Runs()
+        /// <summary>What this tree can ask the shell to do.</summary>
+    private readonly IShellCommands commands;
+
+    /// <param name="commands">What this tree can ask the shell to do.</param>
+    public UC_Runs(IShellCommands commands)
     {
+        ArgumentNullException.ThrowIfNull(commands);
+        this.commands = commands;
+
         InitializeComponent();
 
         subscriptions.Add(StateStore<MainState>.Default
@@ -229,7 +238,7 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
                         chevron: single ? null : expanded.Contains(testKey),
                         tip: test.Test,
                         act: single
-                            ? () => MainWindow.Shell.SelectRun(test.Runs[0].SessionId)
+                            ? () => commands.SelectRun(test.Runs[0].SessionId)
                             : () => Toggle(testKey),
                         selected: single && IsSelected(test.Runs[0])));
 
@@ -406,7 +415,7 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
         content.Children.Add(when);
         content.Children.Add(what);
 
-        return Clickable(content, indent, isSelected, run.Test, () => MainWindow.Shell.SelectRun(run.SessionId));
+        return Clickable(content, indent, isSelected, run.Test, () => commands.SelectRun(run.SessionId));
     }
 
     /// <summary>What became of a run, in the one word the rail has room for.</summary>
@@ -422,24 +431,7 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
     };
 
     private Border Clickable(UIElement content, double indent, bool selected, string? tip, Action act)
-    {
-        Border row = new()
-        {
-            CornerRadius = new CornerRadius(4),
-            Background = selected ? (Brush)FindResource("SurfaceRaised") : Brushes.Transparent,
-            Padding = new Thickness(4, 5, 8, 5),
-            Margin = new Thickness(indent, 0, 0, 1),
-            Cursor = Cursors.Hand,
-            ToolTip = tip,
-            Child = content
-        };
-
-        row.MouseLeftButtonUp += (_, _) => act();
-        row.MouseEnter += (_, _) => { if (!selected) row.Background = (Brush)FindResource("SurfaceRaised"); };
-        row.MouseLeave += (_, _) => { if (!selected) row.Background = Brushes.Transparent; };
-
-        return row;
-    }
+        => InteractiveRow.Wrap(this, content, indent, selected, tip, act);
 
     private Path Chevron(bool open) => new()
     {
@@ -483,7 +475,7 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
 
     private void btClearFilter_Click(object sender, RoutedEventArgs e) => tbFilter.Text = string.Empty;
 
-    private void btRefresh_Click(object sender, RoutedEventArgs e) => MainWindow.Shell.RefreshRecordedRuns();
+    private void btRefresh_Click(object sender, RoutedEventArgs e) => commands.RefreshRecordedRuns();
 
     /// <summary>
     /// Lets go of the store.

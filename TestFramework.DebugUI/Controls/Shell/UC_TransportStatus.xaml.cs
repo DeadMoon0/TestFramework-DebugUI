@@ -101,36 +101,31 @@ public partial class UC_TransportStatus : UserControl
 
     private void Describe(ImmutableList<RunSummary> runs)
     {
-        PipeRunEventSource pipe = MainWindow.Shell.Pipe;
-
-        int attached = pipe.AttachedRunCount;
+        TransportDetails details = StateStore<MainState>.Default.GetValue(state => state.Shell.Details);
 
         // Never composed with the status word. Pairing them produced "Attached - nothing attached",
         // which was true of a sticky status and nonsense to read.
-        tbGeneral.Text = attached switch
+        tbGeneral.Text = details.AttachedRuns switch
         {
             0 => "Nothing attached",
             1 => "1 run attached",
-            _ => $"{attached} runs attached at once"
+            _ => $"{details.AttachedRuns} runs attached at once"
         };
 
-        tbGeneralNote.Text = $"Up to {pipe.MaxConcurrentRuns} at once, one connection each.";
-        tbPipeName.Text = pipe.PipeName;
+        tbGeneralNote.Text = $"Up to {details.MaxConcurrentRuns} at once, one connection each.";
+        tbPipeName.Text = details.PipeName;
 
-        // Named from the transport, described from the store: the transport knows which sessions are
-        // connected, and the store knows what each of them is doing.
-        ImmutableList<string> sessionIds = pipe.AttachedSessionIds.ToImmutableList();
+        // A live run is an attached one, so the connections are read from the same place everything else
+        // about a run is read from. Asking the transport for its session ids meant holding the transport
+        // to draw a list, and gave rows for sessions the store could not name.
+        ImmutableList<RunSummary> live = [.. runs.Where(run => run.IsLive)];
 
         spConnections.Children.Clear();
 
-        foreach (string sessionId in sessionIds)
-        {
-            RunSummary? run = runs.FirstOrDefault(candidate => string.Equals(candidate.SessionId, sessionId, StringComparison.Ordinal));
+        foreach (RunSummary run in live)
+            spConnections.Children.Add(Row(run.SessionId, run));
 
-            spConnections.Children.Add(Row(sessionId, run));
-        }
-
-        tbNoConnections.Visibility = sessionIds.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        tbNoConnections.Visibility = live.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>One connection, and what it is doing.</summary>

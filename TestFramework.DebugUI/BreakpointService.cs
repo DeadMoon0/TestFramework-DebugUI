@@ -1,9 +1,13 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
+using Axiom.State;
+using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Runs;
 using TestFramework.DebugUI.State.Settings;
 using TestFramework.DebugUI.State.Transport;
 
@@ -26,10 +30,18 @@ namespace TestFramework.DebugUI;
 /// <c>Act</c> in every other test that ran afterwards, saved to disk and across restarts. Stage
 /// names are conventional, which is exactly why they collide.
 /// </para>
+/// <para>
+/// Which test that is comes from the store, read here rather than pushed in from outside. It used to
+/// be told — by the board, in its constructor — which meant marks worked only because that one
+/// control happened to exist and happened to subscribe. Any second surface offering to set a mark
+/// would have filed it against whatever test the board last saw, and the failure would have been
+/// silent.
+/// </para>
 /// </remarks>
-public static class Breakpoints
+public sealed class BreakpointService : IDisposable
 {
-    private static readonly ConcurrentDictionary<Key, bool> Set = new();
+    private readonly ConcurrentDictionary<Key, bool> marks = new();
+    private readonly IDisposable? watching;
 
     /// <summary>
     /// The run that has asked to be stopped at its next step, whichever step that turns out to be.
@@ -39,7 +51,7 @@ public static class Breakpoints
     /// attached at once, and a bare flag would be consumed by whichever of them happened to reach a step
     /// first. Cleared as it is read, which is what makes it a single step rather than a mode.
     /// </remarks>
-    private static string? stepping;
+    private string? stepping;
 
     /// <summary>
     /// The test the board is currently showing.
@@ -49,10 +61,24 @@ public static class Breakpoints
     /// because the board a mark is set on is always the selected run's — the two cannot disagree. It is the
     /// answering side, on the reader thread, that has to name its own test, and it does.
     /// </remarks>
-    private static string lookingAt = string.Empty;
+    private string lookingAt = string.Empty;
+
+    /// <summary>
+    /// Creates a service that follows one store's selected run.
+    /// </summary>
+    /// <param name="store">
+    /// Where the test in view is read from. Optional so the marks can be exercised on their own,
+    /// with <see cref="NowLookingAt"/> standing in for the selection.
+    /// </param>
+    public BreakpointService(StateStore<MainState>? store = null)
+    {
+        watching = store?
+            .Bind(RunsSelectors.SelectSelectedTest)
+            .Subscribe(NowLookingAt);
+    }
 
     /// <summary>Raised when a breakpoint is added or removed, or the test in view changes.</summary>
-    public static event Action? Changed;
+    public event Action? Changed;
 
     /// <summary>
     /// Gets or sets a value indicating whether a failing step should stop the run.
@@ -70,16 +96,16 @@ public static class Breakpoints
     /// down yet.
     /// </para>
     /// </remarks>
-    public static bool BreakOnFailure { get; set; }
+    public bool BreakOnFailure { get; set; }
 
     /// <summary>
     /// Says which test's marks the board is showing.
     /// </summary>
     /// <remarks>
-    /// Raises <see cref="Changed"/> so the markers are redrawn: a different test has different marks, and
-    /// leaving the old ones lit would show marks that belong to the run you just navigated away from.
+    /// Followed from the store by default; public so a test can say it directly, and so a surface with a
+    /// notion of "in view" that the store does not model could say it too.
     /// </remarks>
-    public static void NowLookingAt(string? test)
+    public void NowLookingAt(string? test)
     {
         string next = test ?? string.Empty;
 
@@ -98,7 +124,7 @@ public static class Breakpoints
     /// alternative — leaving it pending because a real breakpoint answered first — would stop twice at the
     /// same place and read as the step-forward having done nothing.
     /// </remarks>
-    public static bool ShouldPause(BreakpointQuestion question)
+    public bool ShouldPause(BreakpointQuestion question)
     {
         if (question?.Request is null)
             return false;
@@ -109,55 +135,74 @@ public static class Breakpoints
         // A run whose test could not be identified is not matched against marks at all. The alternative is
         // treating "unknown" as a name several runs share, which is the collision this key exists to end.
         return question.Test is { Length: > 0 } test
-               && Set.ContainsKey(new Key(test, question.Request.Stage, question.Request.StepId));
+               && marks.ContainsKey(new Key(test, question.Request.Stage, question.Request.StepId));
     }
 
     /// <summary>
-    /// Asks a run to stop at its next step, whether or not that step has a breakpoint.
+    /// Steps one run forward: arms a stop at its next step, then lets it go.
     /// </summary>
     /// <remarks>
-    /// Arming this does not release the run. The caller releases it afterwards, and the run then reaches
-    /// its next step and asks — by which time this is waiting for it.
+    /// <para>
+    /// The two halves are here together because their order is the whole correctness of stepping. A run
+    /// let go first can reach its next step and ask about it before this side has said anything, and it
+    /// sails past — so arming comes first, and a release that does not happen has to be undone, or the
+    /// run would stop unbidden at the next step it ever takes.
+    /// </para>
+    /// <para>
+    /// Which is why there is no way to arm and release separately. A caller holding two methods has to
+    /// remember the order and the undo; a caller holding this one cannot get either wrong.
+    /// </para>
     /// </remarks>
-    public static void StepOnce(string sessionId)
+    /// <param name="sessionId">The run to step.</param>
+    /// <param name="release">How to let the run go, reporting whether it was still there to release.</param>
+    /// <returns>Whether the run was released.</returns>
+    public async Task<bool> StepThroughAsync(string sessionId, Func<Task<bool>> release)
+    {
+        ArgumentNullException.ThrowIfNull(release);
+
+        if (string.IsNullOrWhiteSpace(sessionId))
+            return false;
+
+        ArmNextStep(sessionId);
+
+        bool released;
+        try
+        {
+            released = await release();
+        }
+        catch (Exception)
+        {
+            CancelStep(sessionId);
+            throw;
+        }
+
+        if (!released)
+            CancelStep(sessionId);
+
+        return released;
+    }
+
+    /// <summary>
+    /// Asks a run to stop at its next step, without letting it go.
+    /// </summary>
+    /// <remarks>
+    /// For the run that is going to reach its next step on its own — a failure has just been reported and
+    /// nothing is holding it. Stepping forward from a breakpoint is <see cref="StepThroughAsync"/>, which
+    /// is a different act and owns both halves of it.
+    /// </remarks>
+    public void ArmNextStep(string sessionId)
     {
         if (!string.IsNullOrWhiteSpace(sessionId))
             Interlocked.Exchange(ref stepping, sessionId);
     }
 
     /// <summary>Whether a run is waiting to take a single step.</summary>
-    public static bool IsStepping(string sessionId)
+    public bool IsStepping(string sessionId)
         => string.Equals(Volatile.Read(ref stepping), sessionId, StringComparison.Ordinal);
 
-    /// <summary>
-    /// Withdraws a pending single step.
-    /// </summary>
-    /// <remarks>
-    /// For when the release that was supposed to follow it did not happen, and for a run that has finished
-    /// without ever reaching another step. Arming has to come first — a run released before it is armed can
-    /// reach its next step and sail past — so the failed case has to be undone rather than avoided, or the
-    /// run would stop unbidden at the next step it ever takes.
-    /// </remarks>
-    public static void CancelStep(string sessionId)
-    {
-        if (!string.IsNullOrWhiteSpace(sessionId))
-            Interlocked.CompareExchange(ref stepping, null, sessionId);
-    }
-
-    /// <summary>Consumes a pending single step for one run, reporting whether there was one.</summary>
-    private static bool TakeStep(string sessionId)
-    {
-        if (string.IsNullOrWhiteSpace(sessionId))
-            return false;
-
-        // Compared and cleared in one operation: this is read from the transport's reader thread, and two
-        // runs reaching a step together must not both be told to stop.
-        return string.Equals(Interlocked.CompareExchange(ref stepping, null, sessionId), sessionId, StringComparison.Ordinal);
-    }
-
     /// <summary>Reports whether the test in view has a breakpoint on a step.</summary>
-    public static bool IsSet(string stageName, int stepId)
-        => lookingAt.Length > 0 && Set.ContainsKey(new Key(lookingAt, stageName, stepId));
+    public bool IsSet(string stageName, int stepId)
+        => lookingAt.Length > 0 && marks.ContainsKey(new Key(lookingAt, stageName, stepId));
 
     /// <summary>
     /// Adds or removes a breakpoint on the test in view, reporting whether it is now set.
@@ -167,40 +212,33 @@ public static class Breakpoints
     /// would apply to every other unidentified run — nothing happens and the marker stays unlit, which is
     /// the truthful outcome for a run this window cannot name.
     /// </remarks>
-    public static bool Toggle(string stageName, int stepId)
+    public bool Toggle(string stageName, int stepId)
     {
         if (lookingAt.Length == 0)
             return false;
 
         Key key = new(lookingAt, stageName, stepId);
 
-        bool nowSet;
-        if (Set.ContainsKey(key))
-        {
-            Set.TryRemove(key, out _);
-            nowSet = false;
-        }
-        else
-        {
-            Set[key] = true;
-            nowSet = true;
-        }
+        // One operation rather than a contains-then-remove: the marks are read from the transport's
+        // reader thread while the UI thread writes them, and the pair could interleave into a mark that
+        // is neither set nor cleared.
+        bool nowSet = !marks.TryRemove(key, out _) && marks.TryAdd(key, true);
 
         Changed?.Invoke();
         return nowSet;
     }
 
     /// <summary>Removes every breakpoint, and any pending single step with them.</summary>
-    public static void Clear()
+    public void Clear()
     {
-        Set.Clear();
+        marks.Clear();
         Interlocked.Exchange(ref stepping, null);
         Changed?.Invoke();
     }
 
     /// <summary>The breakpoints currently set, in a form that can be written to disk.</summary>
-    public static ImmutableList<BreakpointMark> Snapshot()
-        => [.. Set.Keys
+    public ImmutableList<BreakpointMark> Snapshot()
+        => [.. marks.Keys
             .OrderBy(key => key.Test, StringComparer.Ordinal)
             .ThenBy(key => key.StageName, StringComparer.Ordinal)
             .ThenBy(key => key.StepId)
@@ -222,9 +260,9 @@ public static class Breakpoints
     /// had even been shown.
     /// </para>
     /// </remarks>
-    public static void Restore(IEnumerable<BreakpointMark>? marks)
+    public void Restore(IEnumerable<BreakpointMark>? marks)
     {
-        Set.Clear();
+        this.marks.Clear();
         Interlocked.Exchange(ref stepping, null);
 
         if (marks is not null)
@@ -232,11 +270,38 @@ public static class Breakpoints
             foreach (BreakpointMark mark in marks)
             {
                 if (!string.IsNullOrWhiteSpace(mark?.Stage) && !string.IsNullOrWhiteSpace(mark?.Test))
-                    Set[new Key(mark.Test, mark.Stage, mark.StepId)] = true;
+                    this.marks[new Key(mark.Test, mark.Stage, mark.StepId)] = true;
             }
         }
 
         Changed?.Invoke();
+    }
+
+    /// <summary>Stops following the store.</summary>
+    public void Dispose() => watching?.Dispose();
+
+    /// <summary>
+    /// Withdraws a pending single step.
+    /// </summary>
+    /// <remarks>
+    /// Private because the only caller that needs it is the release that did not happen, and that lives
+    /// in <see cref="StepThroughAsync"/> — which is the point of it being one method.
+    /// </remarks>
+    private void CancelStep(string sessionId)
+    {
+        if (!string.IsNullOrWhiteSpace(sessionId))
+            Interlocked.CompareExchange(ref stepping, null, sessionId);
+    }
+
+    /// <summary>Consumes a pending single step for one run, reporting whether there was one.</summary>
+    private bool TakeStep(string sessionId)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+            return false;
+
+        // Compared and cleared in one operation: this is read from the transport's reader thread, and two
+        // runs reaching a step together must not both be told to stop.
+        return string.Equals(Interlocked.CompareExchange(ref stepping, null, sessionId), sessionId, StringComparison.Ordinal);
     }
 
     private readonly record struct Key(string Test, string StageName, int StepId);

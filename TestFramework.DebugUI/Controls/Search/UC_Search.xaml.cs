@@ -284,7 +284,7 @@ public partial class UC_Search : UserControl
 
         if (hit.StageName is { } stage && hit.StepId is { } stepId)
         {
-            MainWindow.Shell.SelectStep(stage, stepId);
+            StepPicked?.Invoke(stage, stepId);
             return;
         }
 
@@ -294,6 +294,13 @@ public partial class UC_Search : UserControl
 
     /// <summary>Raised when the reader picks a value, so the window can open the inspector on it.</summary>
     public event Action<string, bool>? Opened;
+
+    /// <summary>Raised when the reader picks a step, so the window can show it.</summary>
+    /// <remarks>
+    /// The pair to <see cref="Opened"/>: a hit is either a step or a value, and neither of them is this
+    /// control's to act on. Both are said the same way.
+    /// </remarks>
+    public event Action<string, int>? StepPicked;
 
     private void Move(int by)
     {

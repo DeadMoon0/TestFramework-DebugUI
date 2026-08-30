@@ -33,7 +33,7 @@ public partial class DockFloatWindow : Window
         // the source has been created.
         SourceInitialized += (_, _) =>
         {
-            ArcylicManager.RoundCorners(Handle());
+            WindowEffects.RoundCorners(Handle());
 
             if (System.Windows.Interop.HwndSource.FromHwnd(Handle()) is { } source)
                 source.AddHook(OnMessage);

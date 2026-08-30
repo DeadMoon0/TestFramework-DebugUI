@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Windows;
+using TestFramework.DebugUI.State.Diagnostics;
 
 namespace TestFramework.DebugUI.Copying;
 
@@ -27,7 +28,7 @@ public static class Clipboards
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             return false;
         }
     }

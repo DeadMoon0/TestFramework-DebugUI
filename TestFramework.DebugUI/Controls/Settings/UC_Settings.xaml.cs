@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.State.Settings;
+using TestFramework.DebugUI.State.Diagnostics;
 
 namespace TestFramework.DebugUI.Controls.Settings;
 
@@ -27,6 +28,8 @@ namespace TestFramework.DebugUI.Controls.Settings;
 /// </remarks>
 public partial class UC_Settings : UserControl
 {
+    private BreakpointService? breakpoints;
+
     public UC_Settings()
     {
         InitializeComponent();
@@ -41,8 +44,27 @@ public partial class UC_Settings : UserControl
         // breaks, which has nothing to do with where the window goes when it is put away.
         tgBreakOnFailure.Toggled += value => BreakOnFailureChanged?.Invoke(value);
 
-        Breakpoints.Changed += ShowBreakpointCount;
-        Unloaded += (_, _) => Breakpoints.Changed -= ShowBreakpointCount;
+        Unloaded += (_, _) =>
+        {
+            if (breakpoints is not null)
+                breakpoints.Changed -= ShowBreakpointCount;
+        };
+    }
+
+    /// <summary>
+    /// Gives the panel the marks it counts and clears.
+    /// </summary>
+    public void UseBreakpoints(BreakpointService service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+
+        if (breakpoints is not null)
+            breakpoints.Changed -= ShowBreakpointCount;
+
+        breakpoints = service;
+        breakpoints.Changed += ShowBreakpointCount;
+
+        ShowBreakpointCount();
     }
 
     /// <summary>Raised when the user changes something.</summary>
@@ -129,7 +151,7 @@ public partial class UC_Settings : UserControl
 
     private void ShowBreakpointCount()
     {
-        int count = Breakpoints.Snapshot().Count;
+        int count = breakpoints?.Snapshot().Count ?? 0;
 
         tbBreakpoints.Text = count switch
         {
@@ -194,7 +216,7 @@ public partial class UC_Settings : UserControl
     /// </remarks>
     private void Panel_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => e.Handled = true;
 
-    private void btClearBreakpoints_Click(object sender, RoutedEventArgs e) => Breakpoints.Clear();
+    private void btClearBreakpoints_Click(object sender, RoutedEventArgs e) => breakpoints?.Clear();
 
     private void btOpenRuns_Click(object sender, RoutedEventArgs e) => Reveal(SafeRunsDirectory());
 
@@ -225,7 +247,7 @@ public partial class UC_Settings : UserControl
         catch (Exception e)
         {
             // Not worth interrupting anyone over: the path is on screen and can be copied.
-            Debug.WriteLine(e);
+            Log.Write(e);
         }
     }
 
@@ -237,7 +259,7 @@ public partial class UC_Settings : UserControl
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             return null;
         }
     }

@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
+using TestFramework.DebugUI.State.Diagnostics;
 
 namespace TestFramework.DebugUI;
 
@@ -202,7 +203,7 @@ public sealed class TrayIcon : IDisposable
         {
             // The shell can be mid-restart, in which case the call fails and the icon simply is not
             // there. Nothing about that should reach the user as an error.
-            Debug.WriteLine(e);
+            Log.Write(e);
             return false;
         }
     }
@@ -227,7 +228,7 @@ public sealed class TrayIcon : IDisposable
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             return IntPtr.Zero;
         }
     }

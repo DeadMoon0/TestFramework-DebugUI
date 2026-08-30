@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Pipes;
 using System.Text;
 using System.Threading;
+using TestFramework.DebugUI.State.Diagnostics;
 
 namespace TestFramework.DebugUI;
 
@@ -72,7 +73,7 @@ public sealed class SingleInstance : IDisposable
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
 
             return new SingleInstance(null, isOwner: true);
         }
@@ -126,7 +127,7 @@ public sealed class SingleInstance : IDisposable
         catch (Exception e)
         {
             // A timeout, or no pipe at all. Either way the caller has to get on with starting.
-            Debug.WriteLine(e);
+            Log.Write(e);
 
             return false;
         }
@@ -160,7 +161,7 @@ public sealed class SingleInstance : IDisposable
             }
             catch (Exception e)
             {
-                Debug.WriteLine(e);
+                Log.Write(e);
 
                 if (disposed)
                     return;
@@ -203,7 +204,7 @@ public sealed class SingleInstance : IDisposable
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
         }
 
         mutex?.Dispose();

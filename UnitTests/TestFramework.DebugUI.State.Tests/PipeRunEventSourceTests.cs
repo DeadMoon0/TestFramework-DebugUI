@@ -211,6 +211,35 @@ public sealed class PipeRunEventSourceTests
     }
 
     [Fact]
+    public async Task ASessionEndingIsReportedWhetherOrNotItFinished()
+    {
+        // Anything kept for a session has to be released on either ending. A run that finished says
+        // so; a killed host never does, and this is the only edge that happens for both.
+        using PipeScope scope = new();
+        using Watcher watcher = new(scope.PipeName);
+
+        List<SessionEnded> endings = [];
+        watcher.Source.SessionEnded += ended => { lock (endings) endings.Add(ended); };
+
+        using (NamedPipeClientStream client = new(".", scope.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly))
+        {
+            await client.ConnectAsync((int)Patience.TotalMilliseconds);
+            byte[] frame = DebugEnvelopeCodec.EncodeFrame(DebugEnvelopeCodec.Wrap(Init("vanished"), 1));
+            await client.WriteAsync(frame, 0, frame.Length);
+            await client.FlushAsync();
+
+            await WaitForAsync(() => watcher.Source.AttachedRunCount == 1, "The run never attached.");
+        }
+
+        await WaitForAsync(
+            () => { lock (endings) { return endings.Any(ended => ended.SessionId == "vanished"); } },
+            "A session that disconnected was never reported as ended.");
+
+        lock (endings)
+            Assert.False(endings.First(ended => ended.SessionId == "vanished").Finished);
+    }
+
+    [Fact]
     public async Task AConsumerThatThrowsDoesNotTakeDownTheRun()
     {
         // A bug in the consumer must not cost the run its connection. The run had nothing to do

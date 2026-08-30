@@ -28,6 +28,7 @@ using TestFramework.DebugUI.State.Settings;
 using TestFramework.DebugUI.State.Shell.Feed;
 using TestFramework.DebugUI.State.Transport;
 using static TestFramework.DebugUI.NativeMethods;
+using TestFramework.DebugUI.State.Diagnostics;
 
 namespace TestFramework.DebugUI;
 
@@ -41,9 +42,19 @@ namespace TestFramework.DebugUI;
 /// </remarks>
 public partial class MainWindow : Window
 {
-    private static ShellController? shell;
+    private readonly ShellController shell;
 
     private readonly SettingsStore settings = new();
+
+    /// <summary>
+    /// The steps the user has asked to stop at.
+    /// </summary>
+    /// <remarks>
+    /// Owned here and handed to the surfaces that need it, rather than reached for. It follows the
+    /// store's selected run by itself, so a mark is filed against the test in view whether or not any
+    /// particular control happens to exist.
+    /// </remarks>
+    private readonly BreakpointService breakpoints;
 
     /// <summary>What is unread, and the worst of it — which is what the bell shows without being opened.</summary>
     private readonly record struct Unread(int Count, FeedSeverity Worst);
@@ -59,13 +70,15 @@ public partial class MainWindow : Window
     private DockInsets reserved = DockInsets.None;
 
     /// <summary>
-    /// Gets the controller the views drive.
+    /// Gets the controller this window drives.
     /// </summary>
     /// <remarks>
-    /// Static for the same reason the store is: the window is a singleton, and threading it through
-    /// every control's constructor buys nothing when there is only ever one.
+    /// The window's own, not the application's. It used to be a static every control reached for, which
+    /// threw until this constructor had run — so each of twenty-six call sites depended on a window
+    /// existing first, and no control could be built in a test at all. What the panels need is handed to
+    /// them as <see cref="IShellCommands"/>; what the window's own chrome needs, it asks for here.
     /// </remarks>
-    public static ShellController Shell => shell ?? throw new InvalidOperationException("The window has not been created yet.");
+    private ShellController Shell => shell;
 
     private Controls.Runs.UC_Runs Runs => ucDock.Get<Controls.Runs.UC_Runs>(PanelId.Runs);
 
@@ -91,11 +104,13 @@ public partial class MainWindow : Window
             .UseSynchronizationContext(SynchronizationContext.Current!)
             .BuildAndMakeDefault();
 
+        breakpoints = new BreakpointService(StateStore<MainState>.Default);
+
         shell = new ShellController(StateStore<MainState>.Default)
         {
             // Every step asks before it runs, so this is consulted constantly. It answers from the
             // breakpoints the user has set, and with none set nothing is ever held.
-            PauseAtBreakpoint = Breakpoints.ShouldPause,
+            PauseAtBreakpoint = breakpoints.ShouldPause,
 
             // A run cannot be paused at the moment a step fails — a step is only ever asked before it
             // starts — so the failure arms a stop at whatever comes next. After a failure that is the
@@ -103,8 +118,8 @@ public partial class MainWindow : Window
             // everything the test built still standing, instead of tearing it down and finishing.
             StepEndedBadly = notice =>
             {
-                if (Breakpoints.BreakOnFailure)
-                    Breakpoints.StepOnce(notice.SessionId);
+                if (breakpoints.BreakOnFailure)
+                    breakpoints.ArmNextStep(notice.SessionId);
             }
         };
 
@@ -115,10 +130,16 @@ public partial class MainWindow : Window
 
         InitializeComponent();
 
+        // Before anything reaches for a panel: the dock host builds them, and each of them is built with
+        // what it may ask of the shell.
+        ucDock.UseCommands(shell);
+
         // The summary is a foreground question, so whoever asks for it - the verdict on the board, the
         // title bar, a shortcut - asks, and the window decides where it goes. Neither of them has any
         // business knowing what else is on screen.
         ucBoard.SummaryRequested += ShowSummary;
+        ucBoard.StepSelected += Shell.SelectStep;
+        ucBoard.UseBreakpoints(breakpoints);
 
         // The title bar acts on the run directly, but anything that moves the board is forwarded, because
         // the board owns its own zoom and selection.
@@ -129,6 +150,13 @@ public partial class MainWindow : Window
         ucExport.Exported += ReportExport;
         ucRunBar.FitRequested += ucBoard.FitToWindow;
         ucRunBar.FirstFailureRequested += ucBoard.GoToFirstFailure;
+
+        // What acts on the run is done here, where the controller and the breakpoints both live. The bar
+        // says what was asked for; it holds neither.
+        ucRunBar.ContinueRequested += () => _ = Shell.ContinueSelectedRunAsync();
+        ucRunBar.StepRequested += () => _ = StepSelectedRunAsync();
+        ucRunBar.StopRequested += () => _ = Shell.CancelSelectedRunAsync();
+        ucRunBar.RerunRequested += Shell.RerunSelected;
 
         // The bar chooses; the board draws. Nothing about a stroke is decided in the window.
         ucAnnotate.ToolChosen += ucBoard.SetAnnotationTool;
@@ -164,8 +192,8 @@ public partial class MainWindow : Window
 
         // Read before the window is shown, so restoring geometry does not visibly move it.
         saved = settings.Load();
-        Breakpoints.Restore(saved.Breakpoints);
-        Breakpoints.BreakOnFailure = saved.BreakOnFailure;
+        breakpoints.Restore(saved.Breakpoints);
+        breakpoints.BreakOnFailure = saved.BreakOnFailure;
         ApplyPlacement(saved.Window);
 
         // Where every panel is, as the reader last left it. Restored before the window is shown so it does
@@ -190,16 +218,30 @@ public partial class MainWindow : Window
 
         // Saved on change rather than on exit. A tool that is killed - and this one is attached to
         // test hosts that get killed - would otherwise lose every breakpoint set in the session.
-        Breakpoints.Changed += SaveBreakpoints;
+        breakpoints.Changed += SaveBreakpoints;
 
         ucSettings.Closed += () => ucSettings.Visibility = Visibility.Collapsed;
+        ucSettings.UseBreakpoints(breakpoints);
 
         // A value found by searching opens where a value opened from the rail does. The bar stays up, so a
         // reader can work through several hits without retyping the query.
         ucSearch.Opened += OpenValue;
+        ucSearch.StepPicked += Shell.SelectStep;
 
         // The bell reports what is unread and how bad it is; the panel it opens is only the list.
         ucFeed.Closed += () => ShowNotificationState();
+
+        // An entry names where it happened; going there is the window's to do.
+        ucFeed.EntryPicked += entry =>
+        {
+            if (entry.SessionId is null)
+                return;
+
+            Shell.SelectRun(entry.SessionId);
+
+            if (entry.Stage is not null && entry.StepId is not null)
+                Shell.SelectStep(entry.Stage, entry.StepId.Value);
+        };
 
         notifications = StateStore<MainState>.Default
             .Bind(FeedSelectors.SelectFeed)
@@ -232,7 +274,7 @@ public partial class MainWindow : Window
         // person who works this way finds it still armed next time.
         ucSettings.BreakOnFailureChanged += value =>
         {
-            Breakpoints.BreakOnFailure = value;
+            breakpoints.BreakOnFailure = value;
             Persist(saved with { BreakOnFailure = value });
         };
 
@@ -329,7 +371,7 @@ public partial class MainWindow : Window
         Bind(Shortcuts.Rerun, Shell.RerunSelected);
         Bind(Shortcuts.Stop, () => _ = Shell.CancelSelectedRunAsync());
         Bind(Shortcuts.Continue, () => _ = Shell.ContinueSelectedRunAsync());
-        Bind(Shortcuts.StepForward, () => _ = Controls.Shell.UC_RunBar.StepAsync());
+        Bind(Shortcuts.StepForward, () => _ = StepSelectedRunAsync());
         Bind(Shortcuts.Refresh, Shell.RefreshRecordedRuns);
 
         Bind(Shortcuts.Search, ShowSearch);
@@ -340,6 +382,23 @@ public partial class MainWindow : Window
     }
 
     private void Bind(RoutedUICommand command, Action run) => shortcuts[command] = run;
+
+    /// <summary>
+    /// Runs the selected run on to its next step and stops it there.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than in the bar because it takes both halves of the tool — the breakpoints that arm
+    /// the stop and the controller that lets the run go — and the order between them is not something a
+    /// second caller should have to know. <see cref="BreakpointService.StepThroughAsync"/> owns it.
+    /// </remarks>
+    private Task<bool> StepSelectedRunAsync()
+    {
+        string? sessionId = StateStore<MainState>.Default.GetValue(state => state.Runs.SelectedSessionId);
+
+        return sessionId is null
+            ? Task.FromResult(false)
+            : breakpoints.StepThroughAsync(sessionId, Shell.ContinueSelectedRunAsync);
+    }
 
     /// <summary>
     /// Runs whichever shortcut the key matches.
@@ -538,7 +597,7 @@ public partial class MainWindow : Window
         {
             // No tray icon is a smaller problem than no window. Watch mode degrades to "minimises
             // like anything else".
-            Debug.WriteLine(e);
+            Log.Write(e);
             shell?.Report(new FeedEntry
             {
                 AtUtc = DateTimeOffset.UtcNow,
@@ -621,7 +680,7 @@ public partial class MainWindow : Window
             notifier.IsHidden = true;
     }
 
-    private void SaveBreakpoints() => Persist(saved with { Breakpoints = Breakpoints.Snapshot() });
+    private void SaveBreakpoints() => Persist(saved with { Breakpoints = breakpoints.Snapshot() });
 
     private void Persist(UiSettings next)
     {
@@ -641,11 +700,11 @@ public partial class MainWindow : Window
         IsMaximized = WindowState == WindowState.Maximized
     };
 
-    private static void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         e.Handled = true;
 
-        shell?.Report(new FeedEntry
+        shell.Report(new FeedEntry
         {
             AtUtc = DateTimeOffset.UtcNow,
             Severity = FeedSeverity.Error,
@@ -657,17 +716,13 @@ public partial class MainWindow : Window
 
     private void Window_SourceInitialized(object sender, EventArgs e)
     {
+        IntPtr handle = new WindowInteropHelper(this).Handle;
+
+        HwndSource.FromHwnd(handle).AddHook(new HwndSourceHook(WindowProc));
+
         // Asked for once the handle exists, so the window and its popped-out panels are rounded the same way.
-        ArcylicManager.RoundCorners(new System.Windows.Interop.WindowInteropHelper(this).Handle);
-
-        IntPtr mWindowHandle = new WindowInteropHelper(this).Handle;
-        HwndSource.FromHwnd(mWindowHandle).AddHook(new HwndSourceHook(WindowProc));
-
-        DWMWINDOWATTRIBUTE attribute = DWMWINDOWATTRIBUTE.DWMWA_WINDOW_CORNER_PREFERENCE;
-        DWM_WINDOW_CORNER_PREFERENCE preference = DWM_WINDOW_CORNER_PREFERENCE.DWMWCP_ROUND;
-        DwmSetWindowAttribute(mWindowHandle, attribute, ref preference, sizeof(uint));
-
-        ArcylicManager.EnableBlur(mWindowHandle, System.Windows.Media.Color.FromArgb(200, 0, 0, 0));
+        WindowEffects.RoundCorners(handle);
+        WindowEffects.EnableBlur(handle, System.Windows.Media.Color.FromArgb(200, 0, 0, 0));
     }
 
     private static IntPtr WindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -682,17 +737,17 @@ public partial class MainWindow : Window
         return IntPtr.Zero;
     }
 
+    /// <summary>
+    /// Keeps the corners in step with the window's state.
+    /// </summary>
+    /// <remarks>
+    /// A maximized window's edges are the screen's, and rounding them cuts the corners off the content
+    /// with no frame to show for it.
+    /// </remarks>
     private void Window_StateChanged(object sender, EventArgs e)
-    {
-        IntPtr mWindowHandle = new WindowInteropHelper(this).Handle;
-
-        DWMWINDOWATTRIBUTE attribute = DWMWINDOWATTRIBUTE.DWMWA_WINDOW_CORNER_PREFERENCE;
-        DWM_WINDOW_CORNER_PREFERENCE preference = WindowState == WindowState.Normal
-            ? DWM_WINDOW_CORNER_PREFERENCE.DWMWCP_ROUND
-            : DWM_WINDOW_CORNER_PREFERENCE.DWMWCP_DONOTROUND;
-
-        DwmSetWindowAttribute(mWindowHandle, attribute, ref preference, sizeof(uint));
-    }
+        => WindowEffects.RoundCorners(
+            new WindowInteropHelper(this).Handle,
+            rounded: WindowState == WindowState.Normal);
 
     private static void WmGetMinMaxInfo(IntPtr hwnd, IntPtr lParam)
     {
@@ -740,7 +795,7 @@ public partial class MainWindow : Window
         if (bundlePath is null)
             return;
 
-        if (BundleImport.Open(bundlePath))
+        if (BundleImport.Open(bundlePath, Shell))
             Put(PanelId.Home);
     }
 
@@ -1137,15 +1192,15 @@ public partial class MainWindow : Window
             e.Cancel = true;
 
             // Saved before hiding: from here the process may be killed with the window never shown again.
-            Persist(saved with { Window = CurrentPlacement(), Breakpoints = Breakpoints.Snapshot() });
+            Persist(saved with { Window = CurrentPlacement(), Breakpoints = breakpoints.Snapshot() });
             HideToTray();
 
             return;
         }
 
-        Persist(saved with { Window = CurrentPlacement(), Breakpoints = Breakpoints.Snapshot() });
+        Persist(saved with { Window = CurrentPlacement(), Breakpoints = breakpoints.Snapshot() });
 
-        Breakpoints.Changed -= SaveBreakpoints;
+        breakpoints.Changed -= SaveBreakpoints;
         Application.Current.DispatcherUnhandledException -= OnDispatcherUnhandledException;
 
         // Before the store goes, since it is what is being observed.
@@ -1157,8 +1212,8 @@ public partial class MainWindow : Window
 
         StopWatching();
 
-        shell?.Dispose();
-        shell = null;
+        shell.Dispose();
+        breakpoints.Dispose();
 
         StateStore<MainState>.Default?.Dispose();
 

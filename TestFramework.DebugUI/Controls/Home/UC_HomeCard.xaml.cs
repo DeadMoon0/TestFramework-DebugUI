@@ -12,6 +12,8 @@ using Axiom.State;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Runs;
 
+using TestFramework.DebugUI.State.Transport;
+
 namespace TestFramework.DebugUI.Controls.Home;
 
 /// <summary>
@@ -23,14 +25,22 @@ namespace TestFramework.DebugUI.Controls.Home;
 /// </remarks>
 public partial class UC_HomeCard : UserControl
 {
+    /// <summary>What this row can ask the shell to do.</summary>
+    private readonly IShellCommands commands;
+
     private readonly CompositeDisposable subscriptions = [];
 
     private bool hovered;
 
     /// <summary>Creates a card for one session.</summary>
-    public UC_HomeCard(string sessionId)
+    public UC_HomeCard(string sessionId, IShellCommands commands)
     {
         SessionId = sessionId;
+
+        ArgumentNullException.ThrowIfNull(commands);
+
+        this.commands = commands;
+
 
         InitializeComponent();
 
@@ -134,13 +144,9 @@ public partial class UC_HomeCard : UserControl
             ? "unknown time"
             : run.StartedAtUtc.ToLocalTime().ToString("ddd HH:mm:ss", CultureInfo.CurrentCulture);
 
-        return run.Duration is { } took ? $"{when} · took {Took(took)}" : when;
+        return run.Duration is { } took ? $"{when} · took {DurationText.Compact(took)}" : when;
     }
 
-    private static string Took(TimeSpan took)
-        => took < TimeSpan.FromSeconds(1) ? $"{took.TotalMilliseconds:F0} ms"
-            : took < TimeSpan.FromMinutes(1) ? $"{took.TotalSeconds:F1} s"
-            : $"{(int)took.TotalMinutes}m {took.Seconds}s";
 
     /// <summary>
     /// Draws the run in proportion: what passed, what failed, and what has not happened yet.
@@ -180,7 +186,7 @@ public partial class UC_HomeCard : UserControl
 
     private void Root_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        MainWindow.Shell.SelectRun(SessionId);
+        commands.SelectRun(SessionId);
         Opened?.Invoke();
     }
 }

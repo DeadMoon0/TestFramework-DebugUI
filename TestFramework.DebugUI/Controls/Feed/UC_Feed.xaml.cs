@@ -39,7 +39,7 @@ public partial class UC_Feed : UserControl
         subscriptions.Add(StateStore<MainState>.Default
             .Bind(FeedSelectors.SelectEntries)
             .Select(entries => (IEnumerable<FeedEntry>)[.. entries.Reverse()])
-            .BindToCollection(spEntries.Children, entry => entry, entry => new UC_FeedItem(entry)));
+            .BindToCollection(spEntries.Children, entry => entry, entry => new UC_FeedItem(entry, Pick)));
 
         // An empty panel with a heading and nothing under it reads as a panel that failed to load.
         subscriptions.Add(StateStore<MainState>.Default
@@ -52,6 +52,17 @@ public partial class UC_Feed : UserControl
 
     /// <summary>Raised when the reader closes the panel, so the bell can go back to unpressed.</summary>
     public event Action? Closed;
+
+    /// <summary>
+    /// Raised when the reader clicks an entry that names a run, to be taken there.
+    /// </summary>
+    /// <remarks>
+    /// The rows are built by a collection binding, so each is handed a way to say it was picked and the
+    /// panel passes it on. Neither the row nor the panel decides what being taken there means.
+    /// </remarks>
+    public event Action<FeedEntry>? EntryPicked;
+
+    private void Pick(FeedEntry entry) => EntryPicked?.Invoke(entry);
 
     /// <summary>
     /// Whether the panel is up.

@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.State.Shell.Feed;
+using TestFramework.DebugUI.State.Diagnostics;
 
 namespace TestFramework.DebugUI.State.Transport;
 
@@ -101,6 +102,16 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
     /// disconnected. A consumer that shows a live count needs both edges.
     /// </remarks>
     public event Action? ConnectionsChanged;
+
+    /// <summary>
+    /// Raised when a session's connection is gone, whether or not the run finished first.
+    /// </summary>
+    /// <remarks>
+    /// The finish signal is the last thing a healthy run sends, so anything keyed on a session can be
+    /// released when it arrives — but a killed or crashed test host never sends one, and what was kept
+    /// for it would sit there for the life of the process. This is the edge that happens either way.
+    /// </remarks>
+    public event Action<SessionEnded>? SessionEnded;
 
     /// <summary>
     /// Decides whether a step that reached a breakpoint should be held.
@@ -205,7 +216,7 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
         }
 
         foreach (PipeSession session in sessions.Values)
@@ -221,7 +232,7 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
         }
 
         // Neither the token source nor the semaphore is disposed. Readers still unwinding release
@@ -262,7 +273,7 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
             }
             catch (Exception e)
             {
-                Debug.WriteLine(e);
+                Log.Write(e);
                 Report(FeedSeverity.Error, "Could not accept a test run.", e.Message);
 
                 // A failing accept must not spin. The usual causes — another UI holding the name, or
@@ -325,7 +336,7 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             Report(FeedSeverity.Error, "A test run's connection failed.", e.Message, session?.SessionId);
         }
         finally
@@ -338,7 +349,7 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
             }
             catch (Exception e)
             {
-                Debug.WriteLine(e);
+                Log.Write(e);
             }
 
             slots.Release();
@@ -381,7 +392,7 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
 
             // The step is waiting on an answer, so a frame we cannot read still gets one. Holding a
             // run because its consumer was confused is the one outcome worse than losing the pause.
@@ -402,7 +413,7 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             Report(FeedSeverity.Error, "Deciding whether to pause failed, so the step was allowed to continue.", e.Message, request.SessionId);
             return false;
         }
@@ -432,6 +443,8 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
         sessions.TryRemove(new KeyValuePair<string, PipeSession>(session.SessionId, session));
 
         ConnectionsChanged?.Invoke();
+
+        SessionEnded?.Invoke(new SessionEnded { SessionId = session.SessionId, Finished = session.SawFinish });
 
         if (session.SawFinish)
             return;
@@ -479,7 +492,7 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
             }
             catch (Exception e)
             {
-                Debug.WriteLine(e);
+                Log.Write(e);
                 Report(FeedSeverity.Error, "A run event could not be applied.", e.Message, envelope.SessionId);
             }
         }
@@ -501,7 +514,7 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
         }
     }
 
@@ -545,7 +558,7 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
             }
             catch (Exception e)
             {
-                Debug.WriteLine(e);
+                Log.Write(e);
             }
         }
     }

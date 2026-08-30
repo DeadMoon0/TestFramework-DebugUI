@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.IO;
 using Newtonsoft.Json;
+using TestFramework.DebugUI.State.Diagnostics;
 
 namespace TestFramework.DebugUI.State.Settings;
 
@@ -79,7 +80,7 @@ public sealed class SettingsStore
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             report?.Invoke($"Settings could not be read, so defaults are in use. {e.Message}");
 
             return UiSettings.Defaults;
@@ -112,7 +113,7 @@ public sealed class SettingsStore
         }
         catch (Exception e)
         {
-            Debug.WriteLine(e);
+            Log.Write(e);
             report?.Invoke($"Settings could not be saved. {e.Message}");
 
             TryRemove(temporary);
@@ -130,7 +131,7 @@ public sealed class SettingsStore
         {
             // Nothing useful left to do: the write already failed, and a leftover temporary file is
             // harmless next to losing the settings.
-            Debug.WriteLine(e);
+            Log.Write(e);
         }
     }
 }

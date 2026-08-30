@@ -71,8 +71,10 @@ public sealed class MainReducer : Reducer<MainState>
         catch (Exception)
         {
             // A malformed payload is a transport or version problem, not a reason to lose the run
-            // that is already on screen. The transport reports it to the feed.
-            return state;
+            // that is already on screen. The live transport reports what it cannot read to the feed,
+            // but a journal replayed from disk validates the envelope rather than the payload inside
+            // it — so this is the only place a recorded run's unreadable event is ever counted.
+            return state with { Shell = state.Shell with { UnreadableEvents = state.Shell.UnreadableEvents + 1 } };
         }
 
         state = TrackSession(state, envelope, signal);

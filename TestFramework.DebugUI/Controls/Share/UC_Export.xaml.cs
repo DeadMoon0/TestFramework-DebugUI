@@ -8,6 +8,10 @@ using Microsoft.Win32;
 using TestFramework.DebugUI.State.Bundles;
 using TestFramework.DebugUI.State.Shell.Feed;
 
+using Axiom.State;
+
+using TestFramework.DebugUI.State;
+
 namespace TestFramework.DebugUI.Controls.Share;
 
 /// <summary>
@@ -117,7 +121,7 @@ public partial class UC_Export : UserControl
         }
         catch (Exception exception) when (exception is System.IO.IOException or UnauthorizedAccessException)
         {
-            MainWindow.Shell.Report(new FeedEntry
+            StateStore<MainState>.Default.Dispatch(FeedActions.AppendEntry, new FeedEntry
             {
                 AtUtc = DateTimeOffset.UtcNow,
                 Severity = FeedSeverity.Error,

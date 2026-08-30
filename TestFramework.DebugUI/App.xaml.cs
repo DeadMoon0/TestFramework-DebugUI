@@ -1,8 +1,8 @@
 using System;
-using System.Diagnostics;
 using System.Linq;
 using System.Windows;
 using TestFramework.DebugUI.State.Bundles;
+using TestFramework.DebugUI.State.Diagnostics;
 
 namespace TestFramework.DebugUI
 {
@@ -94,7 +94,8 @@ namespace TestFramework.DebugUI
             if (found is null)
                 return null;
 
-            Debug.WriteLineIf(!System.IO.File.Exists(found), $"asked to open a bundle that is not there: {found}");
+            if (!System.IO.File.Exists(found))
+                Log.Write($"Asked to open a bundle that is not there: {found}");
 
             return found;
         }

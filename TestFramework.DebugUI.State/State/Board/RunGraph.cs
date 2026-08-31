@@ -56,6 +56,79 @@ public sealed record RunGraph
 
     /// <summary>Gets the assertions recorded across the run.</summary>
     public ImmutableList<AssertionNode> Assertions { get; init; } = ImmutableList<AssertionNode>.Empty;
+
+    /// <summary>
+    /// Gets the evidence the run produced, in the order it was produced.
+    /// </summary>
+    /// <remarks>
+    /// A list rather than a map keyed by step, because a widget is read two ways and both are
+    /// wanted: everything one step produced, and everything the run produced in order. Filtering a
+    /// list gives the first; the second would need the list back.
+    /// </remarks>
+    public ImmutableList<WidgetNode> Widgets { get; init; } = ImmutableList<WidgetNode>.Empty;
+}
+
+/// <summary>One piece of evidence the run produced, and where it came from.</summary>
+public sealed record WidgetNode
+{
+    /// <summary>Gets the stage it was produced in, when it was produced inside a step.</summary>
+    public string Stage { get; init; } = string.Empty;
+
+    /// <summary>Gets the step's index within its stage, when it was produced inside one.</summary>
+    public int? StepId { get; init; }
+
+    /// <summary>Gets which attempt of the step produced it, counting from one.</summary>
+    public int? Attempt { get; init; }
+
+    /// <summary>Gets the environment component that produced it, when it was not a step.</summary>
+    public string Component { get; init; } = string.Empty;
+
+    /// <summary>Gets what sort of widget this is, which is what a renderer is chosen by.</summary>
+    public string Kind { get; init; } = string.Empty;
+
+    /// <summary>Gets what it is of, in the producer's words.</summary>
+    public string Name { get; init; } = string.Empty;
+
+    /// <summary>Gets when it was taken.</summary>
+    public DateTimeOffset OccurredAtUtc { get; init; }
+
+    /// <summary>Gets what it is, described the way a value is.</summary>
+    public ValueDescription Description { get; init; } = ValueDescription.Empty;
+
+    /// <summary>
+    /// Compares by content, so a redelivered widget is recognised as the one already held.
+    /// </summary>
+    /// <remarks>
+    /// The same reason <see cref="AssertionNode"/> writes its own: the generated equality compares the
+    /// description by reference, and two built from the same replayed journal are never the same
+    /// instance — so every reopen would append the run's widgets again.
+    /// </remarks>
+    public bool Equals(WidgetNode? other)
+        => other is not null
+           && OccurredAtUtc == other.OccurredAtUtc
+           && string.Equals(Kind, other.Kind, StringComparison.Ordinal)
+           && string.Equals(Name, other.Name, StringComparison.Ordinal)
+           && string.Equals(Stage, other.Stage, StringComparison.Ordinal)
+           && StepId == other.StepId
+           && Attempt == other.Attempt
+           && string.Equals(Component, other.Component, StringComparison.Ordinal)
+           && Equals(Description, other.Description);
+
+    /// <inheritdoc />
+    public override int GetHashCode() => HashCode.Combine(OccurredAtUtc, Kind, Name, Stage, StepId, Attempt);
+
+    /// <summary>
+    /// Whether this widget belongs to one step's attempt.
+    /// </summary>
+    /// <remarks>
+    /// Asked by a surface showing one step: a widget a component produced is filed against the step
+    /// that built the environment, and showing it there would put a container's log on a step that
+    /// has nothing to do with it.
+    /// </remarks>
+    public bool BelongsTo(string stageName, int stepId)
+        => Component.Length == 0
+           && StepId == stepId
+           && string.Equals(Stage, stageName, StringComparison.Ordinal);
 }
 
 /// <summary>One stage and the steps it contains.</summary>

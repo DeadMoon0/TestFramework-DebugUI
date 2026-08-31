@@ -34,6 +34,22 @@ internal static class GraphBuilder
             ]
         };
 
+    /// <summary>The same run, with the named steps having drawn a widget.</summary>
+    internal static RunGraph Showing(RunGraph run, params (string Stage, int StepId)[] widgets)
+        => run with
+        {
+            Widgets =
+            [
+                .. widgets.Select(widget => new WidgetNode
+                {
+                    Stage = widget.Stage,
+                    StepId = widget.StepId,
+                    Kind = "tf.widget.screenshot",
+                    Name = "page"
+                })
+            ]
+        };
+
     internal static StageNode Stage(string name, params StepNode[] steps)
         => new() { Name = name, Steps = [.. steps] };
 

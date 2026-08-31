@@ -911,6 +911,13 @@ public partial class MainWindow : Window
         if (result.Manifest.IsAnonymous)
             parts.Add("Exported anonymously.");
 
+        // Said either way, because both are things the sender should know without opening the bundle:
+        // that pictures were held back, or that pictures went along with nothing having checked them.
+        if (result.ImagesExcluded > 0)
+            parts.Add($"{result.ImagesExcluded} picture(s) were left out; nothing can check what is in them.");
+        else if (result.ImagesIncluded > 0 && result.Manifest.IsAnonymous)
+            parts.Add($"{result.ImagesIncluded} picture(s) were included and their contents were not inspected.");
+
         Shell.Report(new FeedEntry
         {
             AtUtc = DateTimeOffset.UtcNow,

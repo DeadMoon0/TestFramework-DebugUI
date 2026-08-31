@@ -9,7 +9,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="Axiom.State" Version="0.5.0" />
-		<PackageReference Include="TestFramework.Core" Version="0.2.0" />
+		<PackageReference Include="TestFramework.Core" Version="0.5.0" />
 	</ItemGroup>
 
 	<ItemGroup>

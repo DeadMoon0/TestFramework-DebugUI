@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.State.Annotations;
 
 namespace TestFramework.DebugUI.State.Bundles;
@@ -40,6 +41,17 @@ public static class RunBundleWriter
         /// other way round.
         /// </remarks>
         public bool IncludeAnnotations { get; init; } = true;
+
+        /// <summary>
+        /// Gets a value indicating whether pictures travel with the runs.
+        /// </summary>
+        /// <remarks>
+        /// Separate from <see cref="IncludeArtifacts"/> because a picture is the one thing in a bundle whose
+        /// content nothing can inspect. Redaction rewrites named fields; it cannot see a logged-in user name
+        /// in a screenshot, and a sender who asked for anonymity has no way to check from here. So an
+        /// anonymous export leaves them out unless the sender says otherwise, having looked.
+        /// </remarks>
+        public bool IncludeImages { get; init; } = true;
 
         /// <summary>Gets a value indicating whether the sender is redacted.</summary>
         public bool Anonymous { get; init; }
@@ -86,6 +98,18 @@ public static class RunBundleWriter
 
         /// <summary>Gets the number of runs that carried marks.</summary>
         public int AnnotatedCount => Manifest.Runs.Count(run => run.HasAnnotations);
+
+        /// <summary>Gets how many pictures were left out because nothing could check them.</summary>
+        public int ImagesExcluded { get; init; }
+
+        /// <summary>
+        /// Gets how many pictures were included without their content being inspected.
+        /// </summary>
+        /// <remarks>
+        /// Reported even though the sender asked for them. What redaction promises is that the named fields
+        /// were rewritten, and a picture is the part of a bundle that promise does not reach.
+        /// </remarks>
+        public int ImagesIncluded { get; init; }
     }
 
     /// <summary>Writes a bundle, replacing anything already at the path.</summary>
@@ -96,6 +120,10 @@ public static class RunBundleWriter
 
         List<BundleRun> runs = [];
         List<string> missing = [];
+
+        // Every picture the runs named, whether or not it was sent: an anonymous export leaves them
+        // out, and the sender is told how many rather than being left to notice.
+        List<string> pictures = [];
         Dictionary<string, int> warnings = [];
 
         // Written to a temporary file and moved into place, so an export interrupted half way through does not
@@ -114,7 +142,7 @@ public static class RunBundleWriter
         {
             foreach (string journalPath in request.JournalPaths)
             {
-                if (AddRun(archive, journalPath, request, missing, warnings) is { } run)
+                if (AddRun(archive, journalPath, request, missing, warnings, pictures) is { } run)
                     runs.Add(run);
             }
 
@@ -130,6 +158,8 @@ public static class RunBundleWriter
             Path = bundlePath,
             Manifest = Manifest(request, [.. runs]),
             MissingFiles = [.. missing],
+            ImagesIncluded = request.IncludeImages ? pictures.Count : 0,
+            ImagesExcluded = request.IncludeImages ? 0 : pictures.Count,
             Warnings =
             [
                 .. warnings
@@ -158,7 +188,8 @@ public static class RunBundleWriter
         string journalPath,
         Request request,
         List<string> missing,
-        Dictionary<string, int> warnings)
+        Dictionary<string, int> warnings,
+        List<string> pictures)
     {
         if (!File.Exists(journalPath))
             return null;
@@ -229,6 +260,26 @@ public static class RunBundleWriter
         {
             foreach (ValueReference reference in Distinct(references))
             {
+                if (reference.IsPicture)
+                {
+                    pictures.Add(reference.RelativePath);
+
+                    // Left out of the archive but still named in the manifest, so a reader opening the
+                    // bundle is told the run had a picture rather than shown a run that never took one.
+                    if (!request.IncludeImages)
+                    {
+                        files.Add(new BundleFile
+                        {
+                            RelativePath = reference.RelativePath,
+                            SizeInBytes = reference.SizeInBytes,
+                            ContentHash = reference.ContentHash,
+                            WasMissing = true
+                        });
+
+                        continue;
+                    }
+                }
+
                 bool present = !string.IsNullOrWhiteSpace(reference.AbsolutePath) && File.Exists(reference.AbsolutePath);
 
                 if (present)
@@ -344,12 +395,17 @@ public static class RunBundleWriter
             if (string.IsNullOrWhiteSpace(relative))
                 continue;
 
+            // Read from the description around the body rather than from the file's name: what makes
+            // something a picture is what the run said it was, not what it happened to be called.
+            string? form = (candidate.Parent?.Parent as JObject)?["Preview"]?.Value<string>("Form");
+
             yield return new ValueReference
             {
                 AbsolutePath = candidate.Value<string>("Path"),
                 RelativePath = relative.Replace('\\', '/'),
                 SizeInBytes = candidate.Value<long?>("SizeInBytes") ?? 0,
-                ContentHash = candidate.Value<string>("ContentHash")
+                ContentHash = candidate.Value<string>("ContentHash"),
+                IsPicture = string.Equals(form, nameof(DebugPreviewForm.Image), StringComparison.Ordinal)
             };
         }
     }
@@ -399,5 +455,8 @@ public static class RunBundleWriter
         public long SizeInBytes { get; init; }
 
         public string? ContentHash { get; init; }
+
+        /// <summary>Whether this is a picture, whose content nothing can inspect before sending it.</summary>
+        public bool IsPicture { get; init; }
     }
 }

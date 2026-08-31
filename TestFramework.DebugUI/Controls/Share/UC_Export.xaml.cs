@@ -39,7 +39,18 @@ public partial class UC_Export : UserControl
         tgAnonymous.Note = "Drops your name, machine and user folders from what the framework recorded. Logs, values and artifacts are left as they are.";
         tgAnonymous.SetQuietly(false);
 
-        tgAnonymous.Toggled += _ => ShowWarnings([]);
+        tgImages.Label = "Include pictures";
+        tgImages.Note = "Screenshots and other pictures a run took. Nothing can check what is in them, so anonymous exports leave them out unless you have looked.";
+        tgImages.SetQuietly(true);
+
+        // Asking for anonymity turns pictures off, because that is the one part of a bundle the
+        // promise does not cover: redaction rewrites named fields, and a logged-in user name in a
+        // screenshot is not a field. Turning them back on is a deliberate second act.
+        tgAnonymous.Toggled += anonymous =>
+        {
+            tgImages.SetQuietly(!anonymous);
+            ShowWarnings([]);
+        };
     }
 
     /// <summary>Raised when the reader closes the panel without exporting.</summary>
@@ -92,6 +103,7 @@ public partial class UC_Export : UserControl
         {
             JournalPaths = journals,
             IncludeArtifacts = tgArtifacts.IsOn,
+            IncludeImages = tgImages.IsOn,
             Anonymous = tgAnonymous.IsOn,
             ExportedBy = Environment.UserName,
             ToolVersion = typeof(UC_Export).Assembly.GetName().Version?.ToString(),

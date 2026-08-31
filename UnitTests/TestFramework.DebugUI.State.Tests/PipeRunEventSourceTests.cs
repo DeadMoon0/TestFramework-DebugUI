@@ -418,7 +418,7 @@ public sealed class PipeRunEventSourceTests
         public override string Description => "Does nothing.";
         public override bool DoesReturn => false;
 
-        public override Task<EmptyStepResultContext?> Execute(IServiceProvider serviceProvider, VariableStore variableStore, ArtifactStore artifactStore, ScopedLogger logger, CancellationToken cancellationToken)
+        public override Task<EmptyStepResultContext?> Execute(RunContext context)
             => Task.FromResult<EmptyStepResultContext?>(EmptyStepResultContext.Instance);
 
         public override Step<EmptyStepResultContext> Clone() => new NoopStep().WithClonedOptions(this);
@@ -448,16 +448,16 @@ public sealed class PipeRunEventSourceTests
         public override string Description => "Waits until the run is cancelled.";
         public override bool DoesReturn => false;
 
-        public override async Task<EmptyStepResultContext?> Execute(IServiceProvider serviceProvider, VariableStore variableStore, ArtifactStore artifactStore, ScopedLogger logger, CancellationToken cancellationToken)
+        public override async Task<EmptyStepResultContext?> Execute(RunContext context)
         {
             recorder.Started.Set();
 
             DateTimeOffset deadline = DateTimeOffset.UtcNow + Patience;
 
-            while (!cancellationToken.IsCancellationRequested && DateTimeOffset.UtcNow < deadline)
+            while (!context.Deadline.Token.IsCancellationRequested && DateTimeOffset.UtcNow < deadline)
                 await Task.Delay(15, CancellationToken.None);
 
-            recorder.ObservedCancellation = cancellationToken.IsCancellationRequested;
+            recorder.ObservedCancellation = context.Deadline.Token.IsCancellationRequested;
             return EmptyStepResultContext.Instance;
         }
 

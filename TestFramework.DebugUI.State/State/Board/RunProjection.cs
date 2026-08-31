@@ -48,6 +48,7 @@ public static partial class RunProjection
             PipeValueUpdateSignal value => ApplyValueUpdate(graph, value),
             PipeLogEntrySignal log => ApplyLogEntry(graph, log),
             PipeAssertionSignal assertion => ApplyAssertion(graph, assertion),
+            PipeWidgetSignal widget => ApplyWidget(graph, widget),
             PipeBreakpointHitRequestSignal breakpoint => ApplyBreakpointHit(graph, breakpoint),
             PipeTimelineRunFinishedSignal finished => ApplyRunFinished(graph, finished),
             _ => graph

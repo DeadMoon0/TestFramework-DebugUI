@@ -177,7 +177,7 @@ public static class RunBoardLayout
 
                 foreach (StepNode step in row.Steps)
                 {
-                    StepBox box = new(row, step, x);
+                    StepBox box = new(row, step, x, HeightOf(row, step));
                     steps[new StepKey(row.StageName, step.StepId)] = box;
 
                     PlaceConnectors(box);
@@ -466,6 +466,20 @@ public static class RunBoardLayout
         private IEnumerable<StepBox> BoxesIn(Row row)
             => row.Steps.Select(step => steps[new StepKey(row.StageName, step.StepId)]);
 
+        /// <summary>
+        /// How tall a step's card is.
+        /// </summary>
+        /// <remarks>
+        /// Per step rather than per board: a step that drew something needs the room to show it, and
+        /// one that drew nothing would only be paying for empty space — a board of mostly-blank tall
+        /// cards is a board that fits smaller and reads worse. The verdict never grows: it is the
+        /// run's own summing up, and it says what it says in a line.
+        /// </remarks>
+        private double HeightOf(Row row, StepNode step)
+            => !row.IsVerdict && graph.Widgets.Any(widget => widget.BelongsTo(row.StageName, step.StepId))
+                ? measurements.StepHeightWithWidget
+                : measurements.StepHeight;
+
         /// <summary>Where a column sits for the purpose of comparing detours, before any shift.</summary>
         private double ColumnCostX(Column column)
             => column.IsInside ? column.X : PendingLaneX(column.OnLeft, column.Lane);
@@ -645,7 +659,11 @@ public static class RunBoardLayout
                 previousStage = row.StageName;
 
                 row.StepTop = y;
-                y = measurements.Snap(y + measurements.StepHeight);
+
+                // The tallest card in the row decides how deep the row is. Cards in a row share a top
+                // edge rather than a bottom one, so a short card beside a widget's leaves its space
+                // below it — which is where its own pipes drop into the channel anyway.
+                y = measurements.Snap(y + BoxesIn(row).Max(box => box.Height));
 
                 row.ChannelTop = y;
                 y = measurements.Snap(y + ChannelHeight(row.Index));
@@ -1038,7 +1056,7 @@ public static class RunBoardLayout
             internal double ChannelTop { get; set; }
         }
 
-        private sealed class StepBox(Row row, StepNode step, double x)
+        private sealed class StepBox(Row row, StepNode step, double x, double height)
         {
             internal Row Row => row;
 
@@ -1079,7 +1097,10 @@ public static class RunBoardLayout
                     OutputX[key] += distance;
             }
 
-            internal double Bottom(LayoutOptions measurements) => row.StepTop + measurements.StepHeight;
+            /// <summary>How tall this card is, which its own content decides.</summary>
+            internal double Height => height;
+
+            internal double Bottom(LayoutOptions measurements) => row.StepTop + height;
 
             internal LayoutNode ToNode(LayoutOptions measurements) => new()
             {
@@ -1090,7 +1111,7 @@ public static class RunBoardLayout
                 X = x,
                 Y = row.StepTop,
                 Width = measurements.StepWidth,
-                Height = measurements.StepHeight
+                Height = height
             };
         }
 

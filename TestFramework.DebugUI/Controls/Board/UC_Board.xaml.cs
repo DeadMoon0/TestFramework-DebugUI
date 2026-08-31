@@ -7,12 +7,14 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using Axiom.State;
 using Axiom.Wpf.Extensions;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.Controls.Annotate;
+using TestFramework.DebugUI.Controls.Detail;
 using TestFramework.DebugUI.Layout;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Annotations;
@@ -63,6 +65,14 @@ public partial class UC_Board : UserControl
 
     /// <summary>How deep the recessed strip a connector sits on runs into the card.</summary>
     private const double StripHeight = 16;
+
+    /// <summary>How tall the widget area inside a card is drawn.</summary>
+    /// <remarks>
+    /// What is left of a widget-sized card once the heading, the note and the outputs have had their
+    /// rows. Changing it moves every step on the board, and annotations are stored in board
+    /// coordinates — so it travels with a bump of the layout version, never on its own.
+    /// </remarks>
+    private const double WidgetHeight = 196;
 
     private readonly CompositeDisposable subscriptions = [];
     private readonly Dictionary<string, StepVisual> stepVisuals = new(StringComparer.Ordinal);
@@ -467,11 +477,29 @@ public partial class UC_Board : UserControl
         heading.Children.Add(name);
         heading.Children.Add(elapsed);
 
+        // Where the step shows what it did. Empty and collapsed on a board whose steps drew nothing,
+        // so an ordinary run keeps the short card; on a board that asked for room, this is the part
+        // of the card a reader actually looks at and the writing above it is the caption.
+        Border widget = new()
+        {
+            CornerRadius = new CornerRadius(4),
+            ClipToBounds = true,
+            Background = (Brush)FindResource("SurfaceSunken"),
+            Margin = new Thickness(0, 8, 0, 0),
+            Visibility = Visibility.Collapsed
+        };
+
         StackPanel body = new()
         {
             Margin = new Thickness(16, 6, 16, 6),
-            VerticalAlignment = VerticalAlignment.Center,
-            Children = { heading, note, outputs }
+
+            // Centred on a short card, where the writing is all there is; anchored to the top on a
+            // card sized for a widget, so a step that drew nothing reads as a card with room to
+            // spare rather than as a line of text floating in the middle of one.
+            VerticalAlignment = node.Height > LayoutOptions.Default.StepHeight
+                ? VerticalAlignment.Top
+                : VerticalAlignment.Center,
+            Children = { heading, note, widget, outputs }
         };
 
         Border box = new()
@@ -511,7 +539,7 @@ public partial class UC_Board : UserControl
         host.Children.Add(box);
         host.Children.Add(breakpoint);
 
-        stepVisuals[node.Id] = new StepVisual(box, status, name, note, outputs, elapsed, breakpoint);
+        stepVisuals[node.Id] = new StepVisual(box, status, name, note, outputs, elapsed, breakpoint, widget);
         return host;
     }
 
@@ -716,6 +744,7 @@ public partial class UC_Board : UserControl
                 visual.Name.Text = step.DisplayName;
                 visual.Note.Text = Note(step);
                 ShowElapsed(visual.Elapsed, stage.Name, step);
+                ShowWidget(visual.Widget, graph, stage.Name, step);
                 visual.Status.Background = BrushFor(step);
                 visual.Outputs.Text = Describe(step);
 
@@ -1145,6 +1174,101 @@ public partial class UC_Board : UserControl
         marker.Opacity = isSet ? 1 : RestingMarkerOpacity;
     }
 
+    /// <summary>
+    /// Puts the last picture a step took on its card.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The last one rather than all of them: a card has room for an affordance, and what it is saying
+    /// is "this step saw something, and it looked like this". The whole sequence is a click away in
+    /// the step panel.
+    /// </para>
+    /// <para>
+    /// Assigned here rather than built with the card, because a widget arrives long after the board
+    /// was laid out and changes no geometry — so it repaints rather than rebuilding, which is the
+    /// same rule everything else on a card follows.
+    /// </para>
+    /// </remarks>
+    private void ShowWidget(Border target, RunGraph graph, string stageName, StepNode step)
+    {
+        WidgetNode? last = null;
+
+        foreach (WidgetNode widget in graph.Widgets)
+        {
+            if (widget.BelongsTo(stageName, step.StepId))
+                last = widget;
+        }
+
+        // Rebuilt only when the step is showing something new. The graph is replaced on every event a
+        // live run produces, and re-decoding a picture per log line would make the board cost more
+        // than the run it is drawing.
+        string signature = last?.Description.Body?.ContentHash ?? last?.Name ?? string.Empty;
+
+        if (string.Equals(signature, target.Tag as string, StringComparison.Ordinal))
+            return;
+
+        target.Tag = signature;
+
+        if (last is null)
+        {
+            target.Child = null;
+            target.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        target.Height = WidgetHeight;
+        target.Visibility = Visibility.Visible;
+        target.Child = WidgetFace(last);
+    }
+
+    /// <summary>
+    /// What a widget looks like inside a card.
+    /// </summary>
+    /// <remarks>
+    /// The same two renderers the step panel uses, without its frame: on a board the card already is
+    /// the frame — it carries the name, the state, the timing and the connectors — so drawing a second
+    /// one inside it would be a box in a box saying the same thing twice.
+    /// </remarks>
+    private UIElement WidgetFace(WidgetNode widget)
+    {
+        DebugPreviewForm form = widget.Description.Preview?.Form ?? DebugPreviewForm.None;
+
+        if (form == DebugPreviewForm.Image)
+        {
+            BitmapSource? picture = WidgetImages.Read(
+                RunFiles.Resolve(widget.Description.Body),
+                widget.Description.Body?.ContentHash,
+                (int)LayoutOptions.Default.StepWidth);
+
+            if (picture is not null)
+            {
+                Image image = new()
+                {
+                    Source = picture,
+                    Stretch = Stretch.UniformToFill,
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    VerticalAlignment = VerticalAlignment.Top
+                };
+
+                RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+
+                return image;
+            }
+        }
+
+        return new TextBlock
+        {
+            Foreground = (Brush)FindResource("TextFaint"),
+            FontFamily = new FontFamily("Cascadia Mono, Consolas, Courier New"),
+            FontSize = 11,
+            Margin = new Thickness(10, 8, 10, 8),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Text = form is DebugPreviewForm.Text or DebugPreviewForm.Json or DebugPreviewForm.Markup
+                ? ValueInspection.PreviewText(widget.Description.Preview)
+                : widget.Description.Summary
+        };
+    }
+
     private sealed record StepVisual(
         Border Box,
         Border Status,
@@ -1152,7 +1276,8 @@ public partial class UC_Board : UserControl
         TextBlock Note,
         TextBlock Outputs,
         TextBlock Elapsed,
-        Border Breakpoint);
+        Border Breakpoint,
+        Border Widget);
 
     private sealed record VerdictVisual(Border Box, TextBlock Heading, TextBlock Why);
 }

@@ -18,6 +18,8 @@ using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Board.Comparison;
 using TestFramework.DebugUI.State.Bundles;
 
+using System.Windows.Media.Imaging;
+
 namespace TestFramework.DebugUI.Controls.Detail;
 
 /// <summary>
@@ -35,6 +37,13 @@ namespace TestFramework.DebugUI.Controls.Detail;
 /// </remarks>
 public partial class UC_ValueInspector : UserControl, IDisposable
 {
+    /// <summary>How wide a picture is decoded for the inspector's well.</summary>
+    /// <remarks>
+    /// The well is around 600 device-independent pixels and the tool runs per-monitor DPI aware, so
+    /// this leaves room to be drawn on a high-density display without decoding a 4K screenshot whole.
+    /// </remarks>
+    private const int PreviewImageWidth = 1200;
+
     private CompositeDisposable subscriptions = [];
     private ValueBody? body;
 
@@ -173,6 +182,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
 
         btDiff.Content = "Value";
         tbPreview.Visibility = Visibility.Collapsed;
+        imgPreview.Visibility = Visibility.Collapsed;
         rtDiff.Visibility = Visibility.Visible;
 
         tbPreviewLabel.Text = change.Change switch
@@ -469,7 +479,22 @@ public partial class UC_ValueInspector : UserControl, IDisposable
             return;
 
         tbPreviewLabel.Text = ValueInspection.PreviewHeading(described.Preview);
-        tbPreview.Text = ValueInspection.PreviewText(described.Preview);
+
+        // A picture is drawn; everything else is read. The two share the well, so exactly one of them
+        // is up at a time — and the diff, which is the third, has already returned above.
+        BitmapSource? picture = described.Preview?.Form == DebugPreviewForm.Image
+            ? WidgetImages.Read(RunFiles.Resolve(described.Body), described.Body?.ContentHash, PreviewImageWidth)
+            : null;
+
+        imgPreview.Source = picture;
+        imgPreview.Visibility = picture is null ? Visibility.Collapsed : Visibility.Visible;
+        tbPreview.Visibility = picture is null ? Visibility.Visible : Visibility.Collapsed;
+
+        // Said rather than shown blank: a picture whose file is gone — an import that lost it, a run
+        // output someone cleaned up — is a different thing from a value with no content.
+        tbPreview.Text = described.Preview?.Form == DebugPreviewForm.Image
+            ? picture is null ? "The picture could not be read from " + (described.Body?.RelativePath ?? "its file") + "." : string.Empty
+            : ValueInspection.PreviewText(described.Preview);
     }
 
     private void RenderBody(ValueDescription described)
@@ -499,23 +524,8 @@ public partial class UC_ValueInspector : UserControl, IDisposable
         Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })?.Dispose();
     }
 
-    /// <summary>
-    /// The file this value was written to, wherever it is now.
-    /// </summary>
-    /// <remarks>
-    /// Asked of <see cref="ValueFiles"/> rather than tested with <c>File.Exists</c> on the recorded path, so a
-    /// run that arrived from another machine finds its files beside its journal instead of looking empty.
-    /// </remarks>
-    private string? BodyFile()
-        => body is null
-            ? null
-            : ValueFiles.Resolve(body.Path, body.RelativePath, JournalPath());
-
-    /// <summary>The journal the selected run was replayed from, when it came from disk.</summary>
-    private static string? JournalPath()
-        => StateStore<MainState>.Default
-            .GetValue(state => state.Runs.All
-                .Find(run => string.Equals(run.SessionId, state.Runs.SelectedSessionId, StringComparison.Ordinal))?.JournalPath);
+    /// <summary>The file this value was written to, wherever it is now.</summary>
+    private string? BodyFile() => RunFiles.Resolve(body);
 
 
     /// <summary>

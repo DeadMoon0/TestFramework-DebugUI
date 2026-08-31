@@ -139,9 +139,9 @@ public sealed class RealRunLayoutTests
         public override string Description => "Declares an output.";
         public override bool DoesReturn => false;
 
-        public override Task<EmptyStepResultContext?> Execute(IServiceProvider serviceProvider, VariableStore variableStore, ArtifactStore artifactStore, ScopedLogger logger, CancellationToken cancellationToken)
+        public override Task<EmptyStepResultContext?> Execute(RunContext context)
         {
-            variableStore.SetVariable(new VariableIdentifier("answer"), 42);
+            context.Variables.SetVariable(new VariableIdentifier("answer"), 42);
             return Task.FromResult<EmptyStepResultContext?>(EmptyStepResultContext.Instance);
         }
 
@@ -159,7 +159,7 @@ public sealed class RealRunLayoutTests
         public override string Description => "Declares an input.";
         public override bool DoesReturn => false;
 
-        public override Task<EmptyStepResultContext?> Execute(IServiceProvider serviceProvider, VariableStore variableStore, ArtifactStore artifactStore, ScopedLogger logger, CancellationToken cancellationToken)
+        public override Task<EmptyStepResultContext?> Execute(RunContext context)
             => Task.FromResult<EmptyStepResultContext?>(EmptyStepResultContext.Instance);
 
         public override Step<EmptyStepResultContext> Clone() => new ConsumingStep().WithClonedOptions(this);

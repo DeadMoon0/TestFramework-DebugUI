@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
@@ -7,6 +8,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Axiom.State;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.Copying;
@@ -38,6 +40,9 @@ public partial class UC_StepDetail : UserControl, IDisposable
     private TimingDiff timing = TimingDiff.None;
     private LogNode[] entries = [];
 
+    /// <summary>Which widgets the filmstrip is currently drawn from, so it is rebuilt only when they change.</summary>
+    private string shownWidgets = string.Empty;
+
     /// <summary>Creates the panel and binds it.</summary>
     public UC_StepDetail()
     {
@@ -63,6 +68,11 @@ public partial class UC_StepDetail : UserControl, IDisposable
                 ShowTiming();
             }));
 
+        // Its own subscription because a widget arrives without the step changing: a picture taken
+        // during a step that is still running would otherwise not appear until something else moved.
+        subscriptions.Add(StateStore<MainState>.Default
+            .Bind(BoardSelectors.SelectActiveRun)
+            .Subscribe(ShowWidgets));
     }
 
     /// <summary>
@@ -90,6 +100,11 @@ public partial class UC_StepDetail : UserControl, IDisposable
         stageName = selection.Stage;
         step = selection.Step;
 
+        // A different step has different evidence, so what is drawn belongs to the step before this
+        // one until it is rebuilt. Cleared rather than compared, because the signature of two steps'
+        // widgets can legitimately match.
+        shownWidgets = string.Empty;
+
         if (step is null)
         {
             svBody.Visibility = Visibility.Collapsed;
@@ -109,6 +124,7 @@ public partial class UC_StepDetail : UserControl, IDisposable
 
         ShowTiming();
         ShowPolicy();
+        ShowWidgets(StateStore<MainState>.Default.GetValue(state => state.Board.ActiveRun));
         ShowAttempts();
         ShowLog();
         ShowFailure();
@@ -208,6 +224,65 @@ public partial class UC_StepDetail : UserControl, IDisposable
             Text = text
         }
     };
+
+    /// <summary>
+    /// Shows what the step produced to look at, in the order it produced it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The point of the whole widget channel, seen from a reader's chair: a step that walked four
+    /// pages shows four pages rather than the word "Complete". A step that retried shows what each
+    /// attempt saw, which is usually where the difference is.
+    /// </para>
+    /// <para>
+    /// Hidden entirely when the step produced none, which is most steps. A section reading "no
+    /// widgets" on every step of every run would push the failure and the log further down for
+    /// nothing.
+    /// </para>
+    /// </remarks>
+    private void ShowWidgets(RunGraph graph)
+    {
+        WidgetNode[] widgets = step is null || stageName is null
+            ? []
+            : [.. graph.Widgets.Where(widget => widget.BelongsTo(stageName, step.StepId))];
+
+        // Rebuilt only when this step's widgets actually changed. The graph is replaced on every
+        // event a live run produces, and decoding a row of pictures per log line would make the panel
+        // cost more than the run it is showing.
+        string signature = string.Join('|', widgets.Select(widget => widget.Description.Body?.ContentHash ?? widget.Name));
+
+        if (string.Equals(signature, shownWidgets, StringComparison.Ordinal))
+            return;
+
+        shownWidgets = signature;
+        spWidgets.Children.Clear();
+
+        tbWidgetsLabel.Visibility = widgets.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        spWidgets.Visibility = widgets.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+
+        foreach (WidgetNode widget in widgets)
+            spWidgets.Children.Add(Frame(widget));
+    }
+
+    /// <summary>
+    /// One widget, as a tile that opens it.
+
+    /// <summary>
+    /// One widget, framed.
+    /// </summary>
+    /// <remarks>
+    /// Its own control rather than a builder here, because a widget is a thing with a name, a set of
+    /// actions and a middle that belongs to whoever produced it — and every surface that shows one
+    /// wants all three, not a picture and a caption.
+    /// </remarks>
+    private static UIElement Frame(WidgetNode widget)
+    {
+        UC_Widget frame = new();
+
+        frame.Show(widget);
+
+        return frame;
+    }
 
     /// <summary>A duration as a reader would say it, rather than as 00:00:30.</summary>
     private void ShowAttempts()

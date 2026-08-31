@@ -32,6 +32,67 @@ public sealed class RunBundleTests : IDisposable
     private string Output => Ensure(Path.Combine(root, "sender", "output", "values"));
 
     [Fact]
+    public void APictureTravelsWithItsRun()
+    {
+        // Collected without the writer knowing anything about widgets: a body is a body, and the
+        // relative path the journal already carries is what the recipient resolves by.
+        string journal = WriteRunWithPicture("pictured");
+
+        RunBundleWriter.Result written = Export(journal);
+
+        Assert.Equal(1, written.ImagesIncluded);
+        Assert.Contains("runs/pictured/widgets/page.png", Entries(written.Path));
+    }
+
+    [Fact]
+    public void AnAnonymousExportLeavesPicturesBehind()
+    {
+        // The one part of a bundle redaction cannot reach. It rewrites named fields; it cannot see a
+        // logged-in user name in a screenshot, so an anonymous export does not promise what it cannot
+        // check.
+        string journal = WriteRunWithPicture("pictured");
+
+        RunBundleWriter.Result written = RunBundleWriter.Write(
+            Path.Combine(root, $"anon-{Guid.NewGuid():N}{BundleFormat.Extension}"),
+            new RunBundleWriter.Request
+            {
+                JournalPaths = [journal],
+                Anonymous = true,
+                IncludeImages = false,
+                CreatedAtUtc = DateTimeOffset.UnixEpoch
+            });
+
+        Assert.Equal(1, written.ImagesExcluded);
+        Assert.Equal(0, written.ImagesIncluded);
+        Assert.DoesNotContain("runs/pictured/widgets/page.png", Entries(written.Path));
+
+        // Named in the manifest even so, because a run that took a picture and a run that did not are
+        // different things and the recipient should be able to tell.
+        Assert.Contains(
+            written.Manifest.Runs.SelectMany(run => run.Files),
+            file => file.RelativePath == "widgets/page.png" && file.WasMissing);
+    }
+
+    [Fact]
+    public void ASenderWhoAsksForPicturesAnywayIsToldWhatThatMeans()
+    {
+        string journal = WriteRunWithPicture("pictured");
+
+        RunBundleWriter.Result written = RunBundleWriter.Write(
+            Path.Combine(root, $"anon-{Guid.NewGuid():N}{BundleFormat.Extension}"),
+            new RunBundleWriter.Request
+            {
+                JournalPaths = [journal],
+                Anonymous = true,
+                IncludeImages = true,
+                CreatedAtUtc = DateTimeOffset.UnixEpoch
+            });
+
+        Assert.Equal(1, written.ImagesIncluded);
+        Assert.Equal(0, written.ImagesExcluded);
+    }
+
+    [Fact]
     public void ARunTravelsWithItsArtifacts()
     {
         string journal = WriteRun("alpha", artifact: "orderIds.json", content: "[1,2,3]");
@@ -367,6 +428,62 @@ public sealed class RunBundleTests : IDisposable
     }
 
     /// <summary>Writes a journal, its sidecar and one artifact, the way a real run leaves them.</summary>
+    /// <summary>
+    /// Writes a run whose step took a picture, the way a journal records one.
+    /// </summary>
+    /// <remarks>
+    /// Shaped like the real thing rather than reusing the artifact helper, because what marks a body
+    /// as a picture is the preview form in the description around it — which is exactly what the
+    /// writer reads to decide whether it may travel.
+    /// </remarks>
+    private string WriteRunWithPicture(string sessionId, string name = "page")
+    {
+        string widgets = Ensure(Path.Combine(root, "sender", "output", "widgets"));
+        string file = Path.Combine(widgets, name + ".png");
+
+        File.WriteAllBytes(file, [0x89, 0x50, 0x4E, 0x47]);
+
+        JObject widget = new()
+        {
+            ["Kind"] = "Widget",
+            ["SessionId"] = sessionId,
+            ["Entry"] = new JObject
+            {
+                ["Kind"] = "tf.widget.screenshot",
+                ["Name"] = name,
+                ["Description"] = new JObject
+                {
+                    ["Summary"] = name,
+                    ["Preview"] = new JObject { ["Form"] = "Image", ["Text"] = string.Empty, ["IsTruncated"] = true },
+                    ["Body"] = new JObject
+                    {
+                        ["Path"] = file,
+                        ["RelativePath"] = "widgets/" + name + ".png",
+                        ["SizeInBytes"] = 4,
+                        ["ContentHash"] = "ABCD"
+                    }
+                }
+            }
+        };
+
+        string journalPath = Path.Combine(Sender, $"20260818-120000-{sessionId}.ndjson");
+        File.WriteAllLines(journalPath, [widget.ToString(Newtonsoft.Json.Formatting.None)]);
+
+        JObject metadata = new()
+        {
+            ["ProtocolVersion"] = 2,
+            ["SessionId"] = sessionId,
+            ["Name"] = "Pictured" + sessionId,
+            ["MachineName"] = "SENDER-PC",
+            ["StartedAtUtc"] = "2026-08-18T12:00:00+00:00",
+            ["JournalFileName"] = Path.GetFileName(journalPath)
+        };
+
+        File.WriteAllText(Path.ChangeExtension(journalPath, null) + ".meta.json", metadata.ToString());
+
+        return journalPath;
+    }
+
     private string WriteRun(string sessionId, string artifact, string content, string? hash = null, string? logMessage = null, string? stamp = null)
     {
         string file = Path.Combine(Output, artifact);
@@ -476,6 +593,14 @@ public sealed class RunBundleTests : IDisposable
     {
         Directory.CreateDirectory(path);
         return path;
+    }
+
+    /// <summary>What is actually inside a bundle, which is the only thing a recipient gets.</summary>
+    private static string[] Entries(string bundlePath)
+    {
+        using System.IO.Compression.ZipArchive archive = System.IO.Compression.ZipFile.OpenRead(bundlePath);
+
+        return [.. archive.Entries.Select(entry => entry.FullName)];
     }
 
     /// <inheritdoc />

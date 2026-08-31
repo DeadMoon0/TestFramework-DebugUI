@@ -25,7 +25,7 @@ public sealed record LayoutOptions
     /// they were drawn on, so this is what lets a later build say "the board has moved under these marks"
     /// instead of quietly pointing an arrow at the wrong step.
     /// </remarks>
-    public const int Version = 1;
+    public const int Version = 2;
 
     public double Grid { get; init; } = 10;
 
@@ -48,6 +48,17 @@ public sealed record LayoutOptions
     /// the writing on the cards unreadable.
     /// </remarks>
     public double StepHeight { get; init; } = 130;
+
+    /// <summary>
+    /// Gets the height of a step box that has a widget to show.
+    /// </summary>
+    /// <remarks>
+    /// A step that drew something wants the room to show it, and a thumbnail in the corner of a
+    /// heading is not showing it — it only says a picture exists. Applied per step rather than to the
+    /// whole board: a step that drew nothing keeps the short card, so a run with one screenshot in it
+    /// does not become a column of mostly-empty cards that fits smaller and reads worse.
+    /// </remarks>
+    public double StepHeightWithWidget { get; init; } = 330;
 
     /// <summary>
     /// Gets the horizontal gap between steps sharing a layer.

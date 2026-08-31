@@ -88,6 +88,15 @@
                     <TextBlock Style="{StaticResource PanelHeading}" Margin="0 10 0 3" Text="OUTPUTS"/>
                     <TextBlock x:Name="tbOutputs" Style="{StaticResource MutedText}"/>
 
+                    <!--
+                        Between what the step declared and the mechanical record of running it: an
+                        widget is evidence of the step's effect, which is what the outputs above
+                        describe. Above the failure it would push the failure below the fold.
+                    -->
+                    <TextBlock x:Name="tbWidgetsLabel" Style="{StaticResource PanelHeading}" Margin="0 10 0 3"
+                               Text="WIDGETS" Visibility="Collapsed"/>
+                    <WrapPanel x:Name="spWidgets" Visibility="Collapsed" Margin="0 0 0 2" Orientation="Horizontal"/>
+
                     <TextBlock Style="{StaticResource PanelHeading}" Margin="0 10 0 3" Text="ATTEMPTS"/>
                     <StackPanel x:Name="spAttempts"/>
 

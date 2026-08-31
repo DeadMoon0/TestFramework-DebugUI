@@ -120,6 +120,41 @@ public class RunProjectionAgainstRealRunTests(JournalFixture fixture)
     }
 
     [Fact]
+    public async Task ARunsEvidenceSurvivesTheJournalWithTheFileItPointsAt()
+    {
+        // The end-to-end shape of widgets: a step takes a picture, Core writes it into the run's own
+        // output and records where, and reopening the run weeks later still finds it. Everything the
+        // window draws from depends on this chain, and every link of it is a different assembly.
+        Timeline timeline = Timeline.Create()
+            .Trigger(new CapturingStep())
+            .Name("photographs")
+            .Build();
+
+        await timeline.SetupRun().RunAsync();
+
+        RunGraph graph = Replay(out int envelopeCount);
+
+        Assert.True(envelopeCount > 0, "The run wrote no journal, so nothing was actually verified.");
+
+        WidgetNode widget = Assert.Single(graph.Widgets);
+
+        Assert.Equal(WidgetKinds.Screenshot, widget.Kind);
+        Assert.Equal("page", widget.Name);
+        Assert.Equal(1, widget.Attempt);
+        Assert.NotNull(widget.StepId);
+
+        // Attributed to the step that took it, which is what a step panel filters on.
+        StageNode stage = graph.Stages.Single(candidate => candidate.Steps.Any(step => step.DisplayName == "photographs"));
+        StepNode photographs = stage.Steps.Single(step => step.DisplayName == "photographs");
+        Assert.True(widget.BelongsTo(stage.Name, photographs.StepId));
+
+        // And the file is where the journal says, with the bytes the step handed over.
+        Assert.Equal(DebugPreviewForm.Image, widget.Description.Preview!.Form);
+        Assert.StartsWith("widgets/", widget.Description.Body!.RelativePath, StringComparison.Ordinal);
+        Assert.Equal(CapturingStep.Png, File.ReadAllBytes(widget.Description.Body.Path));
+    }
+
+    [Fact]
     public async Task AFailingRunCarriesItsReasonThroughToTheAttempt()
     {
         // The end-to-end version of the failure-detail work: an exception raised in a step has to
@@ -194,22 +229,16 @@ public class RunProjectionAgainstRealRunTests(JournalFixture fixture)
         return graph;
     }
 
+    /// <summary>
+    /// Applies one recorded envelope the way the application does.
+    /// </summary>
+    /// <remarks>
+    /// Through the real dispatch rather than a copy of it. A second switch here would keep passing
+    /// while quietly ignoring every signal kind added after it was written, which is precisely the
+    /// mapping this class exists to catch.
+    /// </remarks>
     private static RunGraph Apply(RunGraph graph, DebugEnvelope envelope)
-    {
-        IPipeSignal signal = DebugEnvelopeCodec.Unwrap(envelope);
-
-        return signal switch
-        {
-            PipeInitTimelineRunSignal init => RunProjection.ApplyInit(init),
-            PipeEntityTransitionSignal transition => RunProjection.ApplyTransition(graph, transition),
-            PipeValueUpdateSignal value => RunProjection.ApplyValueUpdate(graph, value),
-            PipeLogEntrySignal log => RunProjection.ApplyLogEntry(graph, log),
-            PipeAssertionSignal assertion => RunProjection.ApplyAssertion(graph, assertion),
-            PipeBreakpointHitRequestSignal breakpoint => RunProjection.ApplyBreakpointHit(graph, breakpoint),
-            PipeTimelineRunFinishedSignal finished => RunProjection.ApplyRunFinished(graph, finished),
-            _ => graph
-        };
-    }
+        => RunProjection.Apply(graph, DebugEnvelopeCodec.Unwrap(envelope));
 
     private IEnumerable<DebugEnvelope> ReadJournal()
     {
@@ -239,14 +268,42 @@ public class RunProjectionAgainstRealRunTests(JournalFixture fixture)
         public override string Description => "Sets a variable.";
         public override bool DoesReturn => false;
 
-        public override Task<EmptyStepResultContext?> Execute(IServiceProvider serviceProvider, VariableStore variableStore, ArtifactStore artifactStore, ScopedLogger logger, CancellationToken cancellationToken)
+        public override Task<EmptyStepResultContext?> Execute(RunContext context)
         {
-            variableStore.SetVariable(key, value);
+            context.Variables.SetVariable(key, value);
             return Task.FromResult<EmptyStepResultContext?>(EmptyStepResultContext.Instance);
         }
 
         public override Step<EmptyStepResultContext> Clone() => new SetVariableStep(key, value).WithClonedOptions(this);
         public override void DeclareIO(StepIOContract contract) => contract.Outputs.Add(new StepIOEntry(key, StepIOKind.Variable));
+        public override StepInstance<Step<EmptyStepResultContext>, EmptyStepResultContext> GetInstance() => new(this);
+    }
+
+    private sealed class CapturingStep : Step<EmptyStepResultContext>
+    {
+        /// <summary>A one-pixel PNG, so the widget is a real picture rather than bytes pretending.</summary>
+        internal static readonly byte[] Png = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+
+        public override string Name => "capturing";
+        public override string Description => "Takes a picture of what it saw.";
+        public override bool DoesReturn => false;
+
+        public override Task<EmptyStepResultContext?> Execute(RunContext context)
+        {
+            context.Widgets.Publish(new Widget
+            {
+                Kind = WidgetKinds.Screenshot,
+                Name = "page",
+                Form = DebugPreviewForm.Image,
+                Bytes = Png
+            });
+
+            return Task.FromResult<EmptyStepResultContext?>(EmptyStepResultContext.Instance);
+        }
+
+        public override Step<EmptyStepResultContext> Clone() => new CapturingStep().WithClonedOptions(this);
+        public override void DeclareIO(StepIOContract contract) { }
         public override StepInstance<Step<EmptyStepResultContext>, EmptyStepResultContext> GetInstance() => new(this);
     }
 
@@ -256,7 +313,7 @@ public class RunProjectionAgainstRealRunTests(JournalFixture fixture)
         public override string Description => "Always throws.";
         public override bool DoesReturn => false;
 
-        public override Task<EmptyStepResultContext?> Execute(IServiceProvider serviceProvider, VariableStore variableStore, ArtifactStore artifactStore, ScopedLogger logger, CancellationToken cancellationToken)
+        public override Task<EmptyStepResultContext?> Execute(RunContext context)
             => throw new InvalidOperationException(message);
 
         public override Step<EmptyStepResultContext> Clone() => new ThrowingStep(message).WithClonedOptions(this);

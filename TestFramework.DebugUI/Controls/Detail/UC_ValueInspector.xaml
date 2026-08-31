@@ -94,6 +94,15 @@
                                          FontFamily="Cascadia Mono, Consolas, Courier New" FontSize="11"
                                          HorizontalScrollBarVisibility="Disabled"
                                          VerticalScrollBarVisibility="Disabled"/>
+
+                            <!--
+                                A widget that is a picture is drawn rather than described. Left
+                                aligned and never stretched: a screenshot scaled to fill the panel
+                                is a screenshot whose text cannot be read.
+                            -->
+                            <Image x:Name="imgPreview" Visibility="Collapsed"
+                                   HorizontalAlignment="Left" VerticalAlignment="Top"
+                                   Stretch="None" RenderOptions.BitmapScalingMode="HighQuality"/>
                         </Grid>
                     </ScrollViewer>
                 </Grid>

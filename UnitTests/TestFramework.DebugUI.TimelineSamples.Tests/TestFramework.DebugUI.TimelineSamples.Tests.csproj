@@ -16,9 +16,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="TestFramework.Core" Version="0.2.0" />
-    <PackageReference Include="TestFramework.Simple" Version="0.2.0" />
-    <PackageReference Include="TestFramework.LocalIO" Version="0.2.0" />
+    <PackageReference Include="TestFramework.Core" Version="0.5.0" />
+    <PackageReference Include="TestFramework.Simple" Version="0.3.0" />
+    <PackageReference Include="TestFramework.LocalIO" Version="0.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Real pages of the family's own sample shop, photographed by the browser pack. The samples
+      publish these as widgets, so the window has something recognisable to draw rather than a
+      coloured square standing in for a page.
+    -->
+    <Content Include="Pages\*.png" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

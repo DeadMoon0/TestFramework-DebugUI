@@ -73,8 +73,16 @@ public static class ValueInspection
         {
             DebugPreviewForm.Json => "JSON",
             DebugPreviewForm.Binary => "BYTES (HEX)",
+            DebugPreviewForm.Image => "IMAGE",
+            DebugPreviewForm.Markup => "MARKUP",
             _ => "TEXT"
         };
+
+        // A picture is drawn from its file rather than from what travelled, so the "showing X of Y"
+        // that every other form needs would be saying that none of it arrived — true, and useless.
+        // Its size is worth stating on its own.
+        if (preview.Form == DebugPreviewForm.Image)
+            return preview.SizeInBytes is { } imageSize ? $"{form}  —  {Size(imageSize, culture)}" : form;
 
         if (!preview.IsTruncated || preview.SizeInBytes is not { } size)
             return form;

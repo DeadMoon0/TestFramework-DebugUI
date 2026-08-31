@@ -263,14 +263,5 @@ public partial class UC_ValueItem : UserControl
     /// Asked of <see cref="ValueFiles"/> rather than tested with <c>File.Exists</c> on the recorded path, so a
     /// run that arrived from another machine finds its files beside its journal instead of looking empty.
     /// </remarks>
-    private string? BodyFile()
-        => body is null
-            ? null
-            : ValueFiles.Resolve(body.Path, body.RelativePath, JournalPath());
-
-    /// <summary>The journal the selected run was replayed from, when it came from disk.</summary>
-    private static string? JournalPath()
-        => StateStore<MainState>.Default
-            .GetValue(state => state.Runs.All
-                .Find(run => string.Equals(run.SessionId, state.Runs.SelectedSessionId, StringComparison.Ordinal))?.JournalPath);
+    private string? BodyFile() => RunFiles.Resolve(body);
 }

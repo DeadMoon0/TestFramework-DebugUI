@@ -63,6 +63,18 @@ public class ValueInspectionTests
     }
 
     [Fact]
+    public void APictureStatesItsSizeRatherThanHowLittleOfItArrived()
+    {
+        // Every other form arrives partly and says how much. None of a picture arrives — it is drawn
+        // from its file — so "showing 0 bytes of 80 KB" would be true and useless.
+        string heading = ValueInspection.PreviewHeading(
+            Preview(DebugPreviewForm.Image, string.Empty, truncated: true, size: 82_891),
+            CultureInfo.InvariantCulture);
+
+        Assert.Equal("IMAGE  —  80.9 KB", heading);
+    }
+
+    [Fact]
     public void TheFactsLeadWithTheProducersOwnAndEndWithTheSchema()
     {
         // The schema is not something the producer says about the value; it is what a reader needs

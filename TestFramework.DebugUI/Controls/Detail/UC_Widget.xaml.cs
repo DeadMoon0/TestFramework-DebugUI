@@ -89,45 +89,18 @@ public partial class UC_Widget : UserControl
     /// </remarks>
     private UIElement Middle(WidgetNode widget)
     {
-        DebugPreviewForm form = widget.Description.Preview?.Form ?? DebugPreviewForm.None;
-
-        if (form == DebugPreviewForm.Image)
+        // Twice the frame's width, so the picture still reads on a high-density display. The
+        // decisions around it are shared with the board, which draws the same widget at card width.
+        if (WidgetFaces.IsPicture(widget))
         {
-            BitmapSource? picture = WidgetImages.Read(
-                RunFiles.Resolve(widget.Description.Body),
-                widget.Description.Body?.ContentHash,
-                FrameWidth * 2);
-
-            return picture is null ? Missing("the picture is not on this machine") : Picture(picture);
+            return WidgetFaces.PictureOf(widget, FrameWidth * 2) is { } picture
+                ? WidgetFaces.Draw(picture)
+                : Missing("the picture is not on this machine");
         }
 
-        if (form is DebugPreviewForm.Text or DebugPreviewForm.Json or DebugPreviewForm.Markup)
-            return Lines(ValueInspection.PreviewText(widget.Description.Preview));
-
-        return Missing(widget.Description.Body?.RelativePath ?? "nothing to show");
-    }
-
-    /// <summary>
-    /// A picture, filling the frame from the top-left.
-    /// </summary>
-    /// <remarks>
-    /// Anchored rather than centred because a page is far taller than the frame, and the half worth
-    /// recognising it by is the top: the header, the first row, the thing that says which page this
-    /// is. Centring a full-page screenshot shows a band of its middle, which every page shares.
-    /// </remarks>
-    private static UIElement Picture(BitmapSource picture)
-    {
-        Image image = new()
-        {
-            Source = picture,
-            Stretch = Stretch.UniformToFill,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Top
-        };
-
-        RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
-
-        return image;
+        return WidgetFaces.TextOf(widget) is { } text
+            ? Lines(text)
+            : Missing(widget.Description.Body?.RelativePath ?? "nothing to show");
     }
 
     private UIElement Lines(string text) => new TextBox

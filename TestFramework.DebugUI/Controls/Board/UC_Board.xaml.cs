@@ -66,13 +66,18 @@ public partial class UC_Board : UserControl
     /// <summary>How deep the recessed strip a connector sits on runs into the card.</summary>
     private const double StripHeight = 16;
 
+    /// <summary>The gap between a card's writing and the picture under it.</summary>
+    private const double WidgetMargin = 8;
+
     /// <summary>How tall the widget area inside a card is drawn.</summary>
     /// <remarks>
-    /// What is left of a widget-sized card once the heading, the note and the outputs have had their
-    /// rows. Changing it moves every step on the board, and annotations are stored in board
-    /// coordinates — so it travels with a bump of the layout version, never on its own.
+    /// The extra height a card is given for having something to show, less the gap above it — so the
+    /// picture is exactly the room the layout granted and no more. Derived rather than stated,
+    /// because the two were separate numbers meaning one thing: shrinking the card without shrinking
+    /// this would push the picture through the bottom of the card it lives in.
     /// </remarks>
-    private const double WidgetHeight = 196;
+    private static readonly double WidgetHeight =
+        LayoutOptions.Default.StepHeightWithWidget - LayoutOptions.Default.StepHeight - WidgetMargin;
 
     /// <summary>The inset of a card's content from its edge.</summary>
     private const double CardPadding = 16;
@@ -511,7 +516,7 @@ public partial class UC_Board : UserControl
             CornerRadius = new CornerRadius(4),
             ClipToBounds = true,
             Background = (Brush)FindResource("SurfaceSunken"),
-            Margin = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, WidgetMargin, 0, 0),
             Visibility = Visibility.Collapsed
         };
 
@@ -1257,31 +1262,14 @@ public partial class UC_Board : UserControl
     /// </remarks>
     private UIElement WidgetFace(WidgetNode widget)
     {
-        DebugPreviewForm form = widget.Description.Preview?.Form ?? DebugPreviewForm.None;
+        // A card face at a card's width. What counts as a picture, and what a widget's readable
+        // content is, are WidgetFaces' answers rather than this control's - the panel asks the same
+        // two questions of the same widget.
+        if (WidgetFaces.IsPicture(widget) && WidgetFaces.PictureOf(widget, (int)LayoutOptions.Default.StepWidth) is { } picture)
+            return WidgetFaces.Draw(picture);
 
-        if (form == DebugPreviewForm.Image)
-        {
-            BitmapSource? picture = WidgetImages.Read(
-                RunFiles.Resolve(widget.Description.Body),
-                widget.Description.Body?.ContentHash,
-                (int)LayoutOptions.Default.StepWidth);
-
-            if (picture is not null)
-            {
-                Image image = new()
-                {
-                    Source = picture,
-                    Stretch = Stretch.UniformToFill,
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                    VerticalAlignment = VerticalAlignment.Top
-                };
-
-                RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
-
-                return image;
-            }
-        }
-
+        // The summary is the fallback for both a form with nothing to read and a picture whose file
+        // is gone: on a card there is no room to explain, and a name is better than a blank.
         return new TextBlock
         {
             Foreground = (Brush)FindResource("TextFaint"),
@@ -1289,9 +1277,7 @@ public partial class UC_Board : UserControl
             FontSize = 11,
             Margin = new Thickness(10, 8, 10, 8),
             TextTrimming = TextTrimming.CharacterEllipsis,
-            Text = form is DebugPreviewForm.Text or DebugPreviewForm.Json or DebugPreviewForm.Markup
-                ? ValueInspection.PreviewText(widget.Description.Preview)
-                : widget.Description.Summary
+            Text = WidgetFaces.TextOf(widget) ?? widget.Description.Summary
         };
     }
 

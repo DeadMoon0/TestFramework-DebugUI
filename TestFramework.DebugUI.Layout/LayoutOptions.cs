@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace TestFramework.DebugUI.Layout;
 
@@ -25,7 +25,7 @@ public sealed record LayoutOptions
     /// they were drawn on, so this is what lets a later build say "the board has moved under these marks"
     /// instead of quietly pointing an arrow at the wrong step.
     /// </remarks>
-    public const int Version = 2;
+    public const int Version = 3;
 
     public double Grid { get; init; } = 10;
 
@@ -53,12 +53,21 @@ public sealed record LayoutOptions
     /// Gets the height of a step box that has a widget to show.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A step that drew something wants the room to show it, and a thumbnail in the corner of a
     /// heading is not showing it — it only says a picture exists. Applied per step rather than to the
     /// whole board: a step that drew nothing keeps the short card, so a run with one screenshot in it
     /// does not become a column of mostly-empty cards that fits smaller and reads worse.
+    /// </para>
+    /// <para>
+    /// The margin over <see cref="StepHeight"/> is what every step below a widget moves down by, and
+    /// what the whole board grows by — which then makes a fitted board smaller, so the cost of this
+    /// number is paid by cards that have nothing to show. It was 330; at that size one screenshot
+    /// visibly rearranged a run. This is the smallest height that still shows a page as a page rather
+    /// than as a coloured smudge.
+    /// </para>
     /// </remarks>
-    public double StepHeightWithWidget { get; init; } = 330;
+    public double StepHeightWithWidget { get; init; } = 240;
 
     /// <summary>
     /// Gets the horizontal gap between steps sharing a layer.

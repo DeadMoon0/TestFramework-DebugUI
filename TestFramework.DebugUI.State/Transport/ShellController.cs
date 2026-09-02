@@ -343,6 +343,45 @@ public sealed class ShellController : IShellCommands, IDisposable
     }
 
     /// <summary>
+    /// Asks the selected run for a fresh look at itself.
+    /// </summary>
+    /// <remarks>
+    /// Worth asking only while the run is standing still, which is why the surface offering it is
+    /// shown with the breakpoint controls. Every outcome is reported, including the boring one: a
+    /// reader who pressed a button and saw nothing appear is owed the reason, and "the run had
+    /// nothing to show" is a different answer from "the run never replied".
+    /// </remarks>
+    public async Task<bool> CaptureWidgetsForSelectedRunAsync()
+    {
+        string? sessionId = store.GetValue(state => state.Runs.SelectedSessionId);
+        if (sessionId is null)
+            return false;
+
+        WidgetCaptureReport report = await pipe.CaptureWidgetsAsync(sessionId);
+
+        if (report.Captured > 0)
+        {
+            Report(Notice(
+                FeedSeverity.Info,
+                report.Captured == 1 ? "The run recorded a fresh widget." : $"The run recorded {report.Captured} fresh widgets.",
+                "It is on the step the run is holding.",
+                FeedSource.Transport,
+                sessionId));
+
+            return true;
+        }
+
+        Report(Notice(
+            FeedSeverity.Warning,
+            report.Answered ? "The run had nothing fresh to show." : "The run could not be asked for a fresh look.",
+            report.Detail,
+            FeedSource.Transport,
+            sessionId));
+
+        return false;
+    }
+
+    /// <summary>
     /// Runs the selected run's test again.
     /// </summary>
     /// <remarks>

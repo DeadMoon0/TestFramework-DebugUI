@@ -188,6 +188,93 @@ public sealed class PipeRunEventSourceTests
     }
 
     [Fact]
+    public async Task AHeldRunCanBeAskedForAFreshLookAtItself()
+    {
+        // The whole exchange, end to end and over a real pipe: a step is held, this side asks, the
+        // run photographs what it is holding, and the picture arrives as an ordinary widget on the
+        // step the run is standing at. Nothing about the evidence travels in the answer.
+        using PipeScope scope = new();
+        using Watcher watcher = new(scope.PipeName);
+
+        int asked = 0;
+        watcher.Source.PauseAtBreakpoint = _ => Interlocked.Increment(ref asked) == 1;
+
+        Task run = RunWatchedTimelineAsync("held");
+
+        string sessionId = await WaitForPausedSessionAsync(watcher);
+
+        // Waited on with the test's own patience, which is shorter than the source's own timeout for
+        // this exchange. An answer that arrived before its waiter was registered would be dropped and
+        // this would fail on the wait rather than on the assertion below - which is the symptom of
+        // the send-then-register race Core paid ten minutes a step for.
+        WidgetCaptureReport report = await watcher.Source.CaptureWidgetsAsync(sessionId).WaitAsync(Patience);
+
+        Assert.True(report.Answered, report.Detail);
+        Assert.Equal(1, report.Captured);
+
+        watcher.Ingest.Flush();
+
+        // The reply is not news about the run. Recording it would put "a button was pressed" in the
+        // run's own history.
+        Assert.DoesNotContain(watcher.Kinds, kind => kind == PipeSignalKind.CaptureWidgetAck);
+        Assert.Contains(watcher.Kinds, kind => kind == PipeSignalKind.Widget);
+
+        WidgetNode widget = Assert.Single(watcher.Store.GetValue(state => state.Board.ActiveRun).Widgets);
+
+        Assert.Equal("on-request", widget.Name);
+        Assert.NotNull(widget.StepId);
+
+        Assert.True(await watcher.Source.ContinueAsync(sessionId));
+        Assert.True(await CompletesAsync(run, Patience), "The run did not resume after being released.");
+    }
+
+    [Fact]
+    public async Task AskingARunThatIsNotAttachedReportsThat()
+    {
+        using PipeScope scope = new();
+        using Watcher watcher = new(scope.PipeName);
+
+        WidgetCaptureReport report = await watcher.Source.CaptureWidgetsAsync("no-such-session");
+
+        Assert.False(report.Answered);
+        Assert.False(string.IsNullOrWhiteSpace(report.Detail));
+    }
+
+    [Fact]
+    public async Task AskingTwiceAtOnceIsRefusedRatherThanAskedTwice()
+    {
+        // A reader presses the button twice because the first press has not visibly done anything
+        // yet. The second ask must not overwrite the first one's claim on the answer, or the first
+        // would wait for a reply that had been handed to somebody else.
+        using PipeScope scope = new();
+        using Watcher watcher = new(scope.PipeName);
+
+        int asked = 0;
+        watcher.Source.PauseAtBreakpoint = _ => Interlocked.Increment(ref asked) == 1;
+
+        SlowCapture slow = new();
+        Task run = RunWatchedTimelineAsync("busy", slow);
+
+        string sessionId = await WaitForPausedSessionAsync(watcher);
+
+        Task<WidgetCaptureReport> first = watcher.Source.CaptureWidgetsAsync(sessionId);
+
+        Assert.True(slow.Started.Wait(Patience), "The run never started capturing.");
+
+        WidgetCaptureReport second = await watcher.Source.CaptureWidgetsAsync(sessionId).WaitAsync(Patience);
+
+        Assert.False(second.Answered);
+        Assert.Equal(WidgetCaptureReport.AlreadyAsking.Detail, second.Detail);
+
+        slow.Finish.Set();
+
+        Assert.True((await first.WaitAsync(Patience)).Answered);
+
+        Assert.True(await watcher.Source.ContinueAsync(sessionId));
+        Assert.True(await CompletesAsync(run, Patience), "The run did not resume after being released.");
+    }
+
+    [Fact]
     public async Task ARunThatDisappearsIsReportedRatherThanLeftHanging()
     {
         // What a killed test host looks like from here. The run is on screen and simply stops, which
@@ -312,6 +399,74 @@ public sealed class PipeRunEventSourceTests
             .Build();
 
         return timeline.SetupRun().RunAsync();
+    }
+
+    /// <summary>
+    /// A run that has something to show when it is asked.
+    /// </summary>
+    /// <remarks>
+    /// The source is registered as a service, which is the whole of what a pack does: the browser
+    /// pack's is one of these that photographs every open page.
+    /// </remarks>
+    private static Task RunWatchedTimelineAsync(string label, IWidgetCaptureSource? source = null)
+    {
+        Timeline timeline = Timeline.Create()
+            .Trigger(new NoopStep())
+            .Name(label)
+            .Build();
+
+        return timeline.SetupRun(new CaptureServices(source ?? new PictureCapture())).RunAsync();
+    }
+
+    private sealed class CaptureServices(IWidgetCaptureSource source) : IServiceProvider
+    {
+        public object? GetService(Type serviceType)
+            => serviceType == typeof(IWidgetCaptureSource) ? source : null;
+    }
+
+    /// <summary>Publishes one picture when asked, the way a pack's source does.</summary>
+    private sealed class PictureCapture : IWidgetCaptureSource
+    {
+        /// <summary>A one-pixel PNG, so what arrives is a real picture rather than bytes pretending.</summary>
+        private static readonly byte[] Png = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+
+        public Task CaptureAsync(RunContext run)
+        {
+            run.Widgets.Publish(new Widget
+            {
+                Kind = WidgetKinds.Screenshot,
+                Name = "on-request",
+                Form = DebugPreviewForm.Image,
+                Bytes = Png
+            });
+
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>Takes as long as the test needs it to, so a second ask arrives mid-capture.</summary>
+    private sealed class SlowCapture : IWidgetCaptureSource
+    {
+        internal ManualResetEventSlim Started { get; } = new(false);
+
+        internal ManualResetEventSlim Finish { get; } = new(false);
+
+        public Task CaptureAsync(RunContext run)
+        {
+            Started.Set();
+            Finish.Wait(Patience);
+
+            run.Widgets.Publish(new Widget
+            {
+                Kind = WidgetKinds.LogStream,
+                Name = "on-request",
+                Form = DebugPreviewForm.Text,
+                Text = "slow"
+            });
+
+            return Task.CompletedTask;
+        }
     }
 
     private static PipeInitTimelineRunSignal Init(string sessionId) => new()

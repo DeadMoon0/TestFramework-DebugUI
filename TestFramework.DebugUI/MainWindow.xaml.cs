@@ -156,6 +156,10 @@ public partial class MainWindow : Window
         ucRunBar.ContinueRequested += () => _ = Shell.ContinueSelectedRunAsync();
         ucRunBar.StepRequested += () => _ = StepSelectedRunAsync();
         ucRunBar.StopRequested += () => _ = Shell.CancelSelectedRunAsync();
+
+        // Awaited rather than dropped, unlike the three above it: the bar disables its own button
+        // until the run answers, and it can only know when that is by being handed the task.
+        ucRunBar.LookRequested += Shell.CaptureWidgetsForSelectedRunAsync;
         ucRunBar.RerunRequested += Shell.RerunSelected;
 
         // The bar chooses; the board draws. Nothing about a stroke is decided in the window.

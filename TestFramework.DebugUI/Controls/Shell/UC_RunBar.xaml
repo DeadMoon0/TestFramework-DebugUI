@@ -30,6 +30,16 @@
             <Path Data="{StaticResource IconStepOver}" Stroke="{StaticResource Accent}" StrokeThickness="1.5"
                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
         </Button>
+        <!--
+            Shown with them, because a stopped run is the only run worth asking: the page it is
+            sitting on is one nothing has photographed yet, since the step that got there has not
+            finished. While a run is moving, the evidence it produces arrives on its own.
+        -->
+        <Button x:Name="btLook" Style="{StaticResource CaptionIconButton}" Click="btLook_Click"
+                Visibility="Collapsed" shell:WindowChrome.IsHitTestVisibleInChrome="True">
+            <Path Data="{StaticResource IconCamera}" Stroke="{StaticResource Accent}" StrokeThickness="1.5"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+        </Button>
         <Button x:Name="btStop" Style="{StaticResource CaptionIconButton}" Click="btStop_Click"
                 shell:WindowChrome.IsHitTestVisibleInChrome="True">
             <Path Data="{StaticResource IconStop}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"

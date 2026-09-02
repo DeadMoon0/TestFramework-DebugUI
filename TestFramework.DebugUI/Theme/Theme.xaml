@@ -228,6 +228,9 @@
     <!-- Step forward: an arc hopping over the step it is leaving, which is the shape every debugger uses. -->
     <Geometry x:Key="IconStepOver">M 3.6,8.6 A 5.4,5.4 0 0 1 14.4,8.6 M 14.4,8.6 L 12.1,7.3 M 14.4,8.6 L 12.2,10.4 M 9,11.7 A 1.7,1.7 0 1 1 9,15.1 A 1.7,1.7 0 1 1 9,11.7 Z</Geometry>
     <Geometry x:Key="IconRerun">M 3,9 A 6,6 0 1 0 5.2,4.4 M 3,3.2 L 3,4.6 L 4.4,4.6</Geometry>
+    <!-- Asking a stopped run to show what it is looking at. A camera rather than an eye: the reader
+         is not looking, the run is being made to take a picture. -->
+    <Geometry x:Key="IconCamera">M 2.6,6.4 L 6,6.4 L 7.4,4.4 L 10.6,4.4 L 12,6.4 L 15.4,6.4 L 15.4,14 L 2.6,14 Z M 9,7.9 A 2.5,2.5 0 1 1 9,12.9 A 2.5,2.5 0 1 1 9,7.9 Z</Geometry>
     <!-- A bell: what the tool has to say about runs that are not on screen. -->
     <Geometry x:Key="IconBell">M 9,2.6 A 4.4,4.4 0 0 1 13.4,7 C 13.4,10.6 14.8,12.2 14.8,12.2 L 3.2,12.2 C 3.2,12.2 4.6,10.6 4.6,7 A 4.4,4.4 0 0 1 9,2.6 Z M 7.4,14.2 A 1.8,1.8 0 0 0 10.6,14.2</Geometry>
 

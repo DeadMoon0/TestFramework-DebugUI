@@ -11,6 +11,7 @@ using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.Editors;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Diagnostics;
 using TestFramework.DebugUI.State.Runs;
 using TestFramework.DebugUI.State.Shell.Feed;
 
@@ -72,6 +73,7 @@ public partial class UC_RunBar : UserControl
 
         subscriptions.Add(held.BindToDependencyProperty(btContinue, VisibilityProperty));
         subscriptions.Add(held.BindToDependencyProperty(btStep, VisibilityProperty));
+        subscriptions.Add(held.BindToDependencyProperty(btLook, VisibilityProperty));
 
         subscriptions.Add(StateStore<MainState>.Default
             .Bind(BoardSelectors.SelectIsRunning)
@@ -105,6 +107,7 @@ public partial class UC_RunBar : UserControl
         // editor that is not installed is where they stay.
         _ = ShowEditorsAsync();
 
+        btLook.ToolTip = "Ask the run to show what it is looking at now";
         btContinue.ToolTip = Shortcuts.Describe("Release the breakpoint", Shortcuts.Continue);
         btStep.ToolTip = Shortcuts.Describe("Run on to the next step and stop there", Shortcuts.StepForward);
         btStop.ToolTip = Shortcuts.Describe("Ask the run to stop", Shortcuts.Stop);
@@ -135,6 +138,16 @@ public partial class UC_RunBar : UserControl
     /// <summary>Raised when the reader asks the run to take one step.</summary>
     public event Action? StepRequested;
 
+    /// <summary>
+    /// Raised when the reader asks the run for a fresh look at what it is holding.
+    /// </summary>
+    /// <remarks>
+    /// A task, unlike the events beside it, because this one is a question with an answer and the
+    /// button has to reflect the wait: photographing a live page takes long enough to press again,
+    /// and a second press only asks something that is already outstanding.
+    /// </remarks>
+    public event Func<Task>? LookRequested;
+
     /// <summary>Raised when the reader asks the run to stop.</summary>
     public event Action? StopRequested;
 
@@ -144,6 +157,37 @@ public partial class UC_RunBar : UserControl
     private void btContinue_Click(object sender, RoutedEventArgs e) => ContinueRequested?.Invoke();
 
     private void btStep_Click(object sender, RoutedEventArgs e) => StepRequested?.Invoke();
+
+    /// <summary>
+    /// Asks for the look, and stays dead until the answer comes back.
+    /// </summary>
+    /// <remarks>
+    /// The one button here that waits, so the one that has to say so. Anything thrown is logged
+    /// rather than escaping: an unhandled exception from an async void handler takes the window with
+    /// it, and a screenshot that failed is not worth the tool.
+    /// </remarks>
+    private async void btLook_Click(object sender, RoutedEventArgs e)
+    {
+        Func<Task>? asked = LookRequested;
+
+        if (asked is null)
+            return;
+
+        btLook.IsEnabled = false;
+
+        try
+        {
+            await asked();
+        }
+        catch (Exception exception)
+        {
+            Log.Write(exception);
+        }
+        finally
+        {
+            btLook.IsEnabled = true;
+        }
+    }
 
     private void btStop_Click(object sender, RoutedEventArgs e) => StopRequested?.Invoke();
 

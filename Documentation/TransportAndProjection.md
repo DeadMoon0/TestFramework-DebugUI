@@ -47,7 +47,12 @@ Both ends set `PipeOptions.CurrentUserOnly`, so a run under another account cann
 pipe squatting on the well-known name under another account cannot receive a run's stream.
 
 Signal kinds: `InitTimelineRun`, `EntityTransition`, `ValueUpdate`, `LogEntry`, `Assertion`,
-`BreakpointHitRequest` / `BreakpointHitContinue`, `TimelineRunFinished`, `CancelRun`.
+`BreakpointHitRequest` / `BreakpointHitContinue`, `TimelineRunFinished`, `CancelRun`, `Widget`,
+`CaptureWidgetRequest` / `CaptureWidgetAck`.
+
+Kinds are appended, never renumbered, and the three most recent went on without a protocol version
+bump — a consumer that has never heard of a kind still reads every other frame, which is what lets a
+journal recorded months ago still open.
 
 ### Everything is queued except the breakpoint exchange
 
@@ -62,6 +67,26 @@ registered late waits out the whole timeout for an answer that already came. Tha
 every step of every attached run risked a 600-second stall. **Never send-then-register on this
 transport.**
 
+### Asking a run for fresh evidence
+
+There is one message that travels the other way and asks the run to *do* something:
+`CaptureWidgetRequest`. It exists because a run held at a breakpoint is sitting on a page nothing has
+photographed — the step that navigated there has not finished, so the newest picture predates it.
+
+Three properties are worth keeping:
+
+- **The evidence does not travel in the reply.** What the run captures goes out as an ordinary
+  `Widget` signal and is written to the run's own output, so a journal replays a paused capture with
+  no special case and a bundle collects it without knowing it was asked for. `CaptureWidgetAck`
+  carries only how many widgets the run recorded and, when it recorded none, why.
+- **It is served off the receive loop.** Photographing a live page is I/O measured in hundreds of
+  milliseconds, and that loop is the only thing that can hear the continue releasing the very
+  breakpoint the request came from. Answering on it would hold the run in order to look at the run.
+- **The consumer registers its waiter before sending too.** `PipeRunEventSource.CaptureWidgetsAsync`
+  is this side's `ExchangeAsync`, and it is the same rule for the same reason — the ack can arrive
+  before the send's continuation resumes. One ask per run at a time; a second is refused rather than
+  allowed to take the first one's answer.
+
 ## Consuming
 
 `PipeRunEventSource` listens with `MaxAllowedServerInstances` and serves each accepted connection on
@@ -74,6 +99,9 @@ its own task, so a suite running twenty timelines at once does not make them que
   pending and raised so the UI can offer a release; otherwise a `BreakpointHitContinue` goes back
   immediately and the envelope is **not** raised. A frame that cannot be read is still answered — a
   step must never be held because its consumer was confused.
+- `CaptureWidgetAck` is handed to whoever asked and is **not** raised. It is a reply to something
+  this side did, not news about the run; raising it would put "a button was pressed" in the run's own
+  history.
 - Everything else is passed straight through.
 
 `RunIngestService` coalesces envelopes over a short window before dispatching, so a log-heavy run does

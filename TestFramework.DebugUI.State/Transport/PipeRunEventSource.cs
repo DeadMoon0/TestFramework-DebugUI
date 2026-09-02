@@ -51,6 +51,17 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
     /// </remarks>
     public const int DefaultMaxConcurrentRuns = 64;
 
+    /// <summary>
+    /// How long a request for fresh evidence waits for its answer.
+    /// </summary>
+    /// <remarks>
+    /// Sized for the work rather than for the reader's patience: the run photographs a live page,
+    /// which means waiting for the page to be free and then for the picture. Expiring is not a
+    /// failure — the run keeps going and anything it captures still arrives on its own — so this is
+    /// only how long the asker holds its breath.
+    /// </remarks>
+    private static readonly TimeSpan DefaultCaptureWait = TimeSpan.FromSeconds(30);
+
     private readonly string pipeName;
     private readonly SemaphoreSlim slots;
     private readonly CancellationTokenSource shutdown = new();
@@ -175,6 +186,63 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
             return false;
 
         return await SendAsync(session, new PipeBreakpointHitContinueSignal { SessionId = sessionId }, "release the breakpoint");
+    }
+
+    /// <summary>
+    /// Asks a run for a fresh look at whatever it is holding.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The waiter is registered <em>before</em> the request goes out, and that ordering is not a
+    /// nicety: reads happen on this connection's own loop, so a run answering over a local pipe can
+    /// reply before this method's continuation resumes. An answer with nothing registered to receive
+    /// it is dropped, and the asker then waits out the whole timeout for a reply that already came
+    /// and went. Core learned this the expensive way — see <c>PipeClient.ExchangeAsync</c>.
+    /// </para>
+    /// <para>
+    /// Nothing about the evidence itself comes back here. What the run captures arrives as an
+    /// ordinary widget signal through <see cref="EnvelopeReceived"/>, which is why the board and the
+    /// step panel show it with no idea it was asked for. This reports only what became of the asking.
+    /// </para>
+    /// </remarks>
+    /// <param name="sessionId">The run to ask.</param>
+    /// <param name="timeout">How long to wait for the answer, or null for the default.</param>
+    /// <returns>What came of it.</returns>
+    public async Task<WidgetCaptureReport> CaptureWidgetsAsync(string sessionId, TimeSpan? timeout = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
+
+        if (!sessions.TryGetValue(sessionId, out PipeSession? session))
+            return WidgetCaptureReport.NotAttached;
+
+        Task<PipeCaptureWidgetAckSignal>? answer = session.BeginCapture();
+
+        if (answer is null)
+            return WidgetCaptureReport.AlreadyAsking;
+
+        try
+        {
+            if (!await SendAsync(session, new PipeCaptureWidgetRequestSignal { SessionId = sessionId }, "ask the run for a fresh look"))
+                return WidgetCaptureReport.NotAttached;
+
+            Task finished = await Task.WhenAny(answer, Task.Delay(timeout ?? DefaultCaptureWait, shutdownToken));
+
+            if (!ReferenceEquals(finished, answer))
+                return WidgetCaptureReport.Unanswered;
+
+            PipeCaptureWidgetAckSignal ack = await answer;
+
+            return new WidgetCaptureReport
+            {
+                Answered = true,
+                Captured = ack.Captured,
+                Detail = ack.Detail
+            };
+        }
+        finally
+        {
+            session.EndCapture();
+        }
     }
 
     /// <summary>
@@ -367,6 +435,14 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
             return true;
         }
 
+        // A reply to something this side asked, not news about the run. Handing it to the projection
+        // would put a message in the run's history saying that a button had been pressed.
+        if (envelope.Kind == PipeSignalKind.CaptureWidgetAck)
+        {
+            AnswerCapture(session, envelope);
+            return false;
+        }
+
         if (envelope.Kind != PipeSignalKind.BreakpointHitRequest)
             return true;
 
@@ -382,6 +458,31 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
 
         await SendAsync(session, new PipeBreakpointHitContinueSignal { SessionId = envelope.SessionId }, "let the step continue");
         return false;
+    }
+
+    /// <summary>
+    /// Hands a run's answer to whoever asked for it.
+    /// </summary>
+    /// <remarks>
+    /// An answer nobody is waiting for is dropped on purpose, and it is a normal thing rather than a
+    /// fault: the asker gave up, or a second answer arrived for one request. Reporting it would put a
+    /// warning in the feed for something that cost nothing.
+    /// </remarks>
+    private void AnswerCapture(PipeSession session, DebugEnvelope envelope)
+    {
+        try
+        {
+            if (DebugEnvelopeCodec.Unwrap(envelope) is PipeCaptureWidgetAckSignal ack)
+                session.CompleteCapture(ack);
+        }
+        catch (Exception e)
+        {
+            Log.Write(e);
+
+            // Nothing is holding the run here, unlike a breakpoint whose answer went missing, so the
+            // asker simply waits out its own timeout and says the run did not answer.
+            Report(FeedSeverity.Warning, "A run's answer about fresh evidence could not be read.", e.Message, envelope.SessionId);
+        }
     }
 
     private PipeBreakpointHitRequestSignal? TryUnwrapBreakpoint(DebugEnvelope envelope)
@@ -524,6 +625,16 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
         private readonly object gate = new();
         private PipeBreakpointHitRequestSignal? pendingBreakpoint;
 
+        /// <summary>
+        /// What is waiting for this run to answer a request for fresh evidence.
+        /// </summary>
+        /// <remarks>
+        /// One at a time, per run. A reader pressing the button twice wants a second picture rather
+        /// than two answers to one question, and letting the second ask overwrite the first would
+        /// leave the first waiting for an answer that had been handed to someone else.
+        /// </remarks>
+        private TaskCompletionSource<PipeCaptureWidgetAckSignal>? pendingCapture;
+
         internal string SessionId => sessionId;
 
         internal PipeFrameStream Framing => framing;
@@ -548,6 +659,36 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
                 pendingBreakpoint = null;
                 return true;
             }
+        }
+
+        /// <summary>
+        /// Claims the right to ask this run for evidence, and hands back what will answer.
+        /// </summary>
+        /// <returns>The answer to wait on, or null when an ask is already in flight.</returns>
+        internal Task<PipeCaptureWidgetAckSignal>? BeginCapture()
+        {
+            lock (gate)
+            {
+                if (pendingCapture is not null)
+                    return null;
+
+                pendingCapture = new TaskCompletionSource<PipeCaptureWidgetAckSignal>(TaskCreationOptions.RunContinuationsAsynchronously);
+                return pendingCapture.Task;
+            }
+        }
+
+        /// <summary>Delivers the run's answer, if anything is still waiting for it.</summary>
+        internal void CompleteCapture(PipeCaptureWidgetAckSignal ack)
+        {
+            lock (gate)
+                pendingCapture?.TrySetResult(ack);
+        }
+
+        /// <summary>Gives up the claim, whether or not an answer arrived.</summary>
+        internal void EndCapture()
+        {
+            lock (gate)
+                pendingCapture = null;
         }
 
         internal void Close()

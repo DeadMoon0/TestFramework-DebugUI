@@ -39,6 +39,16 @@ public interface IShellCommands
     /// <summary>Asks the selected run to stop, reporting whether the request was delivered.</summary>
     Task<bool> CancelSelectedRunAsync(string? reason = null);
 
+    /// <summary>
+    /// Asks the selected run for a fresh look at itself, reporting whether anything came of it.
+    /// </summary>
+    /// <remarks>
+    /// What the run captures is not returned here. It arrives as an ordinary widget signal and
+    /// appears wherever widgets appear, so a surface that calls this waits only to learn whether to
+    /// expect anything.
+    /// </remarks>
+    Task<bool> CaptureWidgetsForSelectedRunAsync();
+
     /// <summary>Runs the selected run's test again.</summary>
     void RerunSelected();
 

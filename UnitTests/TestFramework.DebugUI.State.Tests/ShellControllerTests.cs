@@ -293,6 +293,34 @@ public sealed class ShellControllerTests(JournalFixture fixture)
         Assert.False(await harness.Controller.ContinueSelectedRunAsync());
     }
 
+    [Fact]
+    public async Task AskingForALookWithNothingSelectedIsNotAnError()
+    {
+        using Harness harness = new(RunsDirectory);
+
+        Assert.False(await harness.Controller.CaptureWidgetsForSelectedRunAsync());
+    }
+
+    [Fact]
+    public async Task AskingARecordedRunForALookSaysWhyItCannot()
+    {
+        // The button offering this is only shown while a run is held, so this is the path a keyboard
+        // or a stale selection can still reach. It has to say something: a reader who asked to see
+        // the run and got silence learns nothing, and the answer here is a real one — a run read back
+        // from disk has no page to photograph.
+        using Harness harness = new(RunsDirectory);
+
+        harness.Controller.SelectRun("recorded");
+
+        Assert.False(await harness.Controller.CaptureWidgetsForSelectedRunAsync());
+
+        FeedEntry told = Assert.Single(
+            harness.Store.GetValue(state => state.Shell.Feed.Entries),
+            entry => entry.Severity == FeedSeverity.Warning && entry.Source == FeedSource.Transport);
+
+        Assert.False(string.IsNullOrWhiteSpace(told.Detail));
+    }
+
     /// <summary>
     /// Every step name reachable by opening each run in turn.
     /// </summary>

@@ -88,6 +88,8 @@ public partial class MainWindow : Window
 
     private Controls.Detail.UC_ValueInspector Inspector => ucDock.Get<Controls.Detail.UC_ValueInspector>(PanelId.Inspector);
 
+    private Controls.Detail.UC_StepDetail StepPanel => ucDock.Get<Controls.Detail.UC_StepDetail>(PanelId.Step);
+
     private Controls.Home.UC_Home HomePage => ucDock.Get<Controls.Home.UC_Home>(PanelId.Home);
 
     /// <summary>Creates the window and the store behind it.</summary>
@@ -171,6 +173,10 @@ public partial class MainWindow : Window
         ucAnnotate.Closed += StopAnnotating;
 
         Values.ValueOpened += OpenValue;
+
+        // A widget goes to the same panel a value does, which is what lets one screenshot be set
+        // against the last passing run's without a second inspector to maintain.
+        StepPanel.WidgetOpened += OpenWidget;
 
         // The home page is shown on purpose and hidden on purpose. It is deliberately not tied to
         // whether a run is selected: the first live run selects itself, and having the page vanish
@@ -942,6 +948,13 @@ public partial class MainWindow : Window
     private void OpenValue(string key, bool isArtifact)
     {
         Inspector.Show(key, isArtifact);
+        Reveal(PanelId.Inspector);
+    }
+
+    /// <summary>Opens a widget in the inspector, where it can be compared with an earlier run's.</summary>
+    private void OpenWidget(WidgetNode widget)
+    {
+        Inspector.ShowWidget(widget);
         Reveal(PanelId.Inspector);
     }
 

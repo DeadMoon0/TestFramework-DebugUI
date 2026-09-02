@@ -74,6 +74,28 @@ public partial class UC_Board : UserControl
     /// </remarks>
     private const double WidgetHeight = 196;
 
+    /// <summary>The inset of a card's content from its edge.</summary>
+    private const double CardPadding = 16;
+
+    /// <summary>The breakpoint marker's width, and how far in from the card's edge it sits.</summary>
+    private const double MarkerWidth = 16;
+    private const double MarkerInset = 8;
+
+    /// <summary>How much clear space is left between the marker and whatever the heading ends with.</summary>
+    private const double MarkerGap = 6;
+
+    /// <summary>
+    /// The column a card's heading gives up to the breakpoint marker.
+    /// </summary>
+    /// <remarks>
+    /// Derived rather than chosen, because the marker is not in that grid and cannot push back: it
+    /// hangs in the card's own host so that dimming an unrun card cannot dim it. That makes the
+    /// heading the only side able to leave room, and a number picked by eye would drift the moment
+    /// the marker moved. The card's padding already covers part of the marker's reach; this is the
+    /// rest of it, plus the gap.
+    /// </remarks>
+    private const double MarkerColumn = MarkerWidth + MarkerInset - CardPadding + MarkerGap;
+
     private readonly CompositeDisposable subscriptions = [];
     private readonly Dictionary<string, StepVisual> stepVisuals = new(StringComparer.Ordinal);
 
@@ -466,7 +488,11 @@ public partial class UC_Board : UserControl
             {
                 new ColumnDefinition { Width = GridLength.Auto },
                 new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
-                new ColumnDefinition { Width = GridLength.Auto }
+                new ColumnDefinition { Width = GridLength.Auto },
+
+                // The marker's corner, left empty. It is the only honest way to keep two things apart
+                // when one of them is not in this grid to be laid out against.
+                new ColumnDefinition { Width = new GridLength(MarkerColumn) }
             }
         };
 
@@ -491,7 +517,7 @@ public partial class UC_Board : UserControl
 
         StackPanel body = new()
         {
-            Margin = new Thickness(16, 6, 16, 6),
+            Margin = new Thickness(CardPadding, 6, CardPadding, 6),
 
             // Centred on a short card, where the writing is all there is; anchored to the top on a
             // card sized for a widget, so a step that drew nothing reads as a card with room to
@@ -563,13 +589,13 @@ public partial class UC_Board : UserControl
     {
         Border marker = new()
         {
-            Width = 16,
+            Width = MarkerWidth,
             Height = 11,
             CornerRadius = new CornerRadius(3),
             BorderThickness = new Thickness(1.5),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 9, 8, 0),
+            Margin = new Thickness(0, 9, MarkerInset, 0),
             Cursor = Cursors.Hand,
             ToolTip = "Stop the run here."
         };

@@ -50,6 +50,17 @@ public partial class UC_ValueInspector : UserControl, IDisposable
     /// <summary>What is on screen, so the diff can be rebuilt when the comparison arrives.</summary>
     private string? shownKey;
     private bool shownIsArtifact;
+
+    /// <summary>
+    /// Set when what is open is a widget rather than a value.
+    /// </summary>
+    /// <remarks>
+    /// A third thing this panel can show, and the one the picture comparison exists for. It is not
+    /// in the run's variables or artifacts, so it is followed through the graph rather than through
+    /// the value selectors - by name, taking the newest of that name, which is what the panel showed
+    /// when it was opened.
+    /// </remarks>
+    private string? shownWidget;
     private ValueChange? comparison;
     private bool showingDiff;
 
@@ -78,6 +89,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
 
         shownKey = key;
         shownIsArtifact = isArtifact;
+        shownWidget = null;
 
         // Opening a value shows the value. The diff is a deliberate second step: most of the time a
         // reader opening a value wants to read it, not to read what it used to be.
@@ -101,6 +113,70 @@ public partial class UC_ValueInspector : UserControl, IDisposable
             .Subscribe(ShowComparison));
 
         Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Shows a widget, following the run for as long as the inspector stays open.
+    /// </summary>
+    /// <remarks>
+    /// The same panel rather than one of its own, because everything it has to say about a widget it
+    /// already says about a value: the facts, the content, the file it was written to, and how it
+    /// stands against the last passing run. What differs is only that the content is a picture, and
+    /// the well was already able to draw one.
+    /// </remarks>
+    /// <param name="widget">The widget to show.</param>
+    public void ShowWidget(WidgetNode widget)
+    {
+        ArgumentNullException.ThrowIfNull(widget);
+
+        subscriptions.Dispose();
+        subscriptions = [];
+
+        shownKey = widget.Name;
+        shownIsArtifact = false;
+        shownWidget = widget.Name;
+
+        showingDiff = false;
+        btDiff.Content = "Diff";
+        rtDiff.Visibility = Visibility.Collapsed;
+        spPictures.Visibility = Visibility.Collapsed;
+        tbPreview.Visibility = Visibility.Visible;
+
+        // Followed through the graph rather than through a value selector, because a widget is in
+        // neither store. A live run can publish a newer one under the same name - a second look at a
+        // page - and the panel showing the older one would be showing the past without saying so.
+        subscriptions.Add(StateStore<MainState>.Default
+            .Bind(BoardSelectors.SelectActiveRun)
+            .Subscribe(_ => ShowNewestWidget()));
+
+        subscriptions.Add(StateStore<MainState>.Default
+            .Bind(ComparisonSelectors.SelectWidgetChange(widget.Name))
+            .Subscribe(ShowComparison));
+
+        Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Draws the newest widget of the open name, which is the current state of that thing.</summary>
+    private void ShowNewestWidget()
+    {
+        if (shownWidget is null || WidgetOf(StateStore<MainState>.Default.GetValue(state => state.Board.ActiveRun)) is not { } widget)
+            return;
+
+        Render(widget.Name, widget.Kind, widget.Description, []);
+    }
+
+    /// <summary>The newest widget carrying the open name, or null when the run has none.</summary>
+    private WidgetNode? WidgetOf(RunGraph graph)
+    {
+        WidgetNode? newest = null;
+
+        foreach (WidgetNode candidate in graph.Widgets)
+        {
+            if (string.Equals(candidate.Name, shownWidget, StringComparison.Ordinal))
+                newest = candidate;
+        }
+
+        return newest;
     }
 
     /// <summary>
@@ -144,6 +220,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
     {
         btDiff.Content = "Diff";
         rtDiff.Visibility = Visibility.Collapsed;
+        spPictures.Visibility = Visibility.Collapsed;
         tbPreview.Visibility = Visibility.Visible;
 
         if (shownKey is not null)
@@ -154,6 +231,12 @@ public partial class UC_ValueInspector : UserControl, IDisposable
     private void Reshow()
     {
         MainState state = StateStore<MainState>.Default.GetValue(current => current);
+
+        if (shownWidget is not null)
+        {
+            ShowNewestWidget();
+            return;
+        }
 
         if (shownIsArtifact)
         {
@@ -183,7 +266,8 @@ public partial class UC_ValueInspector : UserControl, IDisposable
         btDiff.Content = "Value";
         tbPreview.Visibility = Visibility.Collapsed;
         imgPreview.Visibility = Visibility.Collapsed;
-        rtDiff.Visibility = Visibility.Visible;
+        spPictures.Visibility = Visibility.Collapsed;
+        rtDiff.Visibility = Visibility.Collapsed;
 
         tbPreviewLabel.Text = change.Change switch
         {
@@ -191,6 +275,14 @@ public partial class UC_ValueInspector : UserControl, IDisposable
             ValueChangeKind.Removed => "GONE SINCE THE LAST PASSING RUN",
             _ => "CHANGED SINCE THE LAST PASSING RUN"
         };
+
+        // Pictures are shown, not described. Taken before the text diff rather than after it because
+        // a unified diff of two images is not a weaker answer, it is a wrong one: neither carries a
+        // line of text, so it compares nothing against nothing and reports them identical.
+        if (RenderPictureDiff(change))
+            return;
+
+        rtDiff.Visibility = Visibility.Visible;
 
         FlowDocument document = new()
         {
@@ -215,6 +307,123 @@ public partial class UC_ValueInspector : UserControl, IDisposable
 
         rtDiff.Document = document;
     }
+
+    /// <summary>How wide each picture of a side-by-side comparison is decoded.</summary>
+    /// <remarks>
+    /// Half the single-picture width, because two of them share the well. Decoding both at full
+    /// width to draw them at half would cost twice the memory to show the same thing.
+    /// </remarks>
+    private const int ComparedImageWidth = 600;
+
+    /// <summary>
+    /// Shows the two pictures side by side, when what changed is a picture.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// No attempt is made to say <em>what</em> in the image differs. The run already knows they
+    /// differ — the comparison decided that from the content hash, which is exact — so the only thing
+    /// left is to let a reader see both, and the honest way to do that is to show both. A computed
+    /// pixel overlay would be a guess dressed as an answer: two screenshots of the same page taken a
+    /// second apart differ in a caret, a scrollbar and an animation frame, and highlighting all three
+    /// as findings is worse than highlighting nothing.
+    /// </para>
+    /// <para>
+    /// A side that has no picture says so rather than leaving a gap: for something added or removed
+    /// the absence <em>is</em> the difference, and an empty half of a panel does not read as
+    /// "the last passing run did not have this".
+    /// </para>
+    /// </remarks>
+    /// <param name="change">The comparison to draw.</param>
+    /// <returns>Whether this was a picture, and has therefore been drawn.</returns>
+    private bool RenderPictureDiff(ValueChange change)
+    {
+        if (!IsPicture(change.Baseline) && !IsPicture(change.Current))
+            return false;
+
+        spPictures.Children.Clear();
+
+        StackPanel pair = new() { Orientation = Orientation.Horizontal };
+
+        pair.Children.Add(Side("LAST PASSING RUN", change.Baseline));
+        pair.Children.Add(Side("THIS RUN", change.Current));
+
+        spPictures.Children.Add(pair);
+
+        // The verdict in words underneath, because two thumbnails can look alike at this size while
+        // the files are plainly different - and the comparison knows which, by hash.
+        spPictures.Children.Add(new TextBlock
+        {
+            Text = change.Change switch
+            {
+                ValueChangeKind.Changed => "The two differ: " + Difference(change) + ".",
+                ValueChangeKind.Added => "This run produced it; the last passing run did not.",
+                ValueChangeKind.Removed => "The last passing run produced it; this run did not.",
+                ValueChangeKind.Indeterminate => change.Reason ?? "The two cannot be compared.",
+                _ => "The two are the same."
+            },
+            Foreground = (Brush)FindResource("TextFaint"),
+            FontSize = 11,
+            Margin = new Thickness(0, 8, 0, 0),
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        spPictures.Visibility = Visibility.Visible;
+
+        return true;
+    }
+
+    /// <summary>One run's half of a picture comparison, headed by which run it is.</summary>
+    private UIElement Side(string heading, ValueDescription? described)
+    {
+        StackPanel side = new() { Margin = new Thickness(0, 0, 10, 0) };
+
+        side.Children.Add(new TextBlock
+        {
+            Text = heading,
+            Style = (Style)FindResource("PanelHeading"),
+            Margin = new Thickness(0, 0, 0, 4)
+        });
+
+        BitmapSource? picture = IsPicture(described)
+            ? WidgetImages.Read(RunFiles.Resolve(described!.Body), described.Body?.ContentHash, ComparedImageWidth)
+            : null;
+
+        if (picture is not null)
+        {
+            Image image = new()
+            {
+                Source = picture,
+                Width = ComparedImageWidth / 2.0,
+                Stretch = Stretch.Uniform,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Top
+            };
+
+            RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+            side.Children.Add(image);
+
+            return side;
+        }
+
+        // Two different absences, and a reader acts differently on each: one run never produced this,
+        // or it did and the file is not on this machine.
+        side.Children.Add(new TextBlock
+        {
+            Text = described is null
+                ? "Not produced by this run."
+                : "The picture could not be read from " + (described.Body?.RelativePath ?? "its file") + ".",
+            Foreground = (Brush)FindResource("TextFaint"),
+            FontSize = 11,
+            Width = ComparedImageWidth / 2.0,
+            TextWrapping = TextWrapping.Wrap
+        });
+
+        return side;
+    }
+
+    /// <summary>Whether a described thing is something to look at rather than to read.</summary>
+    private static bool IsPicture(ValueDescription? described)
+        => described?.Preview?.Form == DebugPreviewForm.Image;
 
     /// <summary>
     /// One line of content, banded in the colour of what happened to it.

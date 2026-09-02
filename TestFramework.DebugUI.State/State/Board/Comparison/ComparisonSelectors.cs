@@ -27,6 +27,10 @@ public static class ComparisonSelectors
     public static Selector<MainState, ValueChange?> SelectVariableChange(string key)
         => ReadOnlySelector.Of<ValueChange?>(nameof(SelectVariableChange), state => state.Board.Comparison.Values.ChangeForVariable(key));
 
+    /// <summary>How one widget changed, or null when it did not or nothing was compared.</summary>
+    public static Selector<MainState, ValueChange?> SelectWidgetChange(string name)
+        => ReadOnlySelector.Of<ValueChange?>(nameof(SelectWidgetChange), state => state.Board.Comparison.Values.ChangeForWidget(name));
+
     /// <summary>What kind of change one artifact saw, for a badge with no room for the detail.</summary>
     public static Selector<MainState, ValueChangeKind?> SelectArtifactChangeKind(string key)
         => ReadOnlySelector.Of(nameof(SelectArtifactChangeKind), state => state.Board.Comparison.Values.ForArtifact(key));

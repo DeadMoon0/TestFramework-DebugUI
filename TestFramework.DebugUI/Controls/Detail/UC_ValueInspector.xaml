@@ -103,6 +103,15 @@
                             <Image x:Name="imgPreview" Visibility="Collapsed"
                                    HorizontalAlignment="Left" VerticalAlignment="Top"
                                    Stretch="None" RenderOptions.BitmapScalingMode="HighQuality"/>
+
+                            <!--
+                                Two pictures beside each other, for the diff of something that is an
+                                image. A unified text diff of two screenshots compares the words
+                                "image" and "image" and reports them identical, which is true and
+                                useless; what a reader wants is to see both and find the difference
+                                with their eyes.
+                            -->
+                            <StackPanel x:Name="spPictures" Visibility="Collapsed" Orientation="Vertical"/>
                         </Grid>
                     </ScrollViewer>
                 </Grid>

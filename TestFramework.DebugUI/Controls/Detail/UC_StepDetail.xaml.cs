@@ -43,6 +43,13 @@ public partial class UC_StepDetail : UserControl, IDisposable
     /// <summary>Which widgets the filmstrip is currently drawn from, so it is rebuilt only when they change.</summary>
     private string shownWidgets = string.Empty;
 
+    /// <summary>Raised when the reader asks to see one of this step's widgets on its own.</summary>
+    /// <remarks>
+    /// The panel holds the widgets but not the inspector, so it says what was asked for and the
+    /// window decides where the answer goes — the same split every other surface here keeps.
+    /// </remarks>
+    public event Action<WidgetNode>? WidgetOpened;
+
     /// <summary>Creates the panel and binds it.</summary>
     public UC_StepDetail()
     {
@@ -275,9 +282,14 @@ public partial class UC_StepDetail : UserControl, IDisposable
     /// actions and a middle that belongs to whoever produced it — and every surface that shows one
     /// wants all three, not a picture and a caption.
     /// </remarks>
-    private static UIElement Frame(WidgetNode widget)
+    private UIElement Frame(WidgetNode widget)
     {
         UC_Widget frame = new();
+
+        // The panel says what was asked for and the window does it, the way every other surface here
+        // works. Until this was wired the expand button raised an event nobody had subscribed, so
+        // pressing it - and clicking the picture, which does the same - did nothing at all.
+        frame.Expanded += raised => WidgetOpened?.Invoke(raised);
 
         frame.Show(widget);
 

@@ -25,6 +25,18 @@ public sealed record RunBaseline
         = ImmutableDictionary<string, ValueDescription>.Empty;
 
     /// <summary>
+    /// The evidence that run produced, by name.
+    /// </summary>
+    /// <remarks>
+    /// Keyed by name alone, which is what the run itself keys them by: the store that writes a widget
+    /// versions it under its name for the whole run, so two widgets sharing one are already two
+    /// versions of the same thing rather than two things. Keying by step as well would make a
+    /// screenshot taken from a renamed step look like a new one.
+    /// </remarks>
+    public ImmutableDictionary<string, ValueDescription> Widgets { get; init; }
+        = ImmutableDictionary<string, ValueDescription>.Empty;
+
+    /// <summary>
     /// How long each of that run's steps took, keyed by <see cref="TimingComparison.KeyOf"/>.
     /// </summary>
     /// <remarks>
@@ -67,10 +79,25 @@ public sealed record ValueDiff
 
     public ImmutableList<ValueChange> Artifacts { get; init; } = ImmutableList<ValueChange>.Empty;
 
+    /// <summary>The evidence this run produced, set against the same evidence in the baseline.</summary>
+    /// <remarks>
+    /// A screenshot of a page that has changed is the most legible difference a run can show, and the
+    /// hardest to state in words — which is why the comparison carries widgets even though they are
+    /// not values and do not count towards <see cref="ChangedCount"/>.
+    /// </remarks>
+    public ImmutableList<ValueChange> Widgets { get; init; } = ImmutableList<ValueChange>.Empty;
+
     /// <summary>Whether a comparison was made at all.</summary>
     public bool HasBaseline => Baseline is not null;
 
-    /// <summary>How many values differ, which is the number a header shows.</summary>
+    /// <summary>
+    /// How many values differ, which is the number a header shows.
+    /// </summary>
+    /// <remarks>
+    /// Values only. A widget is evidence about a run rather than a value it produced, and a header
+    /// reading "3 values changed" when two of them are screenshots would be answering a different
+    /// question than the one it was asked.
+    /// </remarks>
     public int ChangedCount
         => Variables.Count(change => change.IsInteresting) + Artifacts.Count(change => change.IsInteresting);
 
@@ -85,6 +112,9 @@ public sealed record ValueDiff
 
     /// <summary>The full comparison of one artifact, for the inspector to diff it.</summary>
     public ValueChange? ChangeForArtifact(string key) => Locate(Artifacts, key);
+
+    /// <summary>The full comparison of one widget, for the inspector to diff it.</summary>
+    public ValueChange? ChangeForWidget(string name) => Locate(Widgets, name);
 
     private static ValueChangeKind? Find(ImmutableList<ValueChange> changes, string key)
         => Locate(changes, key)?.Change;
@@ -253,6 +283,7 @@ public static class RunBaselineSelector
             StartedAtUtc = run.StartedAtUtc,
             Variables = graph.Variables.ToImmutableDictionary(pair => pair.Key, pair => pair.Value.Description, StringComparer.Ordinal),
             Artifacts = graph.Artifacts.ToImmutableDictionary(pair => pair.Key, pair => pair.Value.Description, StringComparer.Ordinal),
+            Widgets = WidgetsOf(graph),
 
             // What the run cost, taken from the same replay. The picker's own duration is used for the run
             // total because it comes from the sidecar and is there even for a run nobody has opened.
@@ -277,8 +308,32 @@ public static class RunBaselineSelector
             Artifacts = ValueComparison.Compare(
                 baseline.Artifacts,
                 current.Artifacts.ToImmutableDictionary(pair => pair.Key, pair => pair.Value.Description, StringComparer.Ordinal),
-                DebugValueKindTag.Artifact)
+                DebugValueKindTag.Artifact),
+            Widgets = ValueComparison.Compare(
+                baseline.Widgets,
+                WidgetsOf(current),
+                DebugValueKindTag.Widget)
         };
+    }
+
+    /// <summary>
+    /// A run's widgets as named descriptions, which is all a comparison needs of them.
+    /// </summary>
+    /// <remarks>
+    /// The last of each name wins, matching what a reader sees: the run's own store versions a
+    /// repeated name, so the newest is the current state of that thing and the earlier ones are its
+    /// history. Comparing the first capture of a page against the baseline's last would set two
+    /// different moments beside each other and call the difference a change.
+    /// </remarks>
+    private static ImmutableDictionary<string, ValueDescription> WidgetsOf(RunGraph graph)
+    {
+        ImmutableDictionary<string, ValueDescription>.Builder widgets =
+            ImmutableDictionary.CreateBuilder<string, ValueDescription>(StringComparer.Ordinal);
+
+        foreach (WidgetNode widget in graph.Widgets)
+            widgets[widget.Name] = widget.Description;
+
+        return widgets.ToImmutable();
     }
 
     /// <summary>States why no comparison could be made.</summary>

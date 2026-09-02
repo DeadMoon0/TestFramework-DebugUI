@@ -57,11 +57,21 @@ public sealed record ValueChange
     public bool IsInteresting => Change is not ValueChangeKind.Unchanged;
 }
 
-/// <summary>Whether a compared value is a variable or an artifact.</summary>
+/// <summary>What kind of thing a comparison is about.</summary>
 public enum DebugValueKindTag
 {
     Variable,
-    Artifact
+    Artifact,
+
+    /// <summary>
+    /// A piece of evidence rather than a value.
+    /// </summary>
+    /// <remarks>
+    /// Compared by exactly the same rules — a widget is described the way a value is, so the hash
+    /// rung answers first and answers well: two screenshots of the same page differ in their bytes
+    /// the moment anything on the page moved.
+    /// </remarks>
+    Widget
 }
 
 /// <summary>

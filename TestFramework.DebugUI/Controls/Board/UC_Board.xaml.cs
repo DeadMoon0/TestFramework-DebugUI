@@ -467,7 +467,12 @@ public partial class UC_Board : UserControl
     /// took, what it produced — because a board of small boxes tells you only that things happened
     /// in an order, which is the one thing you already knew.
     /// </remarks>
-    private UIElement BuildStep(LayoutNode node)
+    /// <remarks>
+    /// Internal rather than private so a card can be built and measured in a test. What goes wrong in
+    /// here goes wrong geometrically — two things laid out over each other — and that is invisible to
+    /// every assertion that does not lay the card out.
+    /// </remarks>
+    internal UIElement BuildStep(LayoutNode node)
     {
         Border status = new() { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = (Brush)FindResource("StateNotRun") };
         TextBlock name = new() { Foreground = (Brush)FindResource("TextPrimary"), FontSize = 16, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(8, 0, 0, 0) };

@@ -66,6 +66,9 @@ public partial class MainWindow : Window
     private WatchNotifier? notifier;
     private IDisposable? halts;
 
+    /// <summary>Brings the step panel out whenever a step is picked, wherever it was picked from.</summary>
+    private IDisposable? picks;
+
     /// <summary>What fraction of the window the pinned wells have reserved.</summary>
     private DockInsets reserved = DockInsets.None;
 
@@ -198,6 +201,23 @@ public partial class MainWindow : Window
             {
                 if (waiting)
                     Put(PanelId.Home);
+            });
+
+        // Clicking something is asking to see it, so the panel that shows it comes out: opened if it
+        // was away, brought to the front of its well if it was behind another. Kept here, on the
+        // selection itself, rather than at the four places that make one - the board, a search hit, a
+        // failure in the summary, an entry in the feed. A rule kept at four call sites is a rule that
+        // holds at three of them the day a fifth is added, and until now it held at none: picking a
+        // step with the panel closed changed nothing a reader could see.
+        picks = StateStore<MainState>.Default
+            .Bind(BoardSelectors.SelectSelectedStep)
+            .DistinctUntilChanged()
+            .Subscribe(step =>
+            {
+                // Only a real pick. Selecting another run clears the step, and a panel appearing
+                // because something was cleared would be the tool moving on its own.
+                if (step is not null)
+                    Reveal(PanelId.Step);
             });
 
         // Read before the window is shown, so restoring geometry does not visibly move it.
@@ -1229,6 +1249,7 @@ public partial class MainWindow : Window
 
         // Before the store goes, since it is what is being observed.
         halts?.Dispose();
+        picks?.Dispose();
         halts = null;
 
         notifications?.Dispose();

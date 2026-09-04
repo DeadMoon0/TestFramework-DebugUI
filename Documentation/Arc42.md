@@ -1,6 +1,6 @@
 # TestFramework-DebugUI - arc42 Architecture Documentation
 
-> Date: 2026-06-29
+> Date: 2026-09-04
 
 ## 1. Introduction and Goals
 
@@ -27,10 +27,12 @@ Primary goals:
 
 Relevant collaborators:
 
-- `TestFramework.Core`: emits debugger signals during timeline execution
-- `TestFramework.DebugUI.PipeAdapter`: hosts the current pipe-facing adapter and signal routing loop
-- `TestFramework.DebugUI.Data`: projects signals into the canonical run state graph
-- WPF presentation layer: renders the projected state and exposes user actions such as continuing a breakpoint
+- `TestFramework.Core`: emits debugger signals during timeline execution, and writes the run's journal and widget files
+- `TestFramework.DebugUI.State`: accepts signals from the pipe or from a journal and projects them into the canonical run state graph
+- `TestFramework.DebugUI.Layout`: derives board geometry from that graph
+- `TestFramework.DebugUI.Docking`: works out where panels sit and what a drop would do
+- `TestFramework.DebugUI`: the WPF shell that renders the projected state and offers the actions - continuing a breakpoint, asking a paused run for a fresh look
+- `TestFramework.DebugUI.Launcher`: installs and updates the tool, and creates the directory whose existence arms journalling
 - test authors: start the UI, run timelines, and inspect results
 
 The DebugUI sits on the consumer side of debugging. It is not the run engine, and it should not become the hidden owner of test behavior.
@@ -40,18 +42,20 @@ The DebugUI sits on the consumer side of debugging. It is not the run engine, an
 The current solution strategy is:
 
 - keep the execution-facing debugger semantics in Core
-- accept signals through a dedicated adapter instead of mixing transport code into the WPF window directly
+- accept signals in a library with no WPF types in it, rather than mixing transport code into the window
 - project protocol messages into a canonical state tree before rendering anything
-- keep user-facing docs separate from internal transport plans so ordinary consumers are not forced to learn the transport first
+- derive everything geometric - the board, the panel arrangement - as a pure function of that state, so there is no layout state to keep correct
+- keep user-facing docs separate from internal transport documents so ordinary consumers are not forced to learn the transport first
 
 ## 5. Building Block View
 
 Main building blocks:
 
 - `TestFramework.DebugUI`: WPF shell, windowing, and user interaction
-- `TestFramework.DebugUI.PipeAdapter`: current named-pipe host and signal dispatch layer
-- `TestFramework.DebugUI.Data`: reducer and state-query layer for canonical run state
-- `WpfStateService`: UI-facing state container
+- `TestFramework.DebugUI.State`: transport, ingest, reducers, selectors and the canonical run state - no WPF types
+- `TestFramework.DebugUI.Layout`: pure geometry, a `RunGraph` in and a board arrangement out
+- `TestFramework.DebugUI.Docking`: pure panel arrangement, as records a test can reason about
+- `TestFramework.DebugUI.Launcher`: a small updater that keeps installed versions side by side
 
 Important internal documents:
 
@@ -62,10 +66,10 @@ Important internal documents:
 Typical runtime flow:
 
 1. The test runtime emits debugger signals.
-2. The pipe adapter receives and classifies those signals.
-3. The reducer projects them into canonical run state.
+2. `PipeRunEventSource` accepts one connection per run and classifies what arrives, answering breakpoint requests itself.
+3. The reducer projects the signals into canonical run state.
 4. The WPF UI queries and renders that state.
-5. If a step pauses at a breakpoint, the UI issues a continue signal back through the adapter.
+5. If a step pauses at a breakpoint, the UI issues a continue signal back over the same connection - and may first ask the paused run to record fresh widgets, which arrive as ordinary signals rather than in the reply.
 
 Completed runs are journalled to disk and replayed from there, so they survive both the test host and the UI process exiting. Journalling is armed by its marker directory existing, which the launcher creates.
 
@@ -73,9 +77,8 @@ Completed runs are journalled to disk and replayed from there, so they survive b
 
 The current deployment shape is simple:
 
-- one desktop WPF application
-- one adapter library for current transport integration
-- one data/state projection library
+- one desktop WPF application, plus a small launcher that installs and updates it
+- three libraries it is built from: transport and state, board geometry, panel arrangement
 
 The app runs locally on the developer machine and connects to test processes through the named-pipe transport.
 
@@ -84,7 +87,7 @@ The app runs locally on the developer machine and connects to test processes thr
 - Canonical run state: the UI should reason about `Run -> Stage -> Layer -> Step -> Attempt`, not about raw message ordering.
 - Explicit breakpoint workflow: pausing and resuming should stay visible to the user.
 - Diagnostics over magic: transport failures should point users toward recovery steps, not just disappear into silent no-op behavior.
-- User docs vs internal docs: onboarding and recovery guidance should stay separate from protocol redesign planning.
+- User docs vs internal docs: onboarding and recovery guidance should stay separate from how the transport works.
 
 ### State is a tree of slices
 
@@ -156,11 +159,20 @@ nothing more.
   is what is genuinely transport — pipe lifecycle, per-session event retention, breakpoint replies, and
   listing recorded runs, which callers expect to have happened by the time the call returns.
 
-- Keep the current pipe adapter documented as current-state architecture.
-  Rationale: users need to understand what exists today before future broker work lands.
+- Do not build the separate broker process the retired 2026-05 reliability plan proposed.
+  Rationale: what it was wanted for was durability, and the NDJSON journal provides that without a third
+  process to install, version and debug. The rest of that plan shipped inside the existing two-process
+  shape - one server instance per run, a per-run availability probe, a versioned framed protocol,
+  bounded waits, an authenticated channel. If a broker is ever revisited, the honest reason would be
+  something the journal cannot do, such as one consumer watching runs from several machines. See
+  [TransportAndProjection.md](./TransportAndProjection.md).
 
-- Treat the broker transport plan as future architecture, not present guarantee.
-  Rationale: the plan is valuable, but it should not be mistaken for shipped durability behavior.
+- Let a paused run be asked for fresh evidence, and never let the answer travel in the reply.
+  Rationale: a run held at a breakpoint is sitting on a page nothing has photographed - the step that
+  navigated there has not finished. What the run captures goes out as an ordinary widget signal and is
+  written to the run's own output, so a journal replays it with no special case and a bundle collects it
+  without knowing it was asked for. The acknowledgement carries only a count and, when nothing was
+  recorded, why.
 
 ## 10. Quality Requirements
 
@@ -171,10 +183,10 @@ nothing more.
 
 ## 11. Risks and Technical Debt
 
-- Transport durability is still weaker than the future broker design intends.
-- The current WPF surface remains Windows-only.
-- Late-attach and replay expectations can be misunderstood if readers treat the redesign plan as already implemented.
-- Temporary WPF build artifacts in the repo tree still create noise and should be cleaned separately from this documentation pass.
+- The WPF surface is Windows-only, and the transport's cheap availability probe is a Windows path trick; elsewhere it falls back to a bounded connect.
+- A run that executes while no UI is listening is not shown live at all - it is picked up from its journal once it has finished. That is what late attach really means here, and it is easy to mistake for a lost run.
+- Journalling is armed by a directory the launcher creates, so a machine that has never installed the tool records nothing, and nothing says so at run time.
+- Widget files live beside the run rather than inside the journal, so a journal copied to another machine without its output folder replays the run but cannot show its pictures.
 
 ## 12. Glossary
 
@@ -182,4 +194,5 @@ nothing more.
 - Stage: a named execution group in the timeline
 - Layer: a dependency-ready step batch inside a stage
 - Attempt: one execution try for a step, including retries
-- Pipe Adapter: the current named-pipe host and signal dispatch layer used by DebugUI
+- Widget: a file a run published to be looked at - a screenshot, a document, a log - carried as a described value and rendered according to its kind
+- Journal: the NDJSON record of one run, written beside the run's output, which is what makes a finished run reopenable

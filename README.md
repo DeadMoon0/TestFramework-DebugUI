@@ -8,8 +8,9 @@ The DebugUI focuses on these consumer workflows:
 
 - inspect a run as `Run -> Stage -> Layer -> Step -> Attempt`
 - review variables, artifacts, logs, and assertions without parsing raw output manually
-- pause at breakpoints and continue intentionally
-- keep completed runs visible in the UI process while later runs execute
+- look at what a step recorded to be looked at - screenshots, documents, logs - on the step and on the board
+- pause at breakpoints and continue intentionally, and ask a paused run for a fresh look
+- reopen a recorded run later, after both the test host and the UI have exited
 
 ## Start Here
 
@@ -40,29 +41,30 @@ The UI listens on that pipe, projects the incoming signals into canonical state,
 
 ## What You Can Inspect
 
-The DebugUI data layer exposes a canonical state tree plus queries for:
+`TestFramework.DebugUI.State` holds a canonical state tree plus queries for:
 
 - ordered stage, layer, step, and attempt traversal
 - latest-attempt summaries
 - aggregated debug output and latest-log views
 - assertion history
 - breakpoint-aware step inspection
+- the run's widgets, and the comparison of this run's values against the last clean run of the same test
 
 ## Known Limitations
 
-DebugUI is stable as an inspection surface for normal pipe-connected runs, but its transport story still has known limitations:
+DebugUI is stable both for watching a live run and for reopening a recorded one. What is genuinely limited:
 
-- transport durability is not yet broker-backed across independent UI restarts
-- late-attach and replay behavior are more limited than the future broker plan describes
-- malformed or partial transport messages are diagnosable, but not every failure mode has a recovery path that stays entirely inside the UI
-- recorded runs are durable and reopen after the test host exits; the separate-broker redesign once planned was retired in favour of the journal
+- **Attachment is decided once, at the run's start.** A UI started midway through a run does not join it; that run appears in the list when it finishes and is read from its journal. Every later run in the same suite is picked up, because the check is per run rather than once per process.
+- **Journalling is armed by a directory the launcher creates.** A machine where the tool has never been installed records nothing, and nothing says so at run time.
+- **Widget files live beside the run, not inside the journal.** A journal moved without its output folder replays the run but cannot show its pictures.
+- Malformed or partial transport messages are diagnosable, but not every failure mode has a recovery path that stays entirely inside the UI.
 
-Treat the current implementation as stable for both live debugging sessions and reopening recorded runs.
+The separate-broker redesign once planned was retired: the journal provides the durability it was for.
 
 ## Troubleshooting
 
 - If no run appears, verify the UI started before or during the test run and confirm both sides use the same `TESTFRAMEWORK_DEBUG_PIPE_NAME` value.
-- If a breakpoint never resumes, confirm the active step is actually marked as waiting and that only one breakpoint is paused at a time.
+- If a breakpoint never resumes, confirm the active step is actually marked as waiting; with two steps of one run waiting at once, each can still be released, but a widget captured while both wait is filed against neither.
 - If a run tree appears incomplete, check the DebugUI error guide before assuming the timeline itself is at fault.
 - If you are diagnosing transport behaviour rather than a usage error, read [Documentation/TransportAndProjection.md](./Documentation/TransportAndProjection.md).
 

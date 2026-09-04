@@ -8,16 +8,17 @@ Use it when you want a debugger-oriented view of execution instead of reading on
 
 The application connects to the built-in debugger transport and projects a run into a structured inspection model:
 
-- `Run -> Stage -> Layer -> Step -> Attempt`
-- variables and artifacts as structured values
+- `Run -> Stage -> Layer -> Step -> Attempt`, drawn as a board rather than a list
+- variables and artifacts as structured values, compared against the last clean run of the same test
+- widgets - the files a step recorded to be looked at, such as a screenshot of the page it was on
 - logs and assertions grouped by execution context
-- breakpoint wait state with an explicit continue action
+- breakpoint wait state with an explicit continue action, and a way to ask the paused run for a fresh look
 
 ## Quickstart
 
 1. Start the DebugUI app.
 2. Run your timeline or test suite with the normal built-in debugger path.
-3. Inspect the active run in the tree view.
+3. Pick the run and inspect it on the board; a step's panel holds its values, log, attempts and widgets.
 4. Use the breakpoint continue action when a step pauses.
 
 ## When To Use It

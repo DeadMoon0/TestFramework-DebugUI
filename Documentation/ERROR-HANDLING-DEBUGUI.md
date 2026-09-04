@@ -14,7 +14,7 @@ Check these in order before assuming a deeper transport defect:
 1. Is the DebugUI app running?
 2. Does the test process use the same `TESTFRAMEWORK_DEBUG_PIPE_NAME` value as the UI?
 3. Did the run actually include debugger output, or are you only expecting console formatting from `OutputRunDebugger`?
-4. Is the issue an active-session problem, or a late-attach/replay expectation that belongs to the future broker plan?
+4. Is the issue an active-session problem, or a run that was never watched live and has to be reopened from its journal?
 
 ## Connection And Startup Failures
 
@@ -38,7 +38,7 @@ Likely causes:
 
 - malformed or incomplete transport payloads
 - a producer-side failure before initialization completed
-- a state-projection problem in the adapter or reducer layer
+- a projection problem in `PipeRunEventSource` or in the reducer
 
 Recovery:
 
@@ -60,14 +60,14 @@ Recovery:
 
 - confirm the active step is marked as waiting at a breakpoint
 - use the explicit continue action from the UI
-- avoid overlapping breakpoint waits in the same run until the transport redesign work is complete
+- with two steps of one run waiting at once, the UI can still release each of them, but a widget captured while both wait cannot be filed against either - so reduce to one breakpoint when the evidence matters
 
 ### Symptom: Continue does nothing useful
 
 Likely causes:
 
 - the paused step is no longer the active waiting step
-- the adapter and UI got out of sync after a transport interruption
+- the run and the UI got out of sync after a transport interruption
 
 Recovery:
 
@@ -77,28 +77,57 @@ Recovery:
 
 ## Transport Limitation Cases
 
-### Symptom: A completed run is gone after restarting the UI
+### Symptom: A completed run is missing after restarting the UI
 
-This is currently a known limitation, not necessarily a defect in your test.
+A finished run is journalled to disk and reopens after both the test host and the UI have exited, so a
+run that is missing was most likely never recorded.
 
-Current behavior:
+Likely causes:
 
-- completed runs stay available while the current DebugUI process remains alive
-- broker-backed durable replay across independent UI restarts is future architecture, not the current guaranteed behavior
-
-Recovery:
-
-- inspect the run before closing the UI
-- durable replay is implemented: a journalled run reopens after its test host exits. If a run is missing from the list, the journal marker directory is the thing to check - see [TransportAndProjection.md](./TransportAndProjection.md)
-
-### Symptom: Late attach misses the beginning of the run
-
-This is also part of the current transport limitation envelope.
+- the journal's marker directory does not exist, which is what arms journalling - the launcher creates
+  it, so a machine where the tool has never been installed records nothing
+- the run's output folder was cleaned between the run and the attempt to reopen it
 
 Recovery:
 
-- start the UI before the run when you need full-fidelity inspection
-- use the transport plan as the reference for what future replay semantics should look like
+- check the marker directory before assuming the run was lost - see
+  [TransportAndProjection.md](./TransportAndProjection.md)
+- a run whose journal exists but whose output folder is gone still opens; its widget files do not, since
+  they live beside the run rather than inside the journal
+
+### Symptom: A run that was already going when the UI started never appeared live
+
+Whether a run gets a pipe debugger at all is decided once, at the run's start, by asking whether a UI is
+listening. A UI started midway through therefore does not join the run in progress - it is not a partial
+attach, the run simply has no live consumer.
+
+Recovery:
+
+- start the UI first when you want to watch a specific run
+- otherwise wait: the run is journalled, and it appears in the list once it has finished
+- the probe is per run rather than once per process, so every *later* run in the same suite is picked up
+
+### Symptom: The camera button recorded nothing
+
+Asking a paused run for a fresh look is answered by whatever capture sources the run's packages
+registered, and the acknowledgement says how many widgets were recorded and why none were.
+
+Likely causes:
+
+- the run's packages register no capture source, so there is nothing to ask
+- the source refused: the UI pack will not photograph a browser session that is being held open for
+  inspection by `TESTFRAMEWORK_UI_PAUSE_ON_FAILURE`, because somebody is already looking at that page
+- the source threw, which is logged and swallowed rather than allowed to disturb the paused run
+
+Recovery:
+
+- read the reason in the feed - the acknowledgement carries it
+- a source that threw says so in the run's own log rather than in the acknowledgement
+- for the pause-on-failure case, release the held session first
+
+A related case is a capture that *is* recorded but appears against no step: the widget is filed against
+the one step that is waiting, and with two of them waiting there is no single right answer, so it is
+filed with no step at all.
 
 ## Diagnostic Logging Guidance
 
@@ -109,11 +138,11 @@ When you are debugging the debugger itself, collect evidence from these layers i
 3. whether the missing behavior is in connection, signal delivery, or state projection
 4. reducer/state behavior described in [TransportAndProjection.md](./TransportAndProjection.md)
 
-Do not jump straight to the transport redesign plan unless the current user-facing checks already failed.
+Do not jump straight to the transport internals unless the user-facing checks above have already failed.
 
 ## Known Limitation Reminder
 
-The DebugUI is stable for both active-session inspection and reopening recorded runs. The broker-backed transport once planned was retired: the journal provides the durability it was for. See [TransportAndProjection.md](./TransportAndProjection.md).
+The DebugUI is stable for both active-session inspection and reopening recorded runs. The broker-backed transport once planned was retired: the journal provides the durability it was for. What remains genuinely limited is live attachment - a run decides at its start whether anyone is listening, and never revisits that. See [TransportAndProjection.md](./TransportAndProjection.md).
 
 ## See Also
 

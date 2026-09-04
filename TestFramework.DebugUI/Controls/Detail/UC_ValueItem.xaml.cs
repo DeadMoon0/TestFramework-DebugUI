@@ -15,6 +15,7 @@ using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Board.Comparison;
 using TestFramework.DebugUI.State.Bundles;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Detail;
 
@@ -45,7 +46,7 @@ public partial class UC_ValueItem : UserControl
         // repeated in the panel a click away - and a card that grows a button under the pointer four
         // times over is a card nobody can read.
 
-        bdEdge.Background = (Brush)FindResource(isArtifact ? "FlowArtifact" : "FlowVariable");
+        bdEdge.Background = (Brush)FindResource(isArtifact ? ThemeKeys.FlowArtifact : ThemeKeys.FlowVariable);
 
         subscriptions.Add(isArtifact
             ? StateStore<MainState>.Default
@@ -76,10 +77,10 @@ public partial class UC_ValueItem : UserControl
     private void bdRoot_MouseLeftButtonUp(object sender, MouseButtonEventArgs e) => Opened?.Invoke(Key, IsArtifact);
 
     private void bdRoot_MouseEnter(object sender, MouseEventArgs e)
-        => bdRoot.Background = (Brush)FindResource("SurfaceRaisedHover");
+        => bdRoot.Background = (Brush)FindResource(ThemeKeys.SurfaceRaisedHover);
 
     private void bdRoot_MouseLeave(object sender, MouseEventArgs e)
-        => bdRoot.Background = (Brush)FindResource("SurfaceRaised");
+        => bdRoot.Background = (Brush)FindResource(ThemeKeys.SurfaceRaised);
 
     /// <summary>
     /// Marks how this value stands against the last run of the same test that passed.
@@ -98,10 +99,10 @@ public partial class UC_ValueItem : UserControl
 
         (string glyph, string brush, string meaning) = change switch
         {
-            ValueChangeKind.Changed => ("~", "StateTimeout", "changed since the last passing run"),
-            ValueChangeKind.Added => ("+", "StateComplete", "this run produced it; the last passing run did not"),
-            ValueChangeKind.Removed => ("-", "StateError", "the last passing run produced it; this run did not"),
-            _ => ("?", "StatePaused", "cannot be compared with the last passing run")
+            ValueChangeKind.Changed => ("~", ThemeKeys.StateTimeout, "changed since the last passing run"),
+            ValueChangeKind.Added => ("+", ThemeKeys.StateComplete, "this run produced it; the last passing run did not"),
+            ValueChangeKind.Removed => ("-", ThemeKeys.StateError, "the last passing run produced it; this run did not"),
+            _ => ("?", ThemeKeys.StatePaused, "cannot be compared with the last passing run")
         };
 
         Brush colour = (Brush)FindResource(brush);
@@ -167,13 +168,13 @@ public partial class UC_ValueItem : UserControl
             spBadges.Children.Add(new Border
             {
                 CornerRadius = new CornerRadius(4),
-                Background = (Brush)FindResource("SurfaceCard"),
+                Background = (Brush)FindResource(ThemeKeys.SurfaceCard),
                 Padding = new Thickness(4, 1, 4, 1),
                 Margin = new Thickness(4, 0, 0, 0),
                 Child = new TextBlock
                 {
                     Text = badge,
-                    Foreground = (Brush)FindResource("TextSecondary"),
+                    Foreground = (Brush)FindResource(ThemeKeys.TextSecondary),
                     FontSize = 9
                 }
             });
@@ -192,7 +193,7 @@ public partial class UC_ValueItem : UserControl
                 wpVersions.Children.Add(new TextBlock
                 {
                     Text = "→",
-                    Foreground = (Brush)FindResource("TextFaint"),
+                    Foreground = (Brush)FindResource(ThemeKeys.TextFaint),
                     FontSize = 9,
                     Margin = new Thickness(3, 0, 3, 0),
                     VerticalAlignment = VerticalAlignment.Center
@@ -202,7 +203,7 @@ public partial class UC_ValueItem : UserControl
             wpVersions.Children.Add(new Border
             {
                 CornerRadius = new CornerRadius(4),
-                Background = (Brush)FindResource("SurfaceCard"),
+                Background = (Brush)FindResource(ThemeKeys.SurfaceCard),
                 Padding = new Thickness(4, 1, 4, 1),
                 Margin = new Thickness(0, 0, 0, 2),
 
@@ -212,7 +213,7 @@ public partial class UC_ValueItem : UserControl
                 Child = new TextBlock
                 {
                     Text = "v" + (index + 1).ToString(CultureInfo.InvariantCulture),
-                    Foreground = (Brush)FindResource("TextSecondary"),
+                    Foreground = (Brush)FindResource(ThemeKeys.TextSecondary),
                     FontSize = 9
                 }
             });

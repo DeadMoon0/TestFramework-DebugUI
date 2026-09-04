@@ -14,6 +14,7 @@ using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Runs;
 using TestFramework.DebugUI.State.Shell;
 using TestFramework.DebugUI.State.Transport;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Shell;
 
@@ -136,14 +137,14 @@ public partial class UC_TransportStatus : UserControl
         lines.Children.Add(new TextBlock
         {
             Text = run?.ShortName ?? "Connected",
-            Style = (Style)FindResource("BodyText"),
+            Style = (Style)FindResource(ThemeKeys.BodyText),
             TextTrimming = TextTrimming.CharacterEllipsis
         });
 
         lines.Children.Add(new TextBlock
         {
             Text = Doing(run, sessionId),
-            Style = (Style)FindResource("MutedText"),
+            Style = (Style)FindResource(ThemeKeys.MutedText),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 1, 0, 0)
         });
@@ -182,9 +183,9 @@ public partial class UC_TransportStatus : UserControl
 
     private Brush BrushFor(TransportStatus status) => status switch
     {
-        TransportStatus.Attached => (Brush)FindResource("StateRunning"),
-        TransportStatus.Listening => (Brush)FindResource("StateComplete"),
-        TransportStatus.Faulted => (Brush)FindResource("StateError"),
-        _ => (Brush)FindResource("StateNotRun")
+        TransportStatus.Attached => (Brush)FindResource(ThemeKeys.StateRunning),
+        TransportStatus.Listening => (Brush)FindResource(ThemeKeys.StateComplete),
+        TransportStatus.Faulted => (Brush)FindResource(ThemeKeys.StateError),
+        _ => (Brush)FindResource(ThemeKeys.StateNotRun)
     };
 }

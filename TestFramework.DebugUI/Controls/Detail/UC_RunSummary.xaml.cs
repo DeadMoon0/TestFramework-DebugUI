@@ -17,6 +17,7 @@ using TestFramework.DebugUI.State.Board.Comparison;
 using TestFramework.DebugUI.State.Runs;
 
 using TestFramework.DebugUI.State.Transport;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Detail;
 
@@ -166,7 +167,7 @@ public partial class UC_RunSummary : UserControl, IDisposable
             TextBlock heading = new()
             {
                 Text = failure.DisplayName,
-                Foreground = (Brush)FindResource("TextPrimary"),
+                Foreground = (Brush)FindResource(ThemeKeys.TextPrimary),
                 FontSize = 12,
                 TextTrimming = TextTrimming.CharacterEllipsis
             };
@@ -176,7 +177,7 @@ public partial class UC_RunSummary : UserControl, IDisposable
                 Text = failure.Detail is null
                     ? $"{failure.StageName} · step {failure.StepId.ToString(CultureInfo.InvariantCulture)}"
                     : $"{failure.Detail.ExceptionType}: {failure.Detail.Message}",
-                Foreground = (Brush)FindResource("TextSecondary"),
+                Foreground = (Brush)FindResource(ThemeKeys.TextSecondary),
                 FontSize = 11,
                 Margin = new Thickness(0, 2, 0, 0),
                 TextWrapping = TextWrapping.Wrap
@@ -197,7 +198,7 @@ public partial class UC_RunSummary : UserControl, IDisposable
                 body.Children.Add(new TextBlock
                 {
                     Text = $"↳ {root.ExceptionType}: {root.Message}",
-                    Foreground = (Brush)FindResource("TextFaint"),
+                    Foreground = (Brush)FindResource(ThemeKeys.TextFaint),
                     FontSize = 11,
                     Margin = new Thickness(0, 2, 0, 0),
                     TextWrapping = TextWrapping.Wrap
@@ -207,7 +208,7 @@ public partial class UC_RunSummary : UserControl, IDisposable
             Border row = new()
             {
                 CornerRadius = new CornerRadius(4),
-                Background = (Brush)FindResource("SurfaceRaised"),
+                Background = (Brush)FindResource(ThemeKeys.SurfaceRaised),
                 Padding = new Thickness(8, 6, 8, 6),
                 Margin = new Thickness(0, 0, 0, 4),
                 Cursor = Cursors.Hand,
@@ -245,7 +246,7 @@ public partial class UC_RunSummary : UserControl, IDisposable
             TextBlock heading = new()
             {
                 Text = $"{assertion.Subject} · {assertion.Render()}",
-                Foreground = (Brush)FindResource("TextPrimary"),
+                Foreground = (Brush)FindResource(ThemeKeys.TextPrimary),
                 FontSize = 12,
                 TextTrimming = TextTrimming.CharacterEllipsis
             };
@@ -253,7 +254,7 @@ public partial class UC_RunSummary : UserControl, IDisposable
             TextBlock detail = new()
             {
                 Text = $"was {assertion.Actual.Summary}",
-                Foreground = (Brush)FindResource("TextSecondary"),
+                Foreground = (Brush)FindResource(ThemeKeys.TextSecondary),
                 FontSize = 11,
                 Margin = new Thickness(0, 2, 0, 0),
                 TextWrapping = TextWrapping.Wrap
@@ -262,7 +263,7 @@ public partial class UC_RunSummary : UserControl, IDisposable
             spChecks.Children.Add(new Border
             {
                 CornerRadius = new CornerRadius(4),
-                Background = (Brush)FindResource("SurfaceRaised"),
+                Background = (Brush)FindResource(ThemeKeys.SurfaceRaised),
                 Padding = new Thickness(8, 6, 8, 6),
                 Margin = new Thickness(0, 0, 0, 4),
                 Child = new StackPanel { Children = { heading, detail } }
@@ -306,7 +307,7 @@ public partial class UC_RunSummary : UserControl, IDisposable
             TextBlock heading = new()
             {
                 Text = step.DisplayName,
-                Foreground = (Brush)FindResource("TextPrimary"),
+                Foreground = (Brush)FindResource(ThemeKeys.TextPrimary),
                 FontSize = 12,
                 TextTrimming = TextTrimming.CharacterEllipsis
             };
@@ -319,7 +320,7 @@ public partial class UC_RunSummary : UserControl, IDisposable
 
                 // Amber for slower, green for quicker. Never red: a step taking longer is worth seeing and
                 // is not a failure, and red on this page means something broke.
-                Foreground = (Brush)FindResource(slower ? "StateTimeout" : "StateComplete"),
+                Foreground = (Brush)FindResource(slower ? ThemeKeys.StateTimeout : ThemeKeys.StateComplete),
                 FontSize = 11,
                 Margin = new Thickness(0, 2, 0, 0)
             };
@@ -327,7 +328,7 @@ public partial class UC_RunSummary : UserControl, IDisposable
             Border row = new()
             {
                 CornerRadius = new CornerRadius(4),
-                Background = (Brush)FindResource("SurfaceRaised"),
+                Background = (Brush)FindResource(ThemeKeys.SurfaceRaised),
                 Padding = new Thickness(8, 6, 8, 6),
                 Margin = new Thickness(0, 0, 0, 4),
                 Cursor = Cursors.Hand,

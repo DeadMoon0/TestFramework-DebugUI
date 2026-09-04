@@ -13,6 +13,7 @@ using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Runs;
 
 using TestFramework.DebugUI.State.Transport;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Home;
 
@@ -170,7 +171,7 @@ public partial class UC_HomeCard : UserControl
     }
 
     private void Paint()
-        => bRoot.Background = (Brush)FindResource(IsSelected || hovered ? "SurfaceRaisedHover" : "SurfaceRaised");
+        => bRoot.Background = (Brush)FindResource(IsSelected || hovered ? ThemeKeys.SurfaceRaisedHover : ThemeKeys.SurfaceRaised);
 
     private void Root_MouseEnter(object sender, MouseEventArgs e)
     {

@@ -22,6 +22,7 @@ using TestFramework.DebugUI.State.Settings;
 using TestFramework.DebugUI.State.Shell.Feed;
 using TestFramework.DebugUI.State.Transport;
 using TestFramework.DebugUI.State.Diagnostics;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI;
 
@@ -520,7 +521,7 @@ public partial class MainWindow : Window
     /// </remarks>
     private void ShowWatchState(bool enabled)
     {
-        Brush ink = (Brush)FindResource(enabled ? "Accent" : "TextSecondary");
+        Brush ink = (Brush)FindResource(enabled ? ThemeKeys.Accent : ThemeKeys.TextSecondary);
 
         pathWatchOutline.Stroke = ink;
         ellipseWatchPupil.Fill = ink;
@@ -656,7 +657,7 @@ public partial class MainWindow : Window
     /// business, and it is shown there.
     /// </remarks>
     private void ShowAnnotateState(bool annotating)
-        => pathAnnotate.Stroke = (Brush)FindResource(annotating ? "Accent" : "TextSecondary");
+        => pathAnnotate.Stroke = (Brush)FindResource(annotating ? ThemeKeys.Accent : ThemeKeys.TextSecondary);
 
     private void ShowSummary() => Reveal(PanelId.Summary);
 
@@ -770,19 +771,19 @@ public partial class MainWindow : Window
 
         bUnread.Background = (Brush)FindResource(unread.Worst switch
         {
-            FeedSeverity.Error => "StateError",
-            FeedSeverity.Warning => "StateTimeout",
-            _ => "Accent"
+            FeedSeverity.Error => ThemeKeys.StateError,
+            FeedSeverity.Warning => ThemeKeys.StateTimeout,
+            _ => ThemeKeys.Accent
         });
 
         pathBell.Stroke = (Brush)FindResource(
-            ucFeed.IsOpen ? "Accent"
-            : unread.Count == 0 ? "TextSecondary"
+            ucFeed.IsOpen ? ThemeKeys.Accent
+            : unread.Count == 0 ? ThemeKeys.TextSecondary
             : unread.Worst switch
             {
-                FeedSeverity.Error => "StateError",
-                FeedSeverity.Warning => "StateTimeout",
-                _ => "TextSecondary"
+                FeedSeverity.Error => ThemeKeys.StateError,
+                FeedSeverity.Warning => ThemeKeys.StateTimeout,
+                _ => ThemeKeys.TextSecondary
             });
 
         btNotifications.ToolTip = unread.Count == 0

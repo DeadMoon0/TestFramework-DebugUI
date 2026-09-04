@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using TestFramework.DebugUI.State.Annotations;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Annotate;
 
@@ -63,7 +64,7 @@ internal sealed class AnnotationLayer
     internal AnnotationKind? Tool { get; set; }
 
     /// <summary>Gets or sets the ink new marks are made in.</summary>
-    internal string Ink { get; set; } = "InkCyan";
+    internal string Ink { get; set; } = ThemeKeys.InkCyan;
 
     /// <summary>Gets or sets how thick new marks are.</summary>
     internal double Weight { get; set; } = 4;
@@ -259,7 +260,7 @@ internal sealed class AnnotationLayer
         typing = new TextBox
         {
             MinWidth = 160,
-            Background = (Brush)resources.FindResource("SurfaceOverlay"),
+            Background = (Brush)resources.FindResource(ThemeKeys.SurfaceOverlay),
             Foreground = (Brush)resources.FindResource(Ink),
             BorderBrush = (Brush)resources.FindResource(Ink),
             BorderThickness = new Thickness(1),
@@ -361,7 +362,7 @@ internal sealed class AnnotationLayer
 
         return
         [
-            Stroked(geometry, (Brush)resources.FindResource("InkHalo"), mark.Thickness + Halo),
+            Stroked(geometry, (Brush)resources.FindResource(ThemeKeys.InkHalo), mark.Thickness + Halo),
             Stroked(geometry, (Brush)resources.FindResource(mark.Ink), mark.Thickness)
         ];
     }

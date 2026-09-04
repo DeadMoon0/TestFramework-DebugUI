@@ -13,6 +13,7 @@ using Axiom.State;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Board.Comparison;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Search;
 
@@ -194,7 +195,7 @@ public partial class UC_Search : UserControl
                 heading = hit.Scope;
                 spHits.Children.Add(new TextBlock
                 {
-                    Style = (Style)FindResource("PanelHeading"),
+                    Style = (Style)FindResource(ThemeKeys.PanelHeading),
                     Margin = new Thickness(2, 8, 0, 4),
                     Text = hit.Scope.ToString().ToUpperInvariant()
                 });
@@ -211,7 +212,7 @@ public partial class UC_Search : UserControl
         TextBlock title = new()
         {
             Text = hit.Title,
-            Foreground = (Brush)FindResource("TextPrimary"),
+            Foreground = (Brush)FindResource(ThemeKeys.TextPrimary),
             FontSize = 12,
 
             // Trimmed rather than wrapped. A log line can be three hundred characters, and a result list where
@@ -222,7 +223,7 @@ public partial class UC_Search : UserControl
         TextBlock detail = new()
         {
             Text = hit.Detail,
-            Foreground = (Brush)FindResource("TextSecondary"),
+            Foreground = (Brush)FindResource(ThemeKeys.TextSecondary),
             FontSize = 11,
             Margin = new Thickness(0, 2, 0, 0),
             TextTrimming = TextTrimming.CharacterEllipsis
@@ -261,7 +262,7 @@ public partial class UC_Search : UserControl
         for (int index = 0; index < rows.Count; index++)
         {
             rows[index].Background = index == highlighted
-                ? (Brush)FindResource("SurfaceRaisedHover")
+                ? (Brush)FindResource(ThemeKeys.SurfaceRaisedHover)
                 : Brushes.Transparent;
         }
     }
@@ -328,9 +329,9 @@ public partial class UC_Search : UserControl
         {
             spHints.Children.Add(new TextBlock
             {
-                Style = (Style)FindResource("MutedText"),
+                Style = (Style)FindResource(ThemeKeys.MutedText),
                 FontSize = 11,
-                Foreground = (Brush)FindResource("TextFaint"),
+                Foreground = (Brush)FindResource(ThemeKeys.TextFaint),
                 Margin = new Thickness(0, 0, 0, 3),
                 Text = hint
             });

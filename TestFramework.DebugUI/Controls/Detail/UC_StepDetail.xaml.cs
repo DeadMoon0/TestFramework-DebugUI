@@ -15,6 +15,7 @@ using TestFramework.DebugUI.Copying;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Board.Comparison;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Detail;
 
@@ -160,7 +161,7 @@ public partial class UC_StepDetail : UserControl, IDisposable
         if (compared?.Then is not { } before)
         {
             tbTiming.Text = $"took {DurationText.Compact(took)}";
-            tbTiming.Foreground = (Brush)FindResource("TextSecondary");
+            tbTiming.Foreground = (Brush)FindResource(ThemeKeys.TextSecondary);
             return;
         }
 
@@ -175,9 +176,9 @@ public partial class UC_StepDetail : UserControl, IDisposable
 
         tbTiming.Foreground = (Brush)FindResource(compared.Change switch
         {
-            StepTimingChange.Slower => "StateTimeout",
-            StepTimingChange.Faster => "StateComplete",
-            _ => "TextSecondary"
+            StepTimingChange.Slower => ThemeKeys.StateTimeout,
+            StepTimingChange.Faster => ThemeKeys.StateComplete,
+            _ => ThemeKeys.TextSecondary
         });
     }
 
@@ -221,12 +222,12 @@ public partial class UC_StepDetail : UserControl, IDisposable
     private Border Chip(string text) => new()
     {
         CornerRadius = new CornerRadius(3),
-        Background = (Brush)FindResource("SurfaceRaised"),
+        Background = (Brush)FindResource(ThemeKeys.SurfaceRaised),
         Margin = new Thickness(0, 0, 4, 4),
         Padding = new Thickness(6, 2, 6, 2),
         Child = new TextBlock
         {
-            Style = (Style)FindResource("MutedText"),
+            Style = (Style)FindResource(ThemeKeys.MutedText),
             FontSize = 10.5,
             Text = text
         }
@@ -303,7 +304,7 @@ public partial class UC_StepDetail : UserControl, IDisposable
 
         if (step is null || step.Attempts.Count == 0)
         {
-            spAttempts.Children.Add(new TextBlock { Text = "Not started.", Style = (Style)FindResource("MutedText") });
+            spAttempts.Children.Add(new TextBlock { Text = "Not started.", Style = (Style)FindResource(ThemeKeys.MutedText) });
             return;
         }
 
@@ -313,7 +314,7 @@ public partial class UC_StepDetail : UserControl, IDisposable
 
             spAttempts.Children.Add(new TextBlock
             {
-                Style = (Style)FindResource("MutedText"),
+                Style = (Style)FindResource(ThemeKeys.MutedText),
                 Text = $"#{attempt.Attempt} · {attempt.StartedAtUtc.ToLocalTime():HH:mm:ss} · {outcome}"
             });
         }
@@ -340,7 +341,7 @@ public partial class UC_StepDetail : UserControl, IDisposable
 
         if (entries.Length == 0)
         {
-            spLog.Children.Add(new TextBlock { Text = "Nothing logged.", Style = (Style)FindResource("MutedText") });
+            spLog.Children.Add(new TextBlock { Text = "Nothing logged.", Style = (Style)FindResource(ThemeKeys.MutedText) });
             return;
         }
 
@@ -371,8 +372,8 @@ public partial class UC_StepDetail : UserControl, IDisposable
 
         TextBlock time = new()
         {
-            Style = (Style)FindResource("CodeText"),
-            Foreground = (Brush)FindResource("TextFaint"),
+            Style = (Style)FindResource(ThemeKeys.CodeText),
+            Foreground = (Brush)FindResource(ThemeKeys.TextFaint),
             TextWrapping = TextWrapping.NoWrap,
             Margin = new Thickness(4, 1, 8, 1),
             Text = LogLines.Time(entry)
@@ -380,7 +381,7 @@ public partial class UC_StepDetail : UserControl, IDisposable
 
         TextBlock level = new()
         {
-            Style = (Style)FindResource("CodeText"),
+            Style = (Style)FindResource(ThemeKeys.CodeText),
             Foreground = (Brush)FindResource(LogLines.Brush(entry.Level)),
             FontWeight = FontWeights.Bold,
             TextWrapping = TextWrapping.NoWrap,
@@ -390,8 +391,8 @@ public partial class UC_StepDetail : UserControl, IDisposable
 
         TextBlock message = new()
         {
-            Style = (Style)FindResource("CodeText"),
-            Foreground = (Brush)FindResource(entry.Level == DebugLogLevel.Information ? "TextSecondary" : "TextPrimary"),
+            Style = (Style)FindResource(ThemeKeys.CodeText),
+            Foreground = (Brush)FindResource(entry.Level == DebugLogLevel.Information ? ThemeKeys.TextSecondary : ThemeKeys.TextPrimary),
             Margin = new Thickness(0, 1, 4, 1),
             Text = entry.Render()
         };
@@ -497,17 +498,17 @@ public partial class UC_StepDetail : UserControl, IDisposable
 
             row.Children.Add(new TextBlock
             {
-                Style = (Style)FindResource("MutedText"),
+                Style = (Style)FindResource(ThemeKeys.MutedText),
                 FontFamily = new FontFamily("Consolas"),
                 FontSize = 11,
-                Foreground = (Brush)FindResource("TextSecondary"),
+                Foreground = (Brush)FindResource(ThemeKeys.TextSecondary),
                 Text = ShortTypeName(link.ExceptionType),
                 ToolTip = link.ExceptionType
             });
 
             row.Children.Add(new TextBlock
             {
-                Style = (Style)FindResource("MutedText"),
+                Style = (Style)FindResource(ThemeKeys.MutedText),
                 Margin = new Thickness(0, 1, 0, 0),
                 Text = link.Message
             });

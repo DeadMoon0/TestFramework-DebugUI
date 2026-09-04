@@ -19,6 +19,7 @@ using TestFramework.DebugUI.State.Board.Comparison;
 using TestFramework.DebugUI.State.Bundles;
 
 using System.Windows.Media.Imaging;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Detail;
 
@@ -361,7 +362,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
                 ValueChangeKind.Indeterminate => change.Reason ?? "The two cannot be compared.",
                 _ => "The two are the same."
             },
-            Foreground = (Brush)FindResource("TextFaint"),
+            Foreground = (Brush)FindResource(ThemeKeys.TextFaint),
             FontSize = 11,
             Margin = new Thickness(0, 8, 0, 0),
             TextWrapping = TextWrapping.Wrap
@@ -380,7 +381,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
         side.Children.Add(new TextBlock
         {
             Text = heading,
-            Style = (Style)FindResource("PanelHeading"),
+            Style = (Style)FindResource(ThemeKeys.PanelHeading),
             Margin = new Thickness(0, 0, 0, 4)
         });
 
@@ -412,7 +413,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
             Text = described is null
                 ? "Not produced by this run."
                 : "The picture could not be read from " + (described.Body?.RelativePath ?? "its file") + ".",
-            Foreground = (Brush)FindResource("TextFaint"),
+            Foreground = (Brush)FindResource(ThemeKeys.TextFaint),
             FontSize = 11,
             Width = ComparedImageWidth / 2.0,
             TextWrapping = TextWrapping.Wrap
@@ -438,9 +439,9 @@ public partial class UC_ValueInspector : UserControl, IDisposable
     {
         (string surface, string ink) = line.Kind switch
         {
-            DiffLineKind.Added => ("DiffAddedSurface", "DiffAddedText"),
-            DiffLineKind.Removed => ("DiffRemovedSurface", "DiffRemovedText"),
-            _ => (string.Empty, "DiffContextText")
+            DiffLineKind.Added => (ThemeKeys.DiffAddedSurface, ThemeKeys.DiffAddedText),
+            DiffLineKind.Removed => (ThemeKeys.DiffRemovedSurface, ThemeKeys.DiffRemovedText),
+            _ => (string.Empty, ThemeKeys.DiffContextText)
         };
 
         Paragraph paragraph = new()
@@ -479,7 +480,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
     /// </remarks>
     private IEnumerable<Block> Note(DiffLine line)
     {
-        Brush ink = (Brush)FindResource("TextFaint");
+        Brush ink = (Brush)FindResource(ThemeKeys.TextFaint);
 
         foreach (string wrapped in ValueInspection.WrapToWidth(line.Text, NoteColumns))
         {
@@ -620,7 +621,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
         TextBlock label = new()
         {
             Text = name,
-            Foreground = (Brush)FindResource("TextFaint"),
+            Foreground = (Brush)FindResource(ThemeKeys.TextFaint),
             FontSize = 11,
             Margin = new Thickness(0, 1, 14, 1)
         };
@@ -628,7 +629,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
         TextBlock body = new()
         {
             Text = value,
-            Foreground = (Brush)FindResource("TextSecondary"),
+            Foreground = (Brush)FindResource(ThemeKeys.TextSecondary),
             FontSize = 11,
             Margin = new Thickness(0, 1, 0, 1),
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -655,7 +656,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
                 wpVersions.Children.Add(new TextBlock
                 {
                     Text = "→",
-                    Foreground = (Brush)FindResource("TextFaint"),
+                    Foreground = (Brush)FindResource(ThemeKeys.TextFaint),
                     FontSize = 10,
                     Margin = new Thickness(4, 0, 4, 0),
                     VerticalAlignment = VerticalAlignment.Center
@@ -665,14 +666,14 @@ public partial class UC_ValueInspector : UserControl, IDisposable
             wpVersions.Children.Add(new Border
             {
                 CornerRadius = new CornerRadius(4),
-                Background = (Brush)FindResource("SurfaceCard"),
+                Background = (Brush)FindResource(ThemeKeys.SurfaceCard),
                 Padding = new Thickness(5, 1, 5, 1),
                 Margin = new Thickness(0, 0, 0, 2),
                 ToolTip = versions[index],
                 Child = new TextBlock
                 {
                     Text = "v" + (index + 1).ToString(CultureInfo.InvariantCulture),
-                    Foreground = (Brush)FindResource("TextSecondary"),
+                    Foreground = (Brush)FindResource(ThemeKeys.TextSecondary),
                     FontSize = 10
                 }
             });

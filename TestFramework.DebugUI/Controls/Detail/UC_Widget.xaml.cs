@@ -8,6 +8,7 @@ using System.Windows.Media.Imaging;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.Copying;
 using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Detail;
 
@@ -109,7 +110,7 @@ public partial class UC_Widget : UserControl
         IsReadOnly = true,
         BorderThickness = new Thickness(0),
         Background = Brushes.Transparent,
-        Foreground = (Brush)FindResource("TextSecondary"),
+        Foreground = (Brush)FindResource(ThemeKeys.TextSecondary),
         FontFamily = new FontFamily("Cascadia Mono, Consolas, Courier New"),
         FontSize = 10.5,
         Padding = new Thickness(8, 6, 6, 6),
@@ -120,7 +121,7 @@ public partial class UC_Widget : UserControl
 
     private UIElement Missing(string why) => new TextBlock
     {
-        Style = (Style)FindResource("MutedText"),
+        Style = (Style)FindResource(ThemeKeys.MutedText),
         FontSize = 10.5,
         HorizontalAlignment = HorizontalAlignment.Center,
         VerticalAlignment = VerticalAlignment.Center,

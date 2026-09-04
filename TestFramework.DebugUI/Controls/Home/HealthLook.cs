@@ -1,4 +1,5 @@
 ﻿using TestFramework.DebugUI.State.Runs;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Home;
 
@@ -19,13 +20,13 @@ internal static class HealthLook
     /// <summary>The resource key of the brush a verdict is drawn in.</summary>
     internal static string BrushKey(RunHealth health) => health switch
     {
-        RunHealth.Running => "StateRunning",
-        RunHealth.Waiting => "StatePaused",
-        RunHealth.Passed => "StateComplete",
-        RunHealth.Unproven => "StateTimeout",
-        RunHealth.Failed => "StateError",
-        RunHealth.Aborted => "StateError",
-        _ => "StateNotRun"
+        RunHealth.Running => ThemeKeys.StateRunning,
+        RunHealth.Waiting => ThemeKeys.StatePaused,
+        RunHealth.Passed => ThemeKeys.StateComplete,
+        RunHealth.Unproven => ThemeKeys.StateTimeout,
+        RunHealth.Failed => ThemeKeys.StateError,
+        RunHealth.Aborted => ThemeKeys.StateError,
+        _ => ThemeKeys.StateNotRun
     };
 
     /// <summary>The word a verdict is badged with.</summary>

@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using TestFramework.DebugUI.Docking;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Dock;
 
@@ -207,7 +208,7 @@ internal sealed class DockDragController
         if (drop is null)
             return;
 
-        Brush accent = (Brush)surface.FindResource("Accent");
+        Brush accent = (Brush)surface.FindResource(ThemeKeys.Accent);
 
         Border hint = new()
         {

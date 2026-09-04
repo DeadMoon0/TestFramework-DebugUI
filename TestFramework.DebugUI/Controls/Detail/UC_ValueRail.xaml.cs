@@ -11,6 +11,7 @@ using Axiom.Wpf.Extensions;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Board.Comparison;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Detail;
 
@@ -91,7 +92,7 @@ public partial class UC_ValueRail : UserControl, IDisposable
         if (diff.Baseline is not { } baseline)
         {
             tbBaseline.Text = "No comparison: " + diff.Unavailable;
-            tbBaseline.Foreground = (Brush)FindResource("TextFaint");
+            tbBaseline.Foreground = (Brush)FindResource(ThemeKeys.TextFaint);
             return;
         }
 
@@ -105,7 +106,7 @@ public partial class UC_ValueRail : UserControl, IDisposable
             ? against + " - nothing changed"
             : $"{against} - {changed} value{(changed == 1 ? "" : "s")} differ{(changed == 1 ? "s" : "")}";
 
-        tbBaseline.Foreground = (Brush)FindResource(changed == 0 ? "TextFaint" : "StateTimeout");
+        tbBaseline.Foreground = (Brush)FindResource(changed == 0 ? ThemeKeys.TextFaint : ThemeKeys.StateTimeout);
     }
 
     private static IEnumerable<ValueRow> Rows(RunGraph run)

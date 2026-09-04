@@ -11,6 +11,7 @@ using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Runs;
 
 using TestFramework.DebugUI.State.Transport;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Home;
 
@@ -86,9 +87,11 @@ public partial class UC_RunRow : UserControl
         // with dashes that look like measurements of zero.
         bool known = run.Progress?.IsKnown == true;
 
-        tbName.Foreground = (Brush)FindResource(known ? "TextPrimary" : "TextSecondary");
-        tbSteps.Foreground = (Brush)FindResource(known ? "TextSecondary" : "TextFaint");
-        tbChecks.Foreground = run.Progress?.AssertionsFailed > 0 ? ink : (Brush)FindResource(known ? "TextSecondary" : "TextFaint");
+        tbName.Foreground = (Brush)FindResource(known ? ThemeKeys.TextPrimary : ThemeKeys.TextSecondary);
+        tbSteps.Foreground = (Brush)FindResource(known ? ThemeKeys.TextSecondary : ThemeKeys.TextFaint);
+        tbChecks.Foreground = run.Progress?.AssertionsFailed > 0
+            ? ink
+            : (Brush)FindResource(known ? ThemeKeys.TextSecondary : ThemeKeys.TextFaint);
     }
 
     private static string Leaf(string name)
@@ -132,7 +135,7 @@ public partial class UC_RunRow : UserControl
 
     private void Paint()
         => bRoot.Background = IsSelected || hovered
-            ? (Brush)FindResource("SurfaceRaisedHover")
+            ? (Brush)FindResource(ThemeKeys.SurfaceRaisedHover)
             : Brushes.Transparent;
 
     private void Root_MouseEnter(object sender, MouseEventArgs e)

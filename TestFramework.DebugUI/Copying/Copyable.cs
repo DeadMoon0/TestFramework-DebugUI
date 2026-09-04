@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Copying;
 
@@ -184,8 +185,8 @@ internal sealed class CopyAdorner : Adorner
 
         glyph = new Path
         {
-            Data = (Geometry)adorned.FindResource("IconCopy"),
-            Stroke = (Brush)adorned.FindResource("TextSecondary"),
+            Data = (Geometry)adorned.FindResource(ThemeKeys.IconCopy),
+            Stroke = (Brush)adorned.FindResource(ThemeKeys.TextSecondary),
             StrokeThickness = 1.5,
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round,
@@ -196,8 +197,8 @@ internal sealed class CopyAdorner : Adorner
 
         button = new Button
         {
-            Style = (Style)adorned.FindResource("IconButton"),
-            Background = (Brush)adorned.FindResource("SurfaceRaised"),
+            Style = (Style)adorned.FindResource(ThemeKeys.IconButton),
+            Background = (Brush)adorned.FindResource(ThemeKeys.SurfaceRaised),
             Cursor = Cursors.Hand,
             ToolTip = "Copy",
             Content = glyph

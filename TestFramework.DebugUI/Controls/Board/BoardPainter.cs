@@ -14,6 +14,7 @@ using TestFramework.DebugUI.Layout;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Board.Comparison;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Board;
 
@@ -132,9 +133,9 @@ internal sealed class BoardPainter
                 // is on the panel to the right anyway. A breakpoint that is merely set is the marker's job
                 // now, which is what frees the border to mean "stopped, here".
                 visual.Box.BorderBrush = step.IsWaitingAtBreakpoint
-                    ? (Brush)resources.FindResource("StateError")
+                    ? (Brush)resources.FindResource(ThemeKeys.StateError)
                     : isSelected
-                        ? (Brush)resources.FindResource("Accent")
+                        ? (Brush)resources.FindResource(ThemeKeys.Accent)
                         : Brushes.Transparent;
             }
         }
@@ -169,7 +170,7 @@ internal sealed class BoardPainter
                     : $"All {tally.AssertionsPassed} check(s) held.";
 
         visuals.Verdict.Box.BorderBrush = (Brush)resources.FindResource(
-            !decided ? "StateRunning" : tally.IsValid ? "StateComplete" : "StateError");
+            !decided ? ThemeKeys.StateRunning : tally.IsValid ? ThemeKeys.StateComplete : ThemeKeys.StateError);
     }
 
     /// <summary>The line under a step's name: whatever is worth knowing without opening it.</summary>
@@ -211,7 +212,7 @@ internal sealed class BoardPainter
         {
             elapsed.Text = string.Empty;
             elapsed.ToolTip = null;
-            elapsed.Foreground = (Brush)resources.FindResource("TextFaint");
+            elapsed.Foreground = (Brush)resources.FindResource(ThemeKeys.TextFaint);
             return;
         }
 
@@ -221,7 +222,7 @@ internal sealed class BoardPainter
         {
             elapsed.Text = DurationText.Compact(duration);
             elapsed.ToolTip = compared?.Then is { } unchanged ? $"About the same as last time: {DurationText.Compact(unchanged)}" : null;
-            elapsed.Foreground = (Brush)resources.FindResource("TextFaint");
+            elapsed.Foreground = (Brush)resources.FindResource(ThemeKeys.TextFaint);
             return;
         }
 
@@ -231,7 +232,7 @@ internal sealed class BoardPainter
 
         // Amber rather than red. A slower step is worth noticing and is not a failure, and red on this board
         // already means the step broke.
-        elapsed.Foreground = (Brush)resources.FindResource(slower ? "StateTimeout" : "StateComplete");
+        elapsed.Foreground = (Brush)resources.FindResource(slower ? ThemeKeys.StateTimeout : ThemeKeys.StateComplete);
 
         elapsed.ToolTip = compared.Ratio is { } ratio
             ? $"Was {DurationText.Compact(compared.Then ?? TimeSpan.Zero)} when this test last passed — {ratio:0.#}× that now."
@@ -258,16 +259,16 @@ internal sealed class BoardPainter
     private Brush BrushFor(StepNode step)
     {
         if (step.IsWaitingAtBreakpoint)
-            return (Brush)resources.FindResource("StatePaused");
+            return (Brush)resources.FindResource(ThemeKeys.StatePaused);
 
         return step.Lifecycle switch
         {
-            DebugLifecycleState.Running => (Brush)resources.FindResource("StateRunning"),
-            DebugLifecycleState.Complete => (Brush)resources.FindResource("StateComplete"),
-            DebugLifecycleState.Error => (Brush)resources.FindResource("StateError"),
-            DebugLifecycleState.Timeout => (Brush)resources.FindResource("StateTimeout"),
-            DebugLifecycleState.Skipped => (Brush)resources.FindResource("StateSkipped"),
-            _ => (Brush)resources.FindResource("StateNotRun")
+            DebugLifecycleState.Running => (Brush)resources.FindResource(ThemeKeys.StateRunning),
+            DebugLifecycleState.Complete => (Brush)resources.FindResource(ThemeKeys.StateComplete),
+            DebugLifecycleState.Error => (Brush)resources.FindResource(ThemeKeys.StateError),
+            DebugLifecycleState.Timeout => (Brush)resources.FindResource(ThemeKeys.StateTimeout),
+            DebugLifecycleState.Skipped => (Brush)resources.FindResource(ThemeKeys.StateSkipped),
+            _ => (Brush)resources.FindResource(ThemeKeys.StateNotRun)
         };
     }
 
@@ -275,8 +276,8 @@ internal sealed class BoardPainter
     /// <summary>Makes a breakpoint marker read as set or as an invitation to set one.</summary>
     private void ShowBreakpoint(Border marker, bool isSet)
     {
-        marker.Background = isSet ? (Brush)resources.FindResource("StateError") : Brushes.Transparent;
-        marker.BorderBrush = isSet ? Brushes.Transparent : (Brush)resources.FindResource("TextSecondary");
+        marker.Background = isSet ? (Brush)resources.FindResource(ThemeKeys.StateError) : Brushes.Transparent;
+        marker.BorderBrush = isSet ? Brushes.Transparent : (Brush)resources.FindResource(ThemeKeys.TextSecondary);
         marker.Opacity = isSet ? 1 : BoardMetrics.RestingMarkerOpacity;
     }
 
@@ -347,7 +348,7 @@ internal sealed class BoardPainter
         // is gone: on a card there is no room to explain, and a name is better than a blank.
         return new TextBlock
         {
-            Foreground = (Brush)resources.FindResource("TextFaint"),
+            Foreground = (Brush)resources.FindResource(ThemeKeys.TextFaint),
             FontFamily = new FontFamily("Cascadia Mono, Consolas, Courier New"),
             FontSize = 11,
             Margin = new Thickness(10, 8, 10, 8),

@@ -21,6 +21,7 @@ using TestFramework.DebugUI.State.Runs;
 using TestFramework.DebugUI.State.Shell.Feed;
 
 using TestFramework.DebugUI.State.Transport;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Home;
 
@@ -315,7 +316,7 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
         TextBlock when = new()
         {
             Text = When(batch.LastStartedAtUtc),
-            Foreground = (Brush)FindResource("TextSecondary"),
+            Foreground = (Brush)FindResource(ThemeKeys.TextSecondary),
             FontSize = 11,
             FontWeight = FontWeights.Bold,
             VerticalAlignment = VerticalAlignment.Center
@@ -324,7 +325,7 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
         TextBlock detail = new()
         {
             Text = string.Join(" · ", parts),
-            Foreground = (Brush)FindResource("TextFaint"),
+            Foreground = (Brush)FindResource(ThemeKeys.TextFaint),
             FontSize = 10,
             Margin = new Thickness(8, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center
@@ -342,7 +343,7 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
             Margin = new Thickness(0, 10, 0, 4),
             Padding = new Thickness(3, 0, 0, 4),
             BorderThickness = new Thickness(0, 0, 0, 1),
-            BorderBrush = (Brush)FindResource("SurfaceRaised")
+            BorderBrush = (Brush)FindResource(ThemeKeys.SurfaceRaised)
         };
     }
 
@@ -393,7 +394,7 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
         TextBlock name = new()
         {
             Text = text,
-            Foreground = (Brush)FindResource(selected ? "TextPrimary" : "TextSecondary"),
+            Foreground = (Brush)FindResource(selected ? ThemeKeys.TextPrimary : ThemeKeys.TextSecondary),
             FontSize = 12,
             FontWeight = bold ? FontWeights.Bold : FontWeights.Normal,
             VerticalAlignment = VerticalAlignment.Center,
@@ -403,7 +404,7 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
         TextBlock tally = new()
         {
             Text = count.ToString(CultureInfo.CurrentCulture),
-            Foreground = (Brush)FindResource("TextFaint"),
+            Foreground = (Brush)FindResource(ThemeKeys.TextFaint),
             FontSize = 11,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 0, 0)

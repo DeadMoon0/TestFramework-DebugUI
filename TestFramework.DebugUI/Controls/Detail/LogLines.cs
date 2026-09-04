@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Detail;
 
@@ -44,9 +45,9 @@ public static class LogLines
     /// </remarks>
     public static string Brush(DebugLogLevel level) => level switch
     {
-        DebugLogLevel.Warning => "StateTimeout",
-        DebugLogLevel.Error => "StateError",
-        _ => "TextFaint"
+        DebugLogLevel.Warning => ThemeKeys.StateTimeout,
+        DebugLogLevel.Error => ThemeKeys.StateError,
+        _ => ThemeKeys.TextFaint
     };
 
     /// <summary>When an entry was emitted, on the reader's clock.</summary>

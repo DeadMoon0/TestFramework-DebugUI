@@ -7,6 +7,7 @@ using TestFramework.DebugUI.Controls.Home;
 using TestFramework.DebugUI.Controls.Runs;
 using TestFramework.DebugUI.Docking;
 using TestFramework.DebugUI.State.Transport;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Dock;
 
@@ -74,7 +75,7 @@ internal static class PanelRegistry
         {
             Id = PanelId.Runs,
             Title = "RUNS",
-            IconKey = "IconPanelRuns",
+            IconKey = ThemeKeys.IconPanelRuns,
             DefaultSide = DockSide.Left,
             Create = commands => new UC_Runs(commands)
         },
@@ -82,7 +83,7 @@ internal static class PanelRegistry
         {
             Id = PanelId.Values,
             Title = "VALUES",
-            IconKey = "IconPanelValues",
+            IconKey = ThemeKeys.IconPanelValues,
 
             // Under the tree in the same rail, which is where it has always been: what a run produced is read
             // beside which run you are reading.
@@ -93,7 +94,7 @@ internal static class PanelRegistry
         {
             Id = PanelId.Step,
             Title = "STEP",
-            IconKey = "IconPanelStep",
+            IconKey = ThemeKeys.IconPanelStep,
             DefaultSide = DockSide.Right,
             Create = _ => new UC_StepDetail()
         },
@@ -101,7 +102,7 @@ internal static class PanelRegistry
         {
             Id = PanelId.Summary,
             Title = "SUMMARY",
-            IconKey = "IconSummary",
+            IconKey = ThemeKeys.IconSummary,
             DefaultSide = DockSide.Right,
             Create = commands => new UC_RunSummary(commands)
         },
@@ -109,7 +110,7 @@ internal static class PanelRegistry
         {
             Id = PanelId.Inspector,
             Title = "VALUE",
-            IconKey = "IconPanelInspector",
+            IconKey = ThemeKeys.IconPanelInspector,
             DefaultSide = DockSide.Right,
             Create = _ => new UC_ValueInspector()
         },
@@ -119,7 +120,7 @@ internal static class PanelRegistry
             // three-hundred-pixel rail every one of them would be an ellipsis.
             Id = PanelId.Home,
             Title = "RUNS PAGE",
-            IconKey = "IconHome",
+            IconKey = ThemeKeys.IconHome,
             DefaultSide = DockSide.Center,
             Create = commands => new UC_Home(commands)
         }

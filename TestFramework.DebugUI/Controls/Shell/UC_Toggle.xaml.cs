@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Shell;
 
@@ -94,8 +95,8 @@ public partial class UC_Toggle : UserControl
 
     private void Paint()
     {
-        bTrack.Background = (Brush)FindResource(isOn ? "Accent" : "SurfaceRaised");
-        eKnob.Background = (Brush)FindResource(isOn ? "TextPrimary" : "TextFaint");
+        bTrack.Background = (Brush)FindResource(isOn ? ThemeKeys.Accent : ThemeKeys.SurfaceRaised);
+        eKnob.Background = (Brush)FindResource(isOn ? ThemeKeys.TextPrimary : ThemeKeys.TextFaint);
         eKnob.HorizontalAlignment = isOn ? HorizontalAlignment.Right : HorizontalAlignment.Left;
         eKnob.Margin = isOn ? new Thickness(0, 0, 3, 0) : new Thickness(3, 0, 0, 0);
     }

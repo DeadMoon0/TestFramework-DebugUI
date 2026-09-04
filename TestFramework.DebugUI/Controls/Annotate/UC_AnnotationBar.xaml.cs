@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using TestFramework.DebugUI.State.Annotations;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Annotate;
 
@@ -26,7 +27,8 @@ public partial class UC_AnnotationBar : UserControl
     /// Five, deliberately. A palette long enough to tell three people's marks apart and short enough that the
     /// bar stays a bar; and none of them is one of the board's own state colours.
     /// </remarks>
-    public static readonly ImmutableList<string> Inks = ["InkWhite", "InkCyan", "InkMagenta", "InkViolet", "InkOrange"];
+    public static readonly ImmutableList<string> Inks =
+        [ThemeKeys.InkWhite, ThemeKeys.InkCyan, ThemeKeys.InkMagenta, ThemeKeys.InkViolet, ThemeKeys.InkOrange];
 
     /// <summary>The stroke weights on offer, in board units.</summary>
     public static readonly ImmutableList<double> Weights = [2, 4, 8];
@@ -80,7 +82,7 @@ public partial class UC_AnnotationBar : UserControl
     public AnnotationKind? Tool { get; private set; }
 
     /// <summary>Gets the chosen ink.</summary>
-    public string Ink { get; private set; } = "InkCyan";
+    public string Ink { get; private set; } = ThemeKeys.InkCyan;
 
     /// <summary>Gets the chosen weight.</summary>
     public double Weight { get; private set; } = 4;
@@ -141,7 +143,7 @@ public partial class UC_AnnotationBar : UserControl
                 Width = 16,
                 Height = weight,
                 CornerRadius = new CornerRadius(weight / 2),
-                Background = (Brush)FindResource("TextSecondary"),
+                Background = (Brush)FindResource(ThemeKeys.TextSecondary),
                 VerticalAlignment = VerticalAlignment.Center
             };
 
@@ -190,8 +192,8 @@ public partial class UC_AnnotationBar : UserControl
 
     private void Paint(Button button, Path glyph, bool chosen)
     {
-        button.Background = chosen ? (Brush)FindResource("Accent") : Brushes.Transparent;
-        glyph.Stroke = (Brush)FindResource(chosen ? "TextPrimary" : "TextSecondary");
+        button.Background = chosen ? (Brush)FindResource(ThemeKeys.Accent) : Brushes.Transparent;
+        glyph.Stroke = (Brush)FindResource(chosen ? ThemeKeys.TextPrimary : ThemeKeys.TextSecondary);
     }
 
     private void Choose(string ink)
@@ -201,7 +203,7 @@ public partial class UC_AnnotationBar : UserControl
         foreach ((string key, Border swatch) in inkSwatches)
         {
             swatch.BorderBrush = string.Equals(key, ink, StringComparison.Ordinal)
-                ? (Brush)FindResource("TextPrimary")
+                ? (Brush)FindResource(ThemeKeys.TextPrimary)
                 : Brushes.Transparent;
         }
 
@@ -215,7 +217,7 @@ public partial class UC_AnnotationBar : UserControl
         foreach ((double key, Border swatch) in weightSwatches)
         {
             swatch.Background = key == weight
-                ? (Brush)FindResource("SurfaceRaisedHover")
+                ? (Brush)FindResource(ThemeKeys.SurfaceRaisedHover)
                 : Brushes.Transparent;
         }
 
@@ -228,7 +230,7 @@ public partial class UC_AnnotationBar : UserControl
     {
         marksVisible = !marksVisible;
 
-        Brush ink = (Brush)FindResource(marksVisible ? "TextSecondary" : "TextFaint");
+        Brush ink = (Brush)FindResource(marksVisible ? ThemeKeys.TextSecondary : ThemeKeys.TextFaint);
 
         pathEye.Stroke = ink;
         ellipseEye.Fill = ink;

@@ -9,6 +9,7 @@ using System.Windows.Shapes;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.Layout;
 using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Board;
 
@@ -123,7 +124,7 @@ internal sealed class BoardComposer
         Child = new TextBlock
         {
             Text = node.StageName.ToUpperInvariant(),
-            Foreground = (Brush)resources.FindResource("TextFaint"),
+            Foreground = (Brush)resources.FindResource(ThemeKeys.TextFaint),
             Opacity = 0.55,
             FontSize = 10,
             Margin = new Thickness(12, 8, 0, 0),
@@ -144,7 +145,7 @@ internal sealed class BoardComposer
     {
         TextBlock heading = new()
         {
-            Foreground = (Brush)resources.FindResource("TextPrimary"),
+            Foreground = (Brush)resources.FindResource(ThemeKeys.TextPrimary),
             FontSize = 20,
             FontWeight = FontWeights.Bold,
             TextTrimming = TextTrimming.CharacterEllipsis
@@ -152,7 +153,7 @@ internal sealed class BoardComposer
 
         TextBlock why = new()
         {
-            Foreground = (Brush)resources.FindResource("TextSecondary"),
+            Foreground = (Brush)resources.FindResource(ThemeKeys.TextSecondary),
             FontSize = 12,
             Margin = new Thickness(0, 6, 0, 0),
             TextWrapping = TextWrapping.Wrap
@@ -163,7 +164,7 @@ internal sealed class BoardComposer
             Width = node.Width,
             Height = node.Height,
             CornerRadius = new CornerRadius(4),
-            Background = (Brush)resources.FindResource("SurfaceCard"),
+            Background = (Brush)resources.FindResource(ThemeKeys.SurfaceCard),
             BorderThickness = new Thickness(2),
             BorderBrush = Brushes.Transparent,
             Cursor = Cursors.Hand,
@@ -201,10 +202,10 @@ internal sealed class BoardComposer
     /// </remarks>
     internal UIElement BuildStep(BoardVisuals visuals, LayoutResult board, LayoutNode node)
     {
-        Border status = new() { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = (Brush)resources.FindResource("StateNotRun") };
-        TextBlock name = new() { Foreground = (Brush)resources.FindResource("TextPrimary"), FontSize = 16, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(8, 0, 0, 0) };
-        TextBlock note = new() { Foreground = (Brush)resources.FindResource("TextSecondary"), FontSize = 11, Margin = new Thickness(0, 4, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
-        TextBlock outputs = new() { Foreground = (Brush)resources.FindResource("TextFaint"), FontSize = 11, Margin = new Thickness(0, 8, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
+        Border status = new() { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = (Brush)resources.FindResource(ThemeKeys.StateNotRun) };
+        TextBlock name = new() { Foreground = (Brush)resources.FindResource(ThemeKeys.TextPrimary), FontSize = 16, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(8, 0, 0, 0) };
+        TextBlock note = new() { Foreground = (Brush)resources.FindResource(ThemeKeys.TextSecondary), FontSize = 11, Margin = new Thickness(0, 4, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
+        TextBlock outputs = new() { Foreground = (Brush)resources.FindResource(ThemeKeys.TextFaint), FontSize = 11, Margin = new Thickness(0, 8, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
 
 
         // The heading's right-hand end is the emptiest part of a card and the timing is what a reader
@@ -212,7 +213,7 @@ internal sealed class BoardComposer
         // it competes with the state and the attempt count for the same eye.
         TextBlock elapsed = new()
         {
-            Foreground = (Brush)resources.FindResource("TextFaint"),
+            Foreground = (Brush)resources.FindResource(ThemeKeys.TextFaint),
             FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Right,
@@ -247,7 +248,7 @@ internal sealed class BoardComposer
         {
             CornerRadius = new CornerRadius(4),
             ClipToBounds = true,
-            Background = (Brush)resources.FindResource("SurfaceSunken"),
+            Background = (Brush)resources.FindResource(ThemeKeys.SurfaceSunken),
             Margin = new Thickness(0, BoardMetrics.WidgetMargin, 0, 0),
             Visibility = Visibility.Collapsed
         };
@@ -268,7 +269,7 @@ internal sealed class BoardComposer
         Border box = new()
         {
             CornerRadius = new CornerRadius(4),
-            Background = (Brush)resources.FindResource("SurfaceCard"),
+            Background = (Brush)resources.FindResource(ThemeKeys.SurfaceCard),
             BorderThickness = new Thickness(2),
             BorderBrush = Brushes.Transparent,
             Cursor = Cursors.Hand,
@@ -389,7 +390,7 @@ internal sealed class BoardComposer
 
     private UIElement Strip(bool top) => new Border
     {
-        Background = (Brush)resources.FindResource("SurfaceSunken"),
+        Background = (Brush)resources.FindResource(ThemeKeys.SurfaceSunken),
         CornerRadius = top ? new CornerRadius(4, 4, 0, 0) : new CornerRadius(0, 0, 4, 4)
     };
 
@@ -406,8 +407,8 @@ internal sealed class BoardComposer
         // A connector on the verdict is coloured like the pipe arriving at it. It is the same claim
         // at both ends, and a green socket at the end of a red pipe reads as two different things.
         Brush flow = string.Equals(port.NodeId, "verdict", StringComparison.Ordinal)
-            ? (Brush)resources.FindResource(brokenChecks.Contains(port.Key) ? "StateError" : "StateComplete")
-            : (Brush)resources.FindResource(port.Kind == DebugValueKind.Artifact ? "FlowArtifact" : "FlowVariable");
+            ? (Brush)resources.FindResource(brokenChecks.Contains(port.Key) ? ThemeKeys.StateError : ThemeKeys.StateComplete)
+            : (Brush)resources.FindResource(port.Kind == DebugValueKind.Artifact ? ThemeKeys.FlowArtifact : ThemeKeys.FlowVariable);
 
         Border ring = new()
         {
@@ -454,12 +455,12 @@ internal sealed class BoardComposer
         // claim held. Colouring it by variable-or-artifact there would waste the only place on the
         // board where pass and fail can be seen without reading anything.
         Brush flow = edge.Kind == LayoutEdgeKind.Assertion
-            ? (Brush)resources.FindResource(brokenChecks.Contains(edge.Key) ? "StateError" : "StateComplete")
-            : (Brush)resources.FindResource(edge.ValueKind == DebugValueKind.Artifact ? "FlowArtifact" : "FlowVariable");
+            ? (Brush)resources.FindResource(brokenChecks.Contains(edge.Key) ? ThemeKeys.StateError : ThemeKeys.StateComplete)
+            : (Brush)resources.FindResource(edge.ValueKind == DebugValueKind.Artifact ? ThemeKeys.FlowArtifact : ThemeKeys.FlowVariable);
 
         yield return new Path
         {
-            Stroke = (Brush)resources.FindResource("PipeShadow"),
+            Stroke = (Brush)resources.FindResource(ThemeKeys.PipeShadow),
             StrokeThickness = 10,
             StrokeLineJoin = PenLineJoin.Round,
             StrokeStartLineCap = PenLineCap.Round,

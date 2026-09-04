@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI;
 
@@ -42,7 +43,7 @@ internal static class InteractiveRow
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(pick);
 
-        Brush raised = (Brush)owner.FindResource("SurfaceRaised");
+        Brush raised = (Brush)owner.FindResource(ThemeKeys.SurfaceRaised);
 
         Border row = new()
         {

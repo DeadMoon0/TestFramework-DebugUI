@@ -11,6 +11,7 @@ using System.Windows.Shapes;
 using TestFramework.DebugUI.Docking;
 
 using TestFramework.DebugUI.State.Transport;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Dock;
 
@@ -282,7 +283,7 @@ public partial class UC_DockHost : UserControl
         Border lift = new()
         {
             CornerRadius = new CornerRadius(DockMetrics.CardRadius),
-            Background = (Brush)FindResource("SurfaceOverlay"),
+            Background = (Brush)FindResource(ThemeKeys.SurfaceOverlay),
             Effect = new DropShadowEffect
             {
                 // No offset: a card lifted straight off the surface rather than lit from a corner. Depth without
@@ -305,9 +306,9 @@ public partial class UC_DockHost : UserControl
         Border face = new()
         {
             CornerRadius = new CornerRadius(DockMetrics.CardRadius),
-            Background = (Brush)FindResource("SurfaceOverlay"),
+            Background = (Brush)FindResource(ThemeKeys.SurfaceOverlay),
             BorderThickness = new Thickness(1),
-            BorderBrush = (Brush)FindResource("PanelEdge"),
+            BorderBrush = (Brush)FindResource(ThemeKeys.PanelEdge),
             Child = body
         };
 
@@ -400,7 +401,7 @@ public partial class UC_DockHost : UserControl
         TextBlock title = new()
         {
             Text = descriptor.Title,
-            Foreground = (Brush)FindResource(active ? "TextSecondary" : "TextFaint"),
+            Foreground = (Brush)FindResource(active ? ThemeKeys.TextSecondary : ThemeKeys.TextFaint),
             FontSize = 10,
             FontWeight = FontWeights.Bold,
             VerticalAlignment = VerticalAlignment.Center,
@@ -459,7 +460,7 @@ public partial class UC_DockHost : UserControl
         content.Children.Add(new TextBlock
         {
             Text = descriptor.Title,
-            Foreground = (Brush)FindResource(active ? "TextPrimary" : "TextFaint"),
+            Foreground = (Brush)FindResource(active ? ThemeKeys.TextPrimary : ThemeKeys.TextFaint),
             FontSize = 10,
             FontWeight = FontWeights.Bold,
             VerticalAlignment = VerticalAlignment.Center,
@@ -472,11 +473,11 @@ public partial class UC_DockHost : UserControl
         Border tab = new()
         {
             Height = 28,
-            Background = active ? (Brush)FindResource("SurfaceOverlay") : Brushes.Transparent,
+            Background = active ? (Brush)FindResource(ThemeKeys.SurfaceOverlay) : Brushes.Transparent,
 
             // Only the chosen tab carries the accent, and only along its top edge: a whole tab in the accent
             // would compete with everything inside the panel it opens.
-            BorderBrush = active ? (Brush)FindResource("Accent") : Brushes.Transparent,
+            BorderBrush = active ? (Brush)FindResource(ThemeKeys.Accent) : Brushes.Transparent,
             BorderThickness = new Thickness(0, 2, 0, 0),
             Cursor = Cursors.Hand,
             Child = content
@@ -498,13 +499,13 @@ public partial class UC_DockHost : UserControl
     {
         Button close = new()
         {
-            Style = (Style)FindResource("IconButton"),
+            Style = (Style)FindResource(ThemeKeys.IconButton),
             Margin = new Thickness(0, 2, 4, 2),
             ToolTip = "Close this panel",
             Content = new Path
             {
-                Data = (Geometry)FindResource("IconClose"),
-                Stroke = (Brush)FindResource("TextFaint"),
+                Data = (Geometry)FindResource(ThemeKeys.IconClose),
+                Stroke = (Brush)FindResource(ThemeKeys.TextFaint),
                 StrokeThickness = 1.4,
                 StrokeStartLineCap = PenLineCap.Round,
                 StrokeEndLineCap = PenLineCap.Round,

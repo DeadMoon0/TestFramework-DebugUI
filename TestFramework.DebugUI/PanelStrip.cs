@@ -8,6 +8,7 @@ using System.Windows.Shapes;
 using System.Windows.Shell;
 using TestFramework.DebugUI.Controls.Dock;
 using TestFramework.DebugUI.Docking;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI;
 
@@ -62,7 +63,7 @@ internal sealed class PanelStrip
                     {
                         Width = 1,
                         Margin = new Thickness(0, 7, 0, 7),
-                        Background = (Brush)host.FindResource("IconGroupEdge")
+                        Background = (Brush)host.FindResource(ThemeKeys.IconGroupEdge)
                     });
                 }
 
@@ -78,8 +79,8 @@ internal sealed class PanelStrip
                 CornerRadius = new CornerRadius(6),
                 Margin = new Thickness(shared ? 5 : 0, 0, shared ? 5 : 0, 0),
                 Padding = new Thickness(shared ? 2 : 0, 0, shared ? 2 : 0, 0),
-                Background = shared ? (Brush)host.FindResource("SurfaceRaised") : Brushes.Transparent,
-                BorderBrush = shared ? (Brush)host.FindResource("IconGroupEdge") : Brushes.Transparent,
+                Background = shared ? (Brush)host.FindResource(ThemeKeys.SurfaceRaised) : Brushes.Transparent,
+                BorderBrush = shared ? (Brush)host.FindResource(ThemeKeys.IconGroupEdge) : Brushes.Transparent,
                 BorderThickness = new Thickness(shared ? 1 : 0),
                 Child = row
             };
@@ -105,7 +106,7 @@ internal sealed class PanelStrip
         Path glyph = new()
         {
             Data = (Geometry)host.FindResource(descriptor.IconKey),
-            Stroke = (Brush)host.FindResource("TextSecondary"),
+            Stroke = (Brush)host.FindResource(ThemeKeys.TextSecondary),
             StrokeThickness = 1.5,
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round,
@@ -116,7 +117,7 @@ internal sealed class PanelStrip
 
         Button button = new()
         {
-            Style = (Style)host.FindResource("CaptionIconButton"),
+            Style = (Style)host.FindResource(ThemeKeys.CaptionIconButton),
             Content = glyph,
             Tag = panel,
 
@@ -192,7 +193,7 @@ internal sealed class PanelStrip
             if (button.Tag is not PanelId panel || button.Content is not Path glyph)
                 continue;
 
-            glyph.Stroke = (Brush)host.FindResource(Arrangement.Current.IsOpen(panel) ? "Accent" : "TextSecondary");
+            glyph.Stroke = (Brush)host.FindResource(Arrangement.Current.IsOpen(panel) ? ThemeKeys.Accent : ThemeKeys.TextSecondary);
         }
     }
 

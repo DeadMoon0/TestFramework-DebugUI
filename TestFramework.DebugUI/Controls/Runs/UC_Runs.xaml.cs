@@ -18,6 +18,7 @@ using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Runs;
 
 using TestFramework.DebugUI.State.Transport;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Runs;
 
@@ -333,7 +334,7 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
         TextBlock name = new()
         {
             Text = text,
-            Foreground = (Brush)FindResource(selected ? "TextPrimary" : "TextSecondary"),
+            Foreground = (Brush)FindResource(selected ? ThemeKeys.TextPrimary : ThemeKeys.TextSecondary),
             FontSize = 12,
             FontWeight = bold ? FontWeights.Bold : FontWeights.Normal,
             VerticalAlignment = VerticalAlignment.Center,
@@ -345,7 +346,7 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
         TextBlock tally = new()
         {
             Text = count.ToString(CultureInfo.CurrentCulture),
-            Foreground = (Brush)FindResource("TextFaint"),
+            Foreground = (Brush)FindResource(ThemeKeys.TextFaint),
             FontSize = 11,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 0, 0)
@@ -391,7 +392,7 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
             Text = run.StartedAtUtc == default
                 ? "unknown time"
                 : run.StartedAtUtc.ToLocalTime().ToString("HH:mm:ss", CultureInfo.CurrentCulture),
-            Foreground = (Brush)FindResource(isSelected ? "TextPrimary" : "TextSecondary"),
+            Foreground = (Brush)FindResource(isSelected ? ThemeKeys.TextPrimary : ThemeKeys.TextSecondary),
             FontFamily = new FontFamily("Consolas"),
             FontSize = 11.5,
             VerticalAlignment = VerticalAlignment.Center
@@ -402,7 +403,7 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
         TextBlock what = new()
         {
             Text = Verdict(run),
-            Foreground = (Brush)FindResource("TextFaint"),
+            Foreground = (Brush)FindResource(ThemeKeys.TextFaint),
             FontSize = 11,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 0, 0),
@@ -435,8 +436,8 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
 
     private Path Chevron(bool open) => new()
     {
-        Data = (Geometry)FindResource("IconChevron"),
-        Stroke = (Brush)FindResource("TextFaint"),
+        Data = (Geometry)FindResource(ThemeKeys.IconChevron),
+        Stroke = (Brush)FindResource(ThemeKeys.TextFaint),
         StrokeThickness = 1.4,
         StrokeStartLineCap = PenLineCap.Round,
         StrokeEndLineCap = PenLineCap.Round,

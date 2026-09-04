@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Copying;
 
@@ -34,11 +35,11 @@ public static class CopyGlyph
 
         Cancel(glyph);
 
-        glyph.Data = (Geometry)resources.FindResource("IconTick");
+        glyph.Data = (Geometry)resources.FindResource(ThemeKeys.IconTick);
 
         // The accent, not the green that means a step passed. This tick reports a clipboard, and a verdict
         // colour on it reads as a verdict about the thing that was copied.
-        glyph.Stroke = (Brush)resources.FindResource("Accent");
+        glyph.Stroke = (Brush)resources.FindResource(ThemeKeys.Accent);
 
         // The timer is parked on the glyph it belongs to, so a second copy before the first tick has faded
         // replaces that tick rather than racing it back to the copy icon.
@@ -48,8 +49,8 @@ public static class CopyGlyph
         {
             Cancel(glyph);
 
-            glyph.Data = (Geometry)resources.FindResource("IconCopy");
-            glyph.Stroke = (Brush)resources.FindResource("TextSecondary");
+            glyph.Data = (Geometry)resources.FindResource(ThemeKeys.IconCopy);
+            glyph.Stroke = (Brush)resources.FindResource(ThemeKeys.TextSecondary);
         };
 
         glyph.Tag = revert;

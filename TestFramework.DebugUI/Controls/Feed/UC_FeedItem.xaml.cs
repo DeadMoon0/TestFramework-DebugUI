@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using TestFramework.DebugUI.Copying;
 using TestFramework.DebugUI.State.Shell.Feed;
+using TestFramework.DebugUI.Theme;
 
 
 namespace TestFramework.DebugUI.Controls.Feed;
@@ -47,9 +48,9 @@ public partial class UC_FeedItem : UserControl
 
         bSeverity.Background = entry.Severity switch
         {
-            FeedSeverity.Error => (Brush)FindResource("StateError"),
-            FeedSeverity.Warning => (Brush)FindResource("StateTimeout"),
-            _ => (Brush)FindResource("TextFaint")
+            FeedSeverity.Error => (Brush)FindResource(ThemeKeys.StateError),
+            FeedSeverity.Warning => (Brush)FindResource(ThemeKeys.StateTimeout),
+            _ => (Brush)FindResource(ThemeKeys.TextFaint)
         };
 
         if (entry.SessionId is not null)

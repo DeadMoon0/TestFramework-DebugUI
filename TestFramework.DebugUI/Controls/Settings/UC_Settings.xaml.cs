@@ -8,6 +8,7 @@ using System.Windows.Media;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.State.Settings;
 using TestFramework.DebugUI.State.Diagnostics;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Settings;
 
@@ -177,19 +178,19 @@ public partial class UC_Settings : UserControl
             TextBlock what = new()
             {
                 Text = command.Text,
-                Foreground = (Brush)FindResource("TextSecondary"),
+                Foreground = (Brush)FindResource(ThemeKeys.TextSecondary),
                 FontSize = 11
             };
 
             Border key = new()
             {
                 CornerRadius = new CornerRadius(4),
-                Background = (Brush)FindResource("SurfaceRaised"),
+                Background = (Brush)FindResource(ThemeKeys.SurfaceRaised),
                 Padding = new Thickness(6, 1, 6, 1),
                 Child = new TextBlock
                 {
                     Text = Shortcuts.GestureOf(command),
-                    Foreground = (Brush)FindResource("TextPrimary"),
+                    Foreground = (Brush)FindResource(ThemeKeys.TextPrimary),
                     FontFamily = new FontFamily("Cascadia Mono, Consolas"),
                     FontSize = 10
                 }

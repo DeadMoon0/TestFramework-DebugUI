@@ -26,26 +26,40 @@ namespace TestFramework.DebugUI;
 public sealed class SingleInstance : IDisposable
 {
     /// <summary>
+    /// The name the tool holds its own election under.
+    /// </summary>
+    /// <remarks>
+    /// One name for the product, and everything derived from it. A caller may hold an election under a
+    /// different name — the tool's own suite does, so that testing the election does not require the
+    /// tool to be closed, and so two of these tests are not each other's second instance.
+    /// </remarks>
+    private const string DefaultName = "TestFramework.DebugUI";
+
+    /// <summary>
     /// The name the election is held under.
     /// </summary>
     /// <remarks>
     /// Local rather than global, so the one-instance rule is per logged-in user. Two people on one machine are
     /// two people, and each of them has their own pipe, their own journal and their own window.
     /// </remarks>
-    private const string MutexName = @"Local\TestFramework.DebugUI.instance";
+    private static string MutexNameFor(string name) => @"Local\" + name + ".instance";
 
     /// <summary>The pipe a second launch hands its argument to.</summary>
-    private const string PipeName = "TestFramework.DebugUI.activation";
+    private static string PipeNameFor(string name) => name + ".activation";
 
     private readonly Mutex? mutex;
     private readonly SynchronizationContext? context;
 
+    /// <summary>What this instance was elected under, so it serves and wakes the right pipe.</summary>
+    private readonly string name;
+
     private bool listening;
     private bool disposed;
 
-    private SingleInstance(Mutex? mutex, bool isOwner)
+    private SingleInstance(Mutex? mutex, bool isOwner, string name)
     {
         this.mutex = mutex;
+        this.name = name;
         IsOwner = isOwner;
         context = SynchronizationContext.Current;
     }
@@ -63,19 +77,26 @@ public sealed class SingleInstance : IDisposable
     /// A mutex that cannot be created at all is treated as "I am the owner", so a machine policy that blocks
     /// them leaves the tool working as it did before any of this existed rather than refusing to start.
     /// </remarks>
-    public static SingleInstance Acquire()
+    /// <param name="name">
+    /// What to hold the election under, or null for the tool's own name. Given only by something that
+    /// wants an election of its own rather than the product's — which in practice is the suite that
+    /// tests this, since holding the real election would make it the tool's second instance.
+    /// </param>
+    public static SingleInstance Acquire(string? name = null)
     {
+        string elected = name is { Length: > 0 } given ? given : DefaultName;
+
         try
         {
-            Mutex mutex = new(initiallyOwned: true, MutexName, out bool createdNew);
+            Mutex mutex = new(initiallyOwned: true, MutexNameFor(elected), out bool createdNew);
 
-            return new SingleInstance(mutex, createdNew);
+            return new SingleInstance(mutex, createdNew, elected);
         }
         catch (Exception e)
         {
             Log.Write(e);
 
-            return new SingleInstance(null, isOwner: true);
+            return new SingleInstance(null, isOwner: true, elected);
         }
     }
 
@@ -105,13 +126,16 @@ public sealed class SingleInstance : IDisposable
     /// Returns false when nobody answered, which the caller should treat as "carry on and be the owner" — the
     /// owner may have died between the election and this call.
     /// </remarks>
-    public static bool TrySend(string? payload, TimeSpan timeout)
+    /// <param name="payload">What to hand over, or null to ask only that the window be shown.</param>
+    /// <param name="timeout">How long to wait for the owner to answer.</param>
+    /// <param name="name">The election to hand to, or null for the tool's own.</param>
+    public static bool TrySend(string? payload, TimeSpan timeout, string? name = null)
     {
         try
         {
             using NamedPipeClientStream client = new(
                 ".",
-                PipeName,
+                PipeNameFor(name is { Length: > 0 } given ? given : DefaultName),
                 PipeDirection.Out,
                 PipeOptions.CurrentUserOnly);
 
@@ -142,7 +166,7 @@ public sealed class SingleInstance : IDisposable
                 // CurrentUserOnly on both ends, so nothing outside this account can push a file path into the
                 // window — the same rule the debug transport uses.
                 using NamedPipeServerStream server = new(
-                    PipeName,
+                    PipeNameFor(name),
                     PipeDirection.In,
                     maxNumberOfServerInstances: 1,
                     PipeTransmissionMode.Byte,
@@ -195,7 +219,7 @@ public sealed class SingleInstance : IDisposable
 
         // Unblocks the waiting server so the thread can end rather than holding the pipe until the process does.
         if (listening)
-            TrySend(null, TimeSpan.FromMilliseconds(200));
+            TrySend(null, TimeSpan.FromMilliseconds(200), name);
 
         try
         {

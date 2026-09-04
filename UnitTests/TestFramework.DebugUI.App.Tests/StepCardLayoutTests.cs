@@ -76,9 +76,12 @@ public sealed class StepCardLayoutTests
     /// </remarks>
     private static (FrameworkElement Card, TextBlock Duration, FrameworkElement Marker) Card(double height)
     {
-        UC_Board board = new();
+        // The composer rather than the whole board: what is under test is how a card is built, and it
+        // no longer takes a control to build one.
+        Canvas canvas = new();
+        BoardComposer composer = new(canvas, canvas, () => null, (_, _) => { }, () => { });
 
-        FrameworkElement card = (FrameworkElement)board.BuildStep(new LayoutNode
+        FrameworkElement card = (FrameworkElement)composer.BuildStep(new BoardVisuals(), LayoutResult.Empty, new LayoutNode
         {
             Id = "Main Stage/0",
             Kind = LayoutNodeKind.Step,

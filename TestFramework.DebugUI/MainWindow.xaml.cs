@@ -1,20 +1,14 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Reactive.Linq;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
-using System.Windows.Input;
-using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Shapes;
-using System.Windows.Shell;
 using System.Windows.Threading;
 using Axiom.State;
 using TestFramework.Core.Debugger;
@@ -27,7 +21,6 @@ using TestFramework.DebugUI.State.Runs;
 using TestFramework.DebugUI.State.Settings;
 using TestFramework.DebugUI.State.Shell.Feed;
 using TestFramework.DebugUI.State.Transport;
-using static TestFramework.DebugUI.NativeMethods;
 using TestFramework.DebugUI.State.Diagnostics;
 
 namespace TestFramework.DebugUI;
@@ -62,8 +55,8 @@ public partial class MainWindow : Window
     private IDisposable? notifications;
     private Unread unread;
     private UiSettings saved = UiSettings.Defaults;
-    private TrayIcon? tray;
-    private WatchNotifier? notifier;
+    /// <summary>The notification-area icon and the notices, which outlive the window while watching.</summary>
+    private readonly WatchModeController watch = new();
     private IDisposable? halts;
 
     /// <summary>Brings the step panel out whenever a step is picked, wherever it was picked from.</summary>
@@ -71,6 +64,9 @@ public partial class MainWindow : Window
 
     /// <summary>What fraction of the window the pinned wells have reserved.</summary>
     private DockInsets reserved = DockInsets.None;
+
+    /// <summary>The row of panel icons in the title bar, which keeps itself in step with the arrangement.</summary>
+    private readonly PanelStrip panelStrip;
 
     /// <summary>
     /// Gets the controller this window drives.
@@ -224,7 +220,7 @@ public partial class MainWindow : Window
         saved = settings.Load();
         breakpoints.Restore(saved.Breakpoints);
         breakpoints.BreakOnFailure = saved.BreakOnFailure;
-        ApplyPlacement(saved.Window);
+        WindowChromeInterop.Restore(this, saved.Window);
 
         // Where every panel is, as the reader last left it. Restored before the window is shown so it does
         // not visibly rearrange itself, and repaired on the way in so a file from another build is survivable.
@@ -243,8 +239,15 @@ public partial class MainWindow : Window
 
         SizeChanged += (_, _) => ApplyBoardInsets();
 
-        Arrangement.Changed += ShowPanelStrip;
-        ShowPanelStrip();
+        panelStrip = new PanelStrip(spPanels);
+
+        // The icon says what was asked for and the window does it: bringing the window back needs the
+        // window, and so does leaving.
+        watch.ShowRequested += ShowFromTray;
+        watch.ExitRequested += ExitFromTray;
+
+        Arrangement.Changed += panelStrip.Rebuild;
+        panelStrip.Rebuild();
 
         // Saved on change rather than on exit. A tool that is killed - and this one is attached to
         // test hosts that get killed - would otherwise lose every breakpoint set in the session.
@@ -294,8 +297,7 @@ public partial class MainWindow : Window
         {
             Persist(saved with { Watch = watch });
 
-            if (notifier is not null)
-                notifier.Settings = watch;
+            this.watch.Settings = watch;
 
             ApplyWatchMode(watch.Enabled, announce: false);
         };
@@ -317,48 +319,6 @@ public partial class MainWindow : Window
         shell.Start();
     }
 
-    /// <summary>
-    /// Puts the window back where it was, if that is still somewhere reachable.
-    /// </summary>
-    /// <remarks>
-    /// Checked against the virtual screen rather than trusted: a window restored onto a monitor that
-    /// has since been unplugged is a window nobody can find, and it reads as the application failing
-    /// to start rather than as a misplaced window.
-    /// </remarks>
-    private void ApplyPlacement(WindowPlacement? placement)
-    {
-        if (placement is null || placement.Width < MinWidth || placement.Height < MinHeight)
-            return;
-
-        if (!IsOnScreen(placement))
-            return;
-
-        WindowStartupLocation = WindowStartupLocation.Manual;
-        Left = placement.Left;
-        Top = placement.Top;
-        Width = placement.Width;
-        Height = placement.Height;
-
-        if (placement.IsMaximized)
-            WindowState = WindowState.Maximized;
-    }
-
-    private static bool IsOnScreen(WindowPlacement placement)
-    {
-        // Enough of the title bar has to land inside the virtual desktop to be grabbable.
-        const double MinimumVisible = 120;
-
-        double left = SystemParameters.VirtualScreenLeft;
-        double top = SystemParameters.VirtualScreenTop;
-        double right = left + SystemParameters.VirtualScreenWidth;
-        double bottom = top + SystemParameters.VirtualScreenHeight;
-
-        return placement.Left + MinimumVisible < right
-            && placement.Left + placement.Width - MinimumVisible > left
-            && placement.Top + 1 < bottom
-            && placement.Top + placement.Height - 1 > top;
-    }
-
     private void btSettings_Click(object sender, RoutedEventArgs e)
     {
         if (ucSettings.Visibility == Visibility.Visible)
@@ -370,48 +330,33 @@ public partial class MainWindow : Window
         ucSettings.Show(saved.Watch, settings.FilePath, saved.BreakOnFailure);
     }
 
-    /// <summary>What each shortcut runs.</summary>
-    private readonly Dictionary<RoutedUICommand, Action> shortcuts = [];
-
     /// <summary>
     /// Points every shortcut at the same method its button uses.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Matched on the window's key preview rather than through <c>InputBindings</c> and
-    /// <c>CommandBindings</c>. That was tried first and silently did nothing: a routed command looks for
-    /// its binding by walking up from whatever holds keyboard focus, and in this window that is often
-    /// nothing at all — the board takes mouse focus for panning and the overlays are plain panels — so
-    /// the walk never reached here. Previewing the key is not subject to any of that.
-    /// </para>
-    /// <para>
-    /// The gestures still come from <see cref="Shortcuts"/>, so the keys matched here are the same ones
-    /// the settings list and the tooltips display.
-    /// </para>
+    /// The table is the window's, because what a key does is a decision about this window; the
+    /// matching underneath it is <see cref="ShortcutRouter"/>'s. Every line here has a button
+    /// somewhere that calls the same thing, which is what keeps the two from drifting apart.
     /// </remarks>
     private void BindShortcuts()
     {
-        PreviewKeyDown += OnShortcutKey;
+        new ShortcutRouter(this)
+            .Bind(Shortcuts.Runs, ShowHome)
+            .Bind(Shortcuts.Settings, () => btSettings_Click(this, new RoutedEventArgs()))
+            .Bind(Shortcuts.ToggleWatch, () => ApplyWatchMode(!saved.Watch.Enabled, announce: true))
+            .Bind(Shortcuts.CloseTopmost, CloseTopmost)
 
-        Bind(Shortcuts.Runs, ShowHome);
-        Bind(Shortcuts.Settings, () => btSettings_Click(this, new RoutedEventArgs()));
-        Bind(Shortcuts.ToggleWatch, () => ApplyWatchMode(!saved.Watch.Enabled, announce: true));
-        Bind(Shortcuts.CloseTopmost, CloseTopmost);
+            .Bind(Shortcuts.Rerun, Shell.RerunSelected)
+            .Bind(Shortcuts.Stop, () => _ = Shell.CancelSelectedRunAsync())
+            .Bind(Shortcuts.Continue, () => _ = Shell.ContinueSelectedRunAsync())
+            .Bind(Shortcuts.StepForward, () => _ = StepSelectedRunAsync())
+            .Bind(Shortcuts.Refresh, Shell.RefreshRecordedRuns)
 
-        Bind(Shortcuts.Rerun, Shell.RerunSelected);
-        Bind(Shortcuts.Stop, () => _ = Shell.CancelSelectedRunAsync());
-        Bind(Shortcuts.Continue, () => _ = Shell.ContinueSelectedRunAsync());
-        Bind(Shortcuts.StepForward, () => _ = StepSelectedRunAsync());
-        Bind(Shortcuts.Refresh, Shell.RefreshRecordedRuns);
-
-        Bind(Shortcuts.Search, ShowSearch);
-        Bind(Shortcuts.Fit, ucBoard.FitToWindow);
-        Bind(Shortcuts.Summary, ucBoard.RequestSummary);
-        Bind(Shortcuts.FirstFailure, ucBoard.GoToFirstFailure);
-
+            .Bind(Shortcuts.Search, ShowSearch)
+            .Bind(Shortcuts.Fit, ucBoard.FitToWindow)
+            .Bind(Shortcuts.Summary, ucBoard.RequestSummary)
+            .Bind(Shortcuts.FirstFailure, ucBoard.GoToFirstFailure);
     }
-
-    private void Bind(RoutedUICommand command, Action run) => shortcuts[command] = run;
 
     /// <summary>
     /// Runs the selected run on to its next step and stops it there.
@@ -428,29 +373,6 @@ public partial class MainWindow : Window
         return sessionId is null
             ? Task.FromResult(false)
             : breakpoints.StepThroughAsync(sessionId, Shell.ContinueSelectedRunAsync);
-    }
-
-    /// <summary>
-    /// Runs whichever shortcut the key matches.
-    /// </summary>
-    /// <remarks>
-    /// Typing is left alone: a gesture with no modifier — Escape, F5, F8 — would otherwise fire while
-    /// someone was typing into a field. There is no text entry in this window today, and this is what
-    /// stops the first one that appears from being broken by these shortcuts.
-    /// </remarks>
-    private void OnShortcutKey(object sender, KeyEventArgs e)
-    {
-        if (e.OriginalSource is TextBoxBase { IsReadOnly: false })
-            return;
-
-        if (Shortcuts.Match(e.Key, Keyboard.Modifiers) is not { } command)
-            return;
-
-        if (!shortcuts.TryGetValue(command, out Action? run))
-            return;
-
-        run();
-        e.Handled = true;
     }
 
     /// <summary>
@@ -548,20 +470,22 @@ public partial class MainWindow : Window
     /// </param>
     private void ApplyWatchMode(bool enabled, bool announce)
     {
-        if (enabled && tray is null)
+        if (enabled && !watch.IsWatching)
         {
-            if (!TryStartWatching())
+            if (!watch.TryStart(saved.Watch, out string? problem))
+            {
                 enabled = false;
+                ReportWatchFailure(problem);
+            }
         }
         else if (!enabled)
         {
-            StopWatching();
+            watch.Stop();
         }
 
         Persist(saved with { Watch = saved.Watch with { Enabled = enabled } });
 
-        if (notifier is not null)
-            notifier.Settings = saved.Watch;
+        watch.Settings = saved.Watch;
 
         ShowWatchState(enabled);
 
@@ -570,12 +494,23 @@ public partial class MainWindow : Window
 
         if (announce && enabled)
         {
-            tray?.Notify(
+            watch.Notify(
                 "Watching for test runs",
                 "Close the window and it waits here. Runs that finish will be reported.",
                 TrayIcon.Level.Information);
         }
     }
+
+    /// <summary>Says why watch mode could not be armed, and carries on without it.</summary>
+    private void ReportWatchFailure(string? problem)
+        => shell?.Report(new FeedEntry
+        {
+            AtUtc = DateTimeOffset.UtcNow,
+            Severity = FeedSeverity.Warning,
+            Source = FeedSource.App,
+            Title = "The notification-area icon could not be created.",
+            Detail = problem
+        });
 
     /// <summary>Makes the title bar read as armed or not.</summary>
     /// <remarks>
@@ -597,71 +532,6 @@ public partial class MainWindow : Window
             Shortcuts.ToggleWatch);
     }
 
-    private void StopWatching()
-    {
-        if (notifier is not null)
-        {
-            notifier.Finished -= OnRunFinished;
-            notifier.Dispose();
-            notifier = null;
-        }
-
-        if (tray is not null)
-        {
-            tray.Activated -= ShowFromTray;
-            tray.ContextRequested -= ShowTrayMenu;
-            tray.Dispose();
-            tray = null;
-        }
-    }
-
-    private bool TryStartWatching()
-    {
-        try
-        {
-            tray = new TrayIcon("Test Framework Debugger - watching for test runs");
-            tray.Activated += ShowFromTray;
-            tray.ContextRequested += ShowTrayMenu;
-        }
-        catch (Exception e)
-        {
-            // No tray icon is a smaller problem than no window. Watch mode degrades to "minimises
-            // like anything else".
-            Log.Write(e);
-            shell?.Report(new FeedEntry
-            {
-                AtUtc = DateTimeOffset.UtcNow,
-                Severity = FeedSeverity.Warning,
-                Source = FeedSource.App,
-                Title = "The notification-area icon could not be created.",
-                Detail = e.Message
-            });
-
-            return false;
-        }
-
-        notifier = new WatchNotifier { Settings = saved.Watch };
-        notifier.Finished += OnRunFinished;
-
-        return true;
-    }
-
-    private void OnRunFinished(RunFinishedNotice notice)
-    {
-        bool failed = notice.Health != RunHealth.Passed;
-
-        tray?.Notify(
-            failed ? "A test run needs looking at" : "A test run finished",
-            $"{notice.Test} - {notice.Health.ToString().ToLowerInvariant()}",
-            failed ? TrayIcon.Level.Warning : TrayIcon.Level.Information);
-
-        // Held so that clicking the notification, or the icon, opens the run it was about rather than
-        // whatever happened to be selected before the window was hidden.
-        pendingRun = notice.SessionId;
-    }
-
-    private string? pendingRun;
-
     private void ShowFromTray()
     {
         Show();
@@ -669,45 +539,15 @@ public partial class MainWindow : Window
 
         Surface();
 
-        if (pendingRun is { } sessionId)
-        {
-            pendingRun = null;
+        if (watch.TakePendingRun() is { } sessionId)
             shell?.SelectRun(sessionId);
-        }
-    }
-
-    /// <summary>
-    /// The icon's own menu, which is the only way out while the window is hidden.
-    /// </summary>
-    /// <remarks>
-    /// Not optional. A process with no window and no way to quit but Task Manager is the worst kind of
-    /// tray application, and this one is deliberately allowed to outlive its window.
-    /// </remarks>
-    private void ShowTrayMenu()
-    {
-        ContextMenu menu = new();
-
-        MenuItem show = new() { Header = "Show the debugger" };
-        show.Click += (_, _) => ShowFromTray();
-
-        MenuItem exit = new() { Header = "Stop watching and exit" };
-        exit.Click += (_, _) => ExitFromTray();
-
-        menu.Items.Add(show);
-        menu.Items.Add(new Separator());
-        menu.Items.Add(exit);
-
-        // No placement target, so it opens at the cursor - which for a tray icon is where the icon is.
-        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
-        menu.IsOpen = true;
     }
 
     private void HideToTray()
     {
         Hide();
 
-        if (notifier is not null)
-            notifier.IsHidden = true;
+        watch.MarkHidden();
     }
 
     private void SaveBreakpoints() => Persist(saved with { Breakpoints = breakpoints.Snapshot() });
@@ -717,18 +557,6 @@ public partial class MainWindow : Window
         saved = next;
         settings.Save(saved);
     }
-
-    /// <summary>Where the window is now, for putting it back next time.</summary>
-    private WindowPlacement CurrentPlacement() => new()
-    {
-        // RestoreBounds rather than Left/Top/Width/Height: while maximised those report the maximised
-        // frame, so saving them would lose the size the window had before it was maximised.
-        Left = RestoreBounds.Left,
-        Top = RestoreBounds.Top,
-        Width = RestoreBounds.Width,
-        Height = RestoreBounds.Height,
-        IsMaximized = WindowState == WindowState.Maximized
-    };
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
@@ -744,80 +572,11 @@ public partial class MainWindow : Window
         });
     }
 
-    private void Window_SourceInitialized(object sender, EventArgs e)
-    {
-        IntPtr handle = new WindowInteropHelper(this).Handle;
+    private void Window_SourceInitialized(object sender, EventArgs e) => WindowChromeInterop.Attach(this);
 
-        HwndSource.FromHwnd(handle).AddHook(new HwndSourceHook(WindowProc));
+    /// <summary>Keeps the window's corners in step with its state.</summary>
+    private void Window_StateChanged(object sender, EventArgs e) => WindowChromeInterop.FollowState(this);
 
-        // Asked for once the handle exists, so the window and its popped-out panels are rounded the same way.
-        WindowEffects.RoundCorners(handle);
-        WindowEffects.EnableBlur(handle, System.Windows.Media.Color.FromArgb(200, 0, 0, 0));
-    }
-
-    private static IntPtr WindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        switch (msg)
-        {
-            case 0x0024:
-                WmGetMinMaxInfo(hwnd, lParam);
-                break;
-        }
-
-        return IntPtr.Zero;
-    }
-
-    /// <summary>
-    /// Keeps the corners in step with the window's state.
-    /// </summary>
-    /// <remarks>
-    /// A maximized window's edges are the screen's, and rounding them cuts the corners off the content
-    /// with no frame to show for it.
-    /// </remarks>
-    private void Window_StateChanged(object sender, EventArgs e)
-        => WindowEffects.RoundCorners(
-            new WindowInteropHelper(this).Handle,
-            rounded: WindowState == WindowState.Normal);
-
-    private static void WmGetMinMaxInfo(IntPtr hwnd, IntPtr lParam)
-    {
-        GetCursorPos(out POINT lMousePosition);
-
-        IntPtr lPrimaryScreen = MonitorFromPoint(new POINT(0, 0), MonitorOptions.MONITOR_DEFAULTTOPRIMARY);
-        MONITORINFO lPrimaryScreenInfo = new();
-        if (GetMonitorInfo(lPrimaryScreen, lPrimaryScreenInfo) == false)
-            return;
-
-        IntPtr lCurrentScreen = MonitorFromPoint(lMousePosition, MonitorOptions.MONITOR_DEFAULTTONEAREST);
-
-        MINMAXINFO lMmi = (MINMAXINFO)Marshal.PtrToStructure(lParam, typeof(MINMAXINFO))!;
-
-        if (lPrimaryScreen.Equals(lCurrentScreen))
-        {
-            lMmi.ptMaxPosition.X = lPrimaryScreenInfo.rcWork.Left;
-            lMmi.ptMaxPosition.Y = lPrimaryScreenInfo.rcWork.Top;
-            lMmi.ptMaxSize.X = lPrimaryScreenInfo.rcWork.Right - lPrimaryScreenInfo.rcWork.Left;
-            lMmi.ptMaxSize.Y = lPrimaryScreenInfo.rcWork.Bottom - lPrimaryScreenInfo.rcWork.Top;
-        }
-        else
-        {
-            lMmi.ptMaxPosition.X = lPrimaryScreenInfo.rcMonitor.Left;
-            lMmi.ptMaxPosition.Y = lPrimaryScreenInfo.rcMonitor.Top;
-            lMmi.ptMaxSize.X = lPrimaryScreenInfo.rcMonitor.Right - lPrimaryScreenInfo.rcMonitor.Left;
-            lMmi.ptMaxSize.Y = lPrimaryScreenInfo.rcMonitor.Bottom - lPrimaryScreenInfo.rcMonitor.Top;
-        }
-
-        Marshal.StructureToPtr(lMmi, lParam, true);
-    }
-
-    /// <summary>
-    /// Deals with a second launch that handed its work over.
-    /// </summary>
-    /// <remarks>
-    /// Two things arrive this way. A launch with a bundle - somebody double-clicked a shared run - and a launch
-    /// with nothing, which is somebody starting the tool while it is already running and expecting to be shown
-    /// the window they already have.
-    /// </remarks>
     public void OpenFromAnotherLaunch(string? bundlePath)
     {
         Surface();
@@ -850,8 +609,7 @@ public partial class MainWindow : Window
         Topmost = true;
         Topmost = false;
 
-        if (notifier is not null)
-            notifier.IsHidden = false;
+        watch.MarkShown();
     }
 
     /// <summary>
@@ -991,182 +749,6 @@ public partial class MainWindow : Window
     private void ApplyBoardInsets()
         => ucBoard.Margin = reserved.Against(ucDock.ActualWidth, ucDock.ActualHeight);
 
-    /// <summary>
-    /// Fills the title bar's panel strip from the registry.
-    /// </summary>
-    /// <remarks>
-    /// Built rather than written out in markup, so a panel that exists always has a way to reach it — the same
-    /// reason the settings page lists shortcuts off the command table instead of a copy of it.
-    /// </remarks>
-    /// <summary>
-    /// Fills the title bar's panel strip from the registry, grouped by card.
-    /// </summary>
-    /// <remarks>
-    /// Built rather than written out in markup, so a panel that exists always has a way to reach it — the same
-    /// reason the settings page lists shortcuts off the command table instead of a copy of it.
-    ///
-    /// Rebuilt whenever the arrangement changes, because the grouping is a fact about the arrangement: two panels
-    /// sharing a card are one thing on screen, and their icons have to sit together and act together to say so.
-    /// </remarks>
-    private void ShowPanelStrip()
-    {
-        spPanels.Children.Clear();
-
-        DockLayout layout = Arrangement.Current;
-
-        foreach (ImmutableList<PanelId> card in DockGrouping.Cards(layout))
-        {
-            bool shared = card.Count > 1;
-
-            StackPanel row = new() { Orientation = Orientation.Horizontal };
-
-            for (int index = 0; index < card.Count; index++)
-            {
-                // A hairline between the parts, which is what turns two icons in a box into one control with two
-                // halves. Without it a bordered pair reads as two buttons that happen to be boxed in together.
-                if (index > 0)
-                {
-                    row.Children.Add(new Border
-                    {
-                        Width = 1,
-                        Margin = new Thickness(0, 7, 0, 7),
-                        Background = (Brush)FindResource("IconGroupEdge")
-                    });
-                }
-
-                row.Children.Add(PanelButton(card[index], card));
-            }
-
-            // Drawn as a segmented control: an outline round the pair, a divider between them, and no gap either
-            // side of the divider. A plate alone was not enough — it read as spacing rather than as meaning, and
-            // closing one icon while the other went with it came as a surprise. The shape now says they are one
-            // thing before it is clicked, and the tooltip says it in words.
-            Border group = new()
-            {
-                CornerRadius = new CornerRadius(6),
-                Margin = new Thickness(shared ? 5 : 0, 0, shared ? 5 : 0, 0),
-                Padding = new Thickness(shared ? 2 : 0, 0, shared ? 2 : 0, 0),
-                Background = shared ? (Brush)FindResource("SurfaceRaised") : Brushes.Transparent,
-                BorderBrush = shared ? (Brush)FindResource("IconGroupEdge") : Brushes.Transparent,
-                BorderThickness = new Thickness(shared ? 1 : 0),
-                Child = row
-            };
-
-            WindowChrome.SetIsHitTestVisibleInChrome(group, true);
-
-            spPanels.Children.Add(group);
-        }
-
-        ShowPanelStripState();
-    }
-
-    /// <summary>One panel's icon in the strip.</summary>
-    /// <param name="panel">The panel the icon opens and closes.</param>
-    /// <param name="card">
-    /// Every panel drawn in the same card, so the tooltip can name what else goes away with this one. Being told
-    /// afterwards is what made the grouping feel like a bug rather than a rule.
-    /// </param>
-    private Button PanelButton(PanelId panel, ImmutableList<PanelId> card)
-    {
-        PanelDescriptor descriptor = PanelRegistry.Of(panel);
-
-        Path glyph = new()
-        {
-            Data = (Geometry)FindResource(descriptor.IconKey),
-            Stroke = (Brush)FindResource("TextSecondary"),
-            StrokeThickness = 1.5,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round,
-            Width = 18,
-            Height = 18,
-            Stretch = Stretch.None
-        };
-
-        Button button = new()
-        {
-            Style = (Style)FindResource("CaptionIconButton"),
-            Content = glyph,
-            Tag = panel,
-
-            ToolTip = Tip(panel, descriptor, card)
-        };
-
-        WindowChrome.SetIsHitTestVisibleInChrome(button, true);
-
-        button.Click += (_, _) => TogglePanel(panel);
-
-        return button;
-    }
-
-    /// <summary>
-    /// Puts a panel away, or brings it back.
-    /// </summary>
-    /// <remarks>
-    /// Closing takes the whole card with it. A panel sharing a card with another is not separately on screen —
-    /// they are tabs of one thing — so putting one away while the other stayed would mean closing half a card,
-    /// which is not a state the window can be in. Opening is per panel, because a panel that is away has no card
-    /// to share and no company to bring with it.
-    /// </remarks>
-    /// <summary>
-    /// What an icon says it does.
-    /// </summary>
-    /// <remarks>
-    /// Named in the casing a reader says it in rather than the header's shouted form, and the runs page carries
-    /// its shortcut because it is the one panel with a key of its own. A panel sharing a card names its company:
-    /// the outline says two icons act together, and this says which panel the other one is.
-    /// </remarks>
-    private static string Tip(PanelId panel, PanelDescriptor descriptor, ImmutableList<PanelId> card)
-    {
-        string name = panel == PanelId.Home
-            ? Shortcuts.Describe("Every run, with what became of each", Shortcuts.Runs)
-            : Spoken(descriptor.Title);
-
-        ImmutableList<string> company =
-        [
-            .. card
-                .Where(member => member != panel)
-                .Select(member => Spoken(PanelRegistry.Of(member).Title))
-        ];
-
-        return company.Count == 0 ? name : $"{name}  ·  shares a card with {string.Join(", ", company)}, and closes with it";
-    }
-
-    /// <summary>A panel's name as a reader would say it, rather than as its header shouts it.</summary>
-    private static string Spoken(string title)
-        => char.ToUpperInvariant(title[0]) + title[1..].ToLowerInvariant();
-
-    private static void TogglePanel(PanelId panel) => Arrangement.Apply(layout =>
-    {
-        if (!layout.IsOpen(panel))
-            return layout.Move(panel, PanelRegistry.DefaultSideOf(panel), int.MaxValue);
-
-        DockLayout closed = layout;
-
-        foreach (PanelId member in DockGrouping.SharingACard(layout, panel))
-            closed = closed.Close(member);
-
-        return closed;
-    });
-
-    /// <summary>Lights the icon of every panel that is on screen.</summary>
-    /// <remarks>
-    /// The same rule the pen and the eye follow — lit means on — so the strip needs no labels and no second kind
-    /// of indicator for the reader to learn.
-    /// </remarks>
-    private void ShowPanelStripState()
-    {
-        foreach (Button button in spPanels.Children.OfType<Border>().SelectMany(Icons))
-        {
-            if (button.Tag is not PanelId panel || button.Content is not Path glyph)
-                continue;
-
-            glyph.Stroke = (Brush)FindResource(Arrangement.Current.IsOpen(panel) ? "Accent" : "TextSecondary");
-        }
-    }
-
-    private static IEnumerable<Button> Icons(Border group)
-        => group.Child is StackPanel row ? row.Children.OfType<Button>() : [];
-
     private void btNotifications_Click(object sender, RoutedEventArgs e)
     {
         ucFeed.Toggle();
@@ -1231,18 +813,18 @@ public partial class MainWindow : Window
         // mode is that the tool outlives the window and speaks up when a run finishes, and a close that
         // killed it would make the mode do nothing the moment anyone tidied their desktop. Quitting is on
         // the tray icon's own menu, which is why this can be allowed to swallow a close at all.
-        if (!exiting && tray is not null && saved.Watch.Enabled)
+        if (!exiting && watch.IsWatching && saved.Watch.Enabled)
         {
             e.Cancel = true;
 
             // Saved before hiding: from here the process may be killed with the window never shown again.
-            Persist(saved with { Window = CurrentPlacement(), Breakpoints = breakpoints.Snapshot() });
+            Persist(saved with { Window = WindowChromeInterop.Capture(this), Breakpoints = breakpoints.Snapshot() });
             HideToTray();
 
             return;
         }
 
-        Persist(saved with { Window = CurrentPlacement(), Breakpoints = breakpoints.Snapshot() });
+        Persist(saved with { Window = WindowChromeInterop.Capture(this), Breakpoints = breakpoints.Snapshot() });
 
         breakpoints.Changed -= SaveBreakpoints;
         Application.Current.DispatcherUnhandledException -= OnDispatcherUnhandledException;
@@ -1255,7 +837,7 @@ public partial class MainWindow : Window
         notifications?.Dispose();
         notifications = null;
 
-        StopWatching();
+        watch.Stop();
 
         shell.Dispose();
         breakpoints.Dispose();

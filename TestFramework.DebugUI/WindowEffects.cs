@@ -1,6 +1,5 @@
 using System;
 using System.Runtime.InteropServices;
-using System.Windows.Media;
 
 namespace TestFramework.DebugUI;
 
@@ -36,11 +35,6 @@ internal static class WindowEffects
     /// <summary>Square, as a custom-chromed window is without being asked.</summary>
     private const int DoNotRound = 1;
 
-    private const int AccentPolicyAttribute = 19;
-
-    /// <summary>The acrylic blur the system draws behind a window.</summary>
-    private const int AcrylicBlurBehind = 4;
-
     /// <summary>
     /// Asks Windows to round a window's corners the way it rounds its own.
     /// </summary>
@@ -57,7 +51,7 @@ internal static class WindowEffects
         try
         {
             int preference = rounded ? Round : DoNotRound;
-            DwmSetWindowAttribute(handle, WindowCornerPreference, ref preference, sizeof(int));
+            _ = DwmSetWindowAttribute(handle, WindowCornerPreference, ref preference, sizeof(int));
         }
         catch (Exception)
         {
@@ -65,75 +59,61 @@ internal static class WindowEffects
         }
     }
 
+    /// <summary>Which material the system draws behind the whole window. Windows 11 build 22621 and later.</summary>
+    private const int SystemBackdropType = 38;
+
+    /// <summary>Whether the system draws this window's chrome dark.</summary>
+    private const int ImmersiveDarkMode = 20;
+
     /// <summary>
-    /// Puts an acrylic blur behind a window, tinted the given colour.
+    /// The system-drawn materials, spelled as the Win32 header spells them.
     /// </summary>
-    public static void EnableBlur(IntPtr handle, Color tint)
+    /// <remarks>
+    /// The tool carried these once with every value one too low - <c>MAINWINDOW</c> was 1, which is
+    /// actually <c>NONE</c>. Anyone who tried Mica with that table asked for no backdrop and watched
+    /// nothing happen.
+    /// </remarks>
+    public const int BackdropAuto = 0;
+    public const int BackdropNone = 1;
+    public const int BackdropMica = 2;
+    public const int BackdropAcrylic = 3;
+    public const int BackdropMicaAlt = 4;
+
+    /// <summary>Asks the Desktop Window Manager for a material, and says what it answered.</summary>
+    public static int SetBackdrop(IntPtr handle, int kind)
+    {
+        if (handle == IntPtr.Zero)
+            return -1;
+
+        try
+        {
+            int value = kind;
+
+            return DwmSetWindowAttribute(handle, SystemBackdropType, ref value, sizeof(int));
+        }
+        catch (Exception)
+        {
+            return -1;
+        }
+    }
+
+    /// <summary>Tells the system to draw this window's chrome dark, which Mica follows.</summary>
+    public static void SetDarkMode(IntPtr handle, bool dark)
     {
         if (handle == IntPtr.Zero)
             return;
 
-        IntPtr policy = IntPtr.Zero;
-
         try
         {
-            AccentPolicy accent = new()
-            {
-                AccentState = AcrylicBlurBehind,
-                AccentFlags = 0,
-                GradientColor = ToAbgr(tint),
-                AnimationId = 0
-            };
-
-            int size = Marshal.SizeOf(accent);
-
-            policy = Marshal.AllocHGlobal(size);
-            Marshal.StructureToPtr(accent, policy, fDeleteOld: false);
-
-            WindowCompositionAttributeData data = new()
-            {
-                Attribute = AccentPolicyAttribute,
-                SizeOfData = size,
-                Data = policy
-            };
-
-            SetWindowCompositionAttribute(handle, ref data);
+            int value = dark ? 1 : 0;
+            _ = DwmSetWindowAttribute(handle, ImmersiveDarkMode, ref value, sizeof(int));
         }
         catch (Exception)
         {
-            // As above: a window without a blurred backdrop is still a window.
-        }
-        finally
-        {
-            if (policy != IntPtr.Zero)
-                Marshal.FreeHGlobal(policy);
         }
     }
 
-    /// <summary>The colour as the composition attribute wants it, which is ABGR rather than ARGB.</summary>
-    private static uint ToAbgr(Color colour)
-        => (uint)((colour.A << 24) | (colour.B << 16) | (colour.G << 8) | colour.R);
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, uint size);
 
-    [DllImport("dwmapi.dll", PreserveSig = false)]
-    private static extern void DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, uint size);
-
-    [DllImport("user32.dll")]
-    private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct AccentPolicy
-    {
-        public int AccentState;
-        public int AccentFlags;
-        public uint GradientColor;
-        public int AnimationId;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct WindowCompositionAttributeData
-    {
-        public int Attribute;
-        public IntPtr Data;
-        public int SizeOfData;
-    }
 }

@@ -43,6 +43,34 @@
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="0 0 6 0">
 
+                    <TextBlock Style="{StaticResource PanelHeading}" Text="APPEARANCE" Margin="0 4 0 6"/>
+
+                    <!--
+                        Every theme at once rather than a drop-down. A theme is a picture, and a list of ten
+                        names asks somebody to try each one to find out what any of them are.
+                    -->
+                    <WrapPanel x:Name="wpThemes" Margin="0 0 0 6"/>
+
+                    <StackPanel Margin="0 0 0 12">
+                        <TextBlock Style="{StaticResource MutedText}" Text="Your own themes"/>
+                        <TextBlock x:Name="tbThemesPath" Style="{StaticResource BodyText}" FontSize="11"
+                                   TextWrapping="Wrap" Margin="0 1 0 4"/>
+                        <StackPanel Orientation="Horizontal">
+                            <Button x:Name="btOpenThemes" Style="{StaticResource IconButton}" Click="btOpenThemes_Click"
+                                    ToolTip="Open the folder, with an example theme in it">
+                                <Path Data="{StaticResource IconFolder}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+                            </Button>
+                            <Button x:Name="btReloadThemes" Style="{StaticResource IconButton}" Margin="4 0 0 0" Click="btReloadThemes_Click"
+                                    ToolTip="Read the folder again">
+                                <Path Data="{StaticResource IconRefresh}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" Width="18" Height="18" Stretch="None"/>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Border Height="1" Background="{StaticResource SurfaceDivider}" Margin="0 0 0 12"/>
+
                     <TextBlock Style="{StaticResource PanelHeading}" Text="WATCHING" Margin="0 4 0 6"/>
 
                     <shell:UC_Toggle x:Name="tgWatch" Margin="0 0 0 12"

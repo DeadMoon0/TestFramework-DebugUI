@@ -35,7 +35,7 @@
 
                 <Viewbox Width="14" Height="14" Margin="0 1 8 0" VerticalAlignment="Top" Grid.RowSpan="2">
                     <Canvas Width="16" Height="16">
-                        <Path x:Name="pIcon" StrokeThickness="1.2" Stroke="#FF7A7A7A"/>
+                        <Path x:Name="pIcon" StrokeThickness="1.2" Stroke="{StaticResource TextFaint}"/>
                     </Canvas>
                 </Viewbox>
 

@@ -118,9 +118,12 @@ internal sealed class BoardComposer
         Width = node.Width,
         Height = node.Height,
         CornerRadius = new CornerRadius(4),
-        Background = new SolidColorBrush(Color.FromArgb(8, 255, 255, 255)),
+        // A whisper of the text colour rather than a whisper of white: on a light theme the same wash
+        // has to go the other way, and the ink is the only thing in the palette that already knows which
+        // way that is.
+        Background = ThemeFollow.Wash(ThemeKeys.TextPrimary, 0x08),
         BorderThickness = new Thickness(1),
-        BorderBrush = new SolidColorBrush(Color.FromArgb(14, 255, 255, 255)),
+        BorderBrush = (Brush)resources.FindResource(ThemeKeys.PanelEdge),
         Child = new TextBlock
         {
             Text = node.StageName.ToUpperInvariant(),

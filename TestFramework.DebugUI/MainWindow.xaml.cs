@@ -13,6 +13,7 @@ using System.Windows.Threading;
 using Axiom.State;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.Controls.Dock;
+using TestFramework.DebugUI.Controls.Settings;
 using TestFramework.DebugUI.Docking;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
@@ -22,6 +23,7 @@ using TestFramework.DebugUI.State.Settings;
 using TestFramework.DebugUI.State.Shell.Feed;
 using TestFramework.DebugUI.State.Transport;
 using TestFramework.DebugUI.State.Diagnostics;
+using TestFramework.DebugUI.State.Theming;
 using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI;
@@ -39,6 +41,15 @@ public partial class MainWindow : Window
     private readonly ShellController shell;
 
     private readonly SettingsStore settings = new();
+
+    /// <summary>
+    /// Which theme the window is in.
+    /// </summary>
+    /// <remarks>
+    /// Owned here rather than reached for, and there is exactly one: the brushes it moves are shared by
+    /// the whole process, so a second service would be a second answer to a question with one answer.
+    /// </remarks>
+    private readonly ThemeService theme;
 
     /// <summary>
     /// The steps the user has asked to stop at.
@@ -219,6 +230,21 @@ public partial class MainWindow : Window
 
         // Read before the window is shown, so restoring geometry does not visibly move it.
         saved = settings.Load();
+
+        // Applied here, in the constructor, so the first frame the window paints is already in the
+        // right theme. Without the fade, because there is no previous colour to fade from and a window
+        // that cross-fades into existence reads as a window that has not finished loading.
+        theme = new ThemeService(Application.Current.Resources, new ThemeStore(ReportTheme), ReportTheme);
+        theme.Changed += definition =>
+        {
+            ucBackground.Show(definition.Backdrop, theme.BackdropInk);
+
+            // The ground the whole window lies on. Not a brush anything resolves, so nothing follows it for
+            // free — and this is the only place it is set, which is what a see-through theme depends on: the
+            // window is layered, so how much of the desktop shows is exactly this colour's alpha.
+            bTint.Background = new SolidColorBrush(theme.WindowTint);
+        };
+        theme.Use(saved.ThemeId, animate: false);
         breakpoints.Restore(saved.Breakpoints);
         breakpoints.BreakOnFailure = saved.BreakOnFailure;
         WindowChromeInterop.Restore(this, saved.Window);
@@ -303,6 +329,22 @@ public partial class MainWindow : Window
             ApplyWatchMode(watch.Enabled, announce: false);
         };
 
+        // The id is what is remembered, never the colours: a theme that is corrected in a later build
+        // should arrive for the people who already chose it, not only for new ones.
+        ucSettings.ThemeChosen += id =>
+        {
+            Persist(saved with { ThemeId = theme.Use(id, animate: true).Id });
+            ShowSettings();
+        };
+
+        ucSettings.ThemesReloadRequested += () =>
+        {
+            theme.Reload();
+            ShowSettings();
+        };
+
+        ucSettings.ThemesFolderRequested += OpenThemesFolder;
+
         // Held in the static so the reader thread can consult it without a dispatch, and in the file so a
         // person who works this way finds it still armed next time.
         ucSettings.BreakOnFailureChanged += value =>
@@ -328,8 +370,44 @@ public partial class MainWindow : Window
             return;
         }
 
-        ucSettings.Show(saved.Watch, settings.FilePath, saved.BreakOnFailure);
+        ShowSettings();
     }
+
+    /// <summary>Fills the settings panel in and brings it out.</summary>
+    private void ShowSettings()
+        => ucSettings.Show(
+            saved.Watch,
+            settings.FilePath,
+            saved.BreakOnFailure,
+            theme.Available,
+            theme.Current.Id,
+            theme.Store.DirectoryPath);
+
+    /// <summary>
+    /// Shows the themes folder, having first put something in it.
+    /// </summary>
+    /// <remarks>
+    /// The example is written on the way, so the folder a first-time reader opens explains the format
+    /// instead of being empty. It is never overwritten — the one file somebody is most likely to have
+    /// edited is the one the tool put there.
+    /// </remarks>
+    private void OpenThemesFolder()
+    {
+        theme.Store.WriteExample();
+
+        UC_Settings.Reveal(theme.Store.DirectoryPath);
+    }
+
+    /// <summary>Says why a theme file could not be used, and carries on with the ones that could.</summary>
+    private void ReportTheme(string problem)
+        => shell?.Report(new FeedEntry
+        {
+            AtUtc = DateTimeOffset.UtcNow,
+            Severity = FeedSeverity.Warning,
+            Source = FeedSource.App,
+            Title = "A theme could not be used.",
+            Detail = problem
+        });
 
     /// <summary>
     /// Points every shortcut at the same method its button uses.
@@ -491,7 +569,7 @@ public partial class MainWindow : Window
         ShowWatchState(enabled);
 
         if (ucSettings.Visibility == Visibility.Visible)
-            ucSettings.Show(saved.Watch, settings.FilePath, saved.BreakOnFailure);
+            ShowSettings();
 
         if (announce && enabled)
         {
@@ -573,7 +651,16 @@ public partial class MainWindow : Window
         });
     }
 
-    private void Window_SourceInitialized(object sender, EventArgs e) => WindowChromeInterop.Attach(this);
+    /// <summary>
+    /// Hooks the window once it has a handle.
+    /// </summary>
+    private void Window_SourceInitialized(object sender, EventArgs e)
+    {
+        WindowChromeInterop.Attach(this);
+
+        WindowChromeInterop.Ground(this);
+
+    }
 
     /// <summary>Keeps the window's corners in step with its state.</summary>
     private void Window_StateChanged(object sender, EventArgs e) => WindowChromeInterop.FollowState(this);

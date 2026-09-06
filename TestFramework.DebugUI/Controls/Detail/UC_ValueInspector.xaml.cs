@@ -595,7 +595,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
 
         ValueIcon icon = ValueIcons.For(schemaKey);
         pIcon.Data = Geometry.Parse(icon.Glyph);
-        pIcon.Stroke = new SolidColorBrush((Color)ColorConverter.ConvertFromString(icon.Colour));
+        pIcon.Stroke = (Brush)FindResource(icon.Colour);
 
         RenderFacts(described, schemaKey);
         RenderVersions(versions);

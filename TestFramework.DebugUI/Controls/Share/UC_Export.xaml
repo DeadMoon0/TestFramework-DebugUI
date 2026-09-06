@@ -13,7 +13,7 @@
     <Grid Background="{StaticResource Scrim}">
         <Border Width="520" VerticalAlignment="Center" HorizontalAlignment="Center"
                 CornerRadius="4" Background="{StaticResource SurfaceOverlay}"
-                BorderBrush="#14FFFFFF" BorderThickness="1">
+                BorderBrush="{StaticResource PanelEdge}" BorderThickness="1">
             <StackPanel Margin="20 16 20 16">
                 <Grid>
                     <Grid.ColumnDefinitions>

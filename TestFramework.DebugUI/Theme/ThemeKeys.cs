@@ -51,6 +51,9 @@ internal static class ThemeKeys
     /// <summary>The one colour that means "this is what you are looking at".</summary>
     public const string Accent = "Accent";
 
+    /// <summary>What is drawn on top of the accent, which is not what reads on a surface.</summary>
+    public const string AccentInk = "AccentInk";
+
     // A comparison, line by line.
     public const string DiffAddedSurface = "DiffAddedSurface";
     public const string DiffAddedText = "DiffAddedText";
@@ -59,7 +62,14 @@ internal static class ThemeKeys
     public const string DiffContextText = "DiffContextText";
 
     // What a reader draws in, and what their marks are lifted off the board by.
-    public const string InkWhite = "InkWhite";
+    /// <summary>
+    /// The neutral marker.
+    /// </summary>
+    /// <remarks>
+    /// <c>InkWhite</c> until there was a light theme for it to be white against. The name described the
+    /// colour rather than the job, and the job is "the mark you make when you do not mean a colour".
+    /// </remarks>
+    public const string InkNeutral = "InkNeutral";
     public const string InkCyan = "InkCyan";
     public const string InkMagenta = "InkMagenta";
     public const string InkViolet = "InkViolet";
@@ -89,7 +99,25 @@ internal static class ThemeKeys
     public const string IconCopy = "IconCopy";
     public const string IconTick = "IconTick";
 
+    // What kind of thing a value is, for the icon that says so.
+    public const string ValueRelational = "ValueRelational";
+    public const string ValueDocument = "ValueDocument";
+    public const string ValueBinary = "ValueBinary";
+    public const string ValueTabular = "ValueTabular";
+    public const string ValuePlain = "ValuePlain";
+
+    // The window itself, and the backdrop it paints in front of the blur. Named here because the
+    // painter fetches them the same way everything else fetches a colour.
+    public const string WindowTint = "WindowTint";
+    public const string BackdropBase = "BackdropBase";
+    public const string BackdropNear = "BackdropNear";
+    public const string BackdropFar = "BackdropFar";
+    public const string BackdropGlow = "BackdropGlow";
+
     // Button styles.
     public const string IconButton = "IconButton";
     public const string CaptionIconButton = "CaptionIconButton";
+
+    /// <summary>The shape a theme in the picker is drawn as.</summary>
+    public const string ThemeChip = "ThemeChip";
 }

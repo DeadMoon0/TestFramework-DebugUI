@@ -23,10 +23,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <None Remove="Shaders\HLSL\BlurShader.ps" />
-	</ItemGroup>
-
-	<ItemGroup>
 	  <Content Include="Icon.ico" />
 	</ItemGroup>
 
@@ -39,12 +35,6 @@
 		<ProjectReference Include="..\TestFramework.DebugUI.Docking\TestFramework.DebugUI.Docking.csproj" />
 		<ProjectReference Include="..\TestFramework.DebugUI.Layout\TestFramework.DebugUI.Layout.csproj" />
 		<ProjectReference Include="..\TestFramework.DebugUI.State\TestFramework.DebugUI.State.csproj" />
-	</ItemGroup>
-
-	<ItemGroup>
-	  <Resource Include="Shaders\HLSL\BlurShader.ps">
-	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-	  </Resource>
 	</ItemGroup>
 
 </Project>

@@ -280,19 +280,24 @@ public partial class UC_DockHost : UserControl
     /// </remarks>
     private FrameworkElement Card(PanelId panel, UIElement header, UIElement content)
     {
+
+        DropShadowEffect shadow = new()
+        {
+            // No offset: a card lifted straight off the surface rather than lit from a corner. Depth without
+            // a direction is what stops several of them reading as sheets of paper on a desk.
+            ShadowDepth = 0,
+            BlurRadius = 18,
+            Opacity = 0.55
+        };
+
+        // Not black. A light theme's shadow is a low cool grey, and PipeShadow is where that already lives.
+        ThemeFollow.Shadow(shadow, ThemeKeys.PipeShadow);
+
         Border lift = new()
         {
             CornerRadius = new CornerRadius(DockMetrics.CardRadius),
             Background = (Brush)FindResource(ThemeKeys.SurfaceOverlay),
-            Effect = new DropShadowEffect
-            {
-                // No offset: a card lifted straight off the surface rather than lit from a corner. Depth without
-                // a direction is what stops several of them reading as sheets of paper on a desk.
-                ShadowDepth = 0,
-                BlurRadius = 18,
-                Opacity = 0.55,
-                Color = Colors.Black
-            }
+            Effect = shadow
         };
 
         Grid body = new();
@@ -303,10 +308,12 @@ public partial class UC_DockHost : UserControl
         body.Children.Add(header);
         body.Children.Add(content);
 
+        Brush faceBrush = (Brush)FindResource(ThemeKeys.SurfaceOverlay);
+
         Border face = new()
         {
             CornerRadius = new CornerRadius(DockMetrics.CardRadius),
-            Background = (Brush)FindResource(ThemeKeys.SurfaceOverlay),
+            Background = faceBrush,
             BorderThickness = new Thickness(1),
             BorderBrush = (Brush)FindResource(ThemeKeys.PanelEdge),
             Child = body

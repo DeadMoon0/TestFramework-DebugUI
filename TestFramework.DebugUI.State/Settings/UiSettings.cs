@@ -1,5 +1,6 @@
 ﻿using System.Collections.Immutable;
 using TestFramework.DebugUI.Docking;
+using TestFramework.DebugUI.State.Theming;
 
 namespace TestFramework.DebugUI.State.Settings;
 
@@ -66,6 +67,20 @@ public sealed record UiSettings
     /// something to start doing to somebody without being asked.
     /// </remarks>
     public bool BreakOnFailure { get; init; }
+
+    /// <summary>
+    /// The theme the window paints itself in.
+    /// </summary>
+    /// <remarks>
+    /// The id rather than the colours. A settings file that carried a whole palette would freeze
+    /// somebody's window at the version they first opened it in — every later correction to that theme
+    /// would arrive for new users only. Naming it instead means a theme improves under everyone who
+    /// chose it, and a custom theme is edited in its own file rather than in here.
+    ///
+    /// An id this build does not have reads as the default, which is how a file written by a newer
+    /// version opens in an older one.
+    /// </remarks>
+    public string ThemeId { get; init; } = BuiltInThemes.DefaultId;
 
     /// <summary>How the tool behaves while it is watching rather than being looked at.</summary>
     public WatchSettings Watch { get; init; } = new();

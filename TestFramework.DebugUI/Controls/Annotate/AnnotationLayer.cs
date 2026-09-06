@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using TestFramework.DebugUI.State.Annotations;
 using TestFramework.DebugUI.Theme;
@@ -367,6 +368,22 @@ internal sealed class AnnotationLayer
         ];
     }
 
+    /// <summary>
+    /// The glow that lifts written words off whatever they were written over.
+    /// </summary>
+    /// <remarks>
+    /// One per label rather than one shared effect: an effect belongs to the element it is set on, and
+    /// the colour is bound rather than copied so every one of them follows the theme.
+    /// </remarks>
+    private static DropShadowEffect TextHalo()
+    {
+        DropShadowEffect halo = new() { BlurRadius = 6, ShadowDepth = 0, Opacity = 0.9 };
+
+        ThemeFollow.Shadow(halo, ThemeKeys.InkHalo);
+
+        return halo;
+    }
+
     private static Path Stroked(Geometry geometry, Brush brush, double thickness) => new()
     {
         Data = geometry,
@@ -390,14 +407,10 @@ internal sealed class AnnotationLayer
             FontWeight = FontWeights.SemiBold,
             IsHitTestVisible = false,
 
-            // The halo, for words: a dark glow rather than a second copy of the text.
-            Effect = new System.Windows.Media.Effects.DropShadowEffect
-            {
-                BlurRadius = 6,
-                ShadowDepth = 0,
-                Opacity = 0.9,
-                Color = Colors.Black
-            }
+            // The halo, for words: a glow rather than a second copy of the text. Its colour follows
+            // InkHalo, which goes white under a light theme - a black halo behind dark ink on a bright
+            // board hides the very mark it is there to lift.
+            Effect = TextHalo()
         };
 
         AnnotationPoint at = mark.Points.Count > 0 ? mark.Points[0] : new AnnotationPoint(0, 0);

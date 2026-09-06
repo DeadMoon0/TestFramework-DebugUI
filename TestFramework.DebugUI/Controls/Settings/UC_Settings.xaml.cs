@@ -4,10 +4,12 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Collections.Generic;
 using System.Windows.Media;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.State.Settings;
 using TestFramework.DebugUI.State.Diagnostics;
+using TestFramework.DebugUI.State.Theming;
 using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Settings;
@@ -77,6 +79,21 @@ public partial class UC_Settings : UserControl
     /// <summary>Raised when the user changes whether a failing step holds its run.</summary>
     public event Action<bool>? BreakOnFailureChanged;
 
+    /// <summary>Raised when the user picks a theme, with its id.</summary>
+    public event Action<string>? ThemeChosen;
+
+    /// <summary>Raised when the user asks for the themes folder to be read again.</summary>
+    public event Action? ThemesReloadRequested;
+
+    /// <summary>
+    /// Raised when the user asks to see the themes folder.
+    /// </summary>
+    /// <remarks>
+    /// The window handles it rather than this panel opening the folder itself, because the folder has
+    /// to have something in it first: an empty folder is not an explanation of a file format.
+    /// </remarks>
+    public event Action? ThemesFolderRequested;
+
     private WatchSettings Current { get; set; } = new();
 
     /// <summary>
@@ -86,11 +103,20 @@ public partial class UC_Settings : UserControl
     /// Called every time the panel is shown rather than once, because the title bar's eye changes the
     /// same setting: a panel populated only on construction would open showing a stale switch.
     /// </remarks>
-    public void Show(WatchSettings watch, string settingsPath, bool breakOnFailure)
+    public void Show(
+        WatchSettings watch,
+        string settingsPath,
+        bool breakOnFailure,
+        IReadOnlyList<ThemeDefinition> themes,
+        string currentThemeId,
+        string themesPath)
     {
         ArgumentNullException.ThrowIfNull(watch);
 
         Current = watch;
+
+        ShowThemes(themes, currentThemeId);
+        tbThemesPath.Text = themesPath;
 
         tgWatch.SetQuietly(watch.Enabled);
         tgNotify.SetQuietly(watch.NotifyOnFinish);
@@ -164,6 +190,37 @@ public partial class UC_Settings : UserControl
         btClearBreakpoints.IsEnabled = count > 0;
     }
 
+    /// <summary>
+    /// Lays out the themes on offer, with the current one marked.
+    /// </summary>
+    /// <remarks>
+    /// Rebuilt rather than updated. A chip is a picture of a theme and the marked one is drawn
+    /// differently from the rest, so "which is chosen" is not a property to toggle — and there are ten
+    /// of them, once, when a panel opens.
+    /// </remarks>
+    public void ShowThemes(IReadOnlyList<ThemeDefinition> themes, string currentThemeId)
+    {
+        ArgumentNullException.ThrowIfNull(themes);
+
+        wpThemes.Children.Clear();
+
+        foreach (ThemeDefinition theme in themes)
+        {
+            bool chosen = string.Equals(theme.Id, currentThemeId, StringComparison.OrdinalIgnoreCase);
+
+            Button chip = ThemeChip.Build(theme, chosen, this);
+            string id = theme.Id;
+
+            chip.Click += (_, _) => ThemeChosen?.Invoke(id);
+
+            wpThemes.Children.Add(chip);
+        }
+    }
+
+    private void btOpenThemes_Click(object sender, RoutedEventArgs e) => ThemesFolderRequested?.Invoke();
+
+    private void btReloadThemes_Click(object sender, RoutedEventArgs e) => ThemesReloadRequested?.Invoke();
+
     /// <summary>Lists the shortcuts, read off the commands the window binds.</summary>
     private void ShowShortcuts()
     {
@@ -230,7 +287,7 @@ public partial class UC_Settings : UserControl
     /// Creates it first when it is missing. The settings folder does not exist until something has been
     /// saved, and "Open folder" doing nothing at all is the least helpful possible answer.
     /// </remarks>
-    private static void Reveal(string? folder)
+    internal static void Reveal(string? folder)
     {
         if (string.IsNullOrWhiteSpace(folder))
             return;

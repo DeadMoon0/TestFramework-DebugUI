@@ -31,8 +31,14 @@ public partial class UC_StepDetail : UserControl, IDisposable
 {
     private readonly CompositeDisposable subscriptions = [];
 
-    /// <summary>The wash behind every other row, which is what separates one long entry from two.</summary>
-    private static readonly Brush Odd = new SolidColorBrush(Color.FromArgb(0x0A, 0xFF, 0xFF, 0xFF));
+    /// <summary>
+    /// The wash behind every other row, which is what separates one long entry from two.
+    /// </summary>
+    /// <remarks>
+    /// A trace of the text colour rather than a fixed white one. The row behind has to be lighter than
+    /// its surface on a dark theme and darker on a light one, and the ink is what already knows which.
+    /// </remarks>
+    private static Brush Odd => ThemeFollow.Wash(ThemeKeys.TextPrimary, 0x0A);
 
     private StepNode? step;
     private string? stageName;

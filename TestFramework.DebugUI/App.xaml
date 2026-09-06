@@ -13,13 +13,18 @@
                 <ResourceDictionary Source="Theme/Theme.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
+            <!--
+                A tooltip is a card that floats, so it is drawn as one. It used to be its own grey, written
+                twice, which meant it was the one surface in the window a theme could not reach.
+            -->
             <Style TargetType="ToolTip">
-                <Setter Property="Background" Value="#FF2F2F2F"/>
-                <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                <Setter Property="Background" Value="{DynamicResource SurfaceCard}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="ToolTip">
-                            <Border CornerRadius="4" Background="#FF2F2F2F" MaxWidth="420">
+                            <Border CornerRadius="4" Background="{TemplateBinding Background}" MaxWidth="420"
+                                    BorderThickness="1" BorderBrush="{StaticResource PanelEdge}">
                                 <ContentPresenter Margin="6" HorizontalAlignment="Left" VerticalAlignment="Center"/>
                             </Border>
                         </ControlTemplate>

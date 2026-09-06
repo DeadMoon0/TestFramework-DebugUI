@@ -19,12 +19,25 @@
         MinHeight="650" MinWidth="1100" AllowsTransparency="True"
         SourceInitialized="Window_SourceInitialized" StateChanged="Window_StateChanged" Closing="Window_Closing">
 
+    <!--
+        The root's Background is not a theme colour and deliberately not WindowTint: a fully transparent
+        window takes no mouse input at all, so it needs the one unit of alpha that makes it hit-testable
+        and nothing more. What the reader actually sees behind everything is the acrylic tint Windows
+        draws, and then whatever UC_Background paints in front of it.
+    -->
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="40" UseAeroCaptionButtons="True"/>
     </WindowChrome.WindowChrome>
 
     <Grid>
-        <shell:UC_Background/>
+        <!--
+            The ground the whole window lies on, painted in the theme's WindowTint. Its alpha is the whole
+            of what "see-through" means here: the window is layered, so what this does not cover, the
+            desktop shows through.
+        -->
+        <Border x:Name="bTint"/>
+
+        <shell:UC_Background x:Name="ucBackground"/>
 
         <Grid>
             <Grid.RowDefinitions>
@@ -160,7 +173,7 @@
                         <Viewbox>
                             <Canvas Height="100" Width="100">
                                 <Line X1="37" Y1="49.5" X2="63" Y2="49.5" StrokeThickness="1.99"
-                                      StrokeEndLineCap="Round" Stroke="White" RenderOptions.EdgeMode="Aliased"/>
+                                      StrokeEndLineCap="Round" Stroke="{StaticResource TextPrimary}" RenderOptions.EdgeMode="Aliased"/>
                             </Canvas>
                         </Viewbox>
                     </Button>
@@ -169,7 +182,7 @@
                         <Viewbox>
                             <Canvas Height="100" Width="100">
                                 <Rectangle Canvas.Left="38" Canvas.Top="38" Width="24" Height="24"
-                                           StrokeThickness="1.99" Stroke="White" RenderOptions.EdgeMode="Aliased"/>
+                                           StrokeThickness="1.99" Stroke="{StaticResource TextPrimary}" RenderOptions.EdgeMode="Aliased"/>
                             </Canvas>
                         </Viewbox>
                     </Button>
@@ -178,9 +191,9 @@
                         <Viewbox>
                             <Canvas Height="100" Width="100">
                                 <Line X1="39" Y1="39" X2="61" Y2="61" StrokeThickness="1.99"
-                                      StrokeEndLineCap="Round" Stroke="White" RenderOptions.EdgeMode="Aliased"/>
+                                      StrokeEndLineCap="Round" Stroke="{StaticResource TextPrimary}" RenderOptions.EdgeMode="Aliased"/>
                                 <Line X1="61" Y1="39" X2="39" Y2="61" StrokeThickness="1.99"
-                                      StrokeEndLineCap="Round" Stroke="White" RenderOptions.EdgeMode="Aliased"/>
+                                      StrokeEndLineCap="Round" Stroke="{StaticResource TextPrimary}" RenderOptions.EdgeMode="Aliased"/>
                             </Canvas>
                         </Viewbox>
                     </Button>

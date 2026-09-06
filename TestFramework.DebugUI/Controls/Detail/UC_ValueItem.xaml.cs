@@ -143,7 +143,7 @@ public partial class UC_ValueItem : UserControl
 
         ValueIcon icon = ValueIcons.For(schemaKey);
         pIcon.Data = Geometry.Parse(icon.Glyph);
-        pIcon.Stroke = new SolidColorBrush((Color)ColorConverter.ConvertFromString(icon.Colour));
+        pIcon.Stroke = (Brush)FindResource(icon.Colour);
 
         ShowFacts(described);
         ShowBadges(described);

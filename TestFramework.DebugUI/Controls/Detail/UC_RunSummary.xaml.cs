@@ -30,6 +30,9 @@ namespace TestFramework.DebugUI.Controls.Detail;
 /// </remarks>
 public partial class UC_RunSummary : UserControl, IDisposable
 {
+    /// <summary>How strongly the verdict's own colour shows in the panel behind it.</summary>
+    private const byte VerdictWash = 0x28;
+
     /// <summary>
     /// How many moved steps this page names.
     /// </summary>
@@ -104,11 +107,14 @@ public partial class UC_RunSummary : UserControl, IDisposable
         // because nothing threw is the most flattering reading of the evidence, not the honest one.
         tbVerdictWhy.Text = Why(tally, decided);
 
-        bVerdict.Background = new SolidColorBrush(
-            !decided ? Color.FromArgb(0x28, 0x46, 0x80, 0xFC)
-            : !tally.IsValid ? Color.FromArgb(0x28, 0xFC, 0x46, 0x46)
-            : tally.HasAssertions ? Color.FromArgb(0x28, 0x62, 0xC9, 0x8F)
-            : Color.FromArgb(0x28, 0xFC, 0xAF, 0x62));
+        // The verdict's own colour, quieter - derived rather than named, so a theme that retunes what
+        // "failed" looks like cannot leave the wash behind it saying the old thing.
+        bVerdict.Background = ThemeFollow.Wash(
+            !decided ? ThemeKeys.Accent
+            : !tally.IsValid ? ThemeKeys.StateError
+            : tally.HasAssertions ? ThemeKeys.StateComplete
+            : ThemeKeys.StateTimeout,
+            VerdictWash);
 
         tbCounts.Text = Counts(tally, recorded);
 

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Windows;
 using TestFramework.DebugUI.State.Bundles;
 using TestFramework.DebugUI.State.Diagnostics;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI
 {
@@ -48,6 +49,11 @@ namespace TestFramework.DebugUI
                     return;
                 }
             }
+
+            // Before the window, and that is not a style choice. A control resolves its brushes while
+            // it is being built, so the palette has to be made movable first or every control in the
+            // first window keeps a brush no theme can ever move again.
+            ThemeApplier.Prepare(Resources);
 
             MainWindow window = new();
             MainWindow = window;

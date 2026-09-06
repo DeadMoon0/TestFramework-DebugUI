@@ -28,8 +28,17 @@ internal static class WindowChromeInterop
     /// Hooks a window so it behaves like a framed one, once it has a handle.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Called from <c>SourceInitialized</c> and not before: there is no handle to hook, round or blur
     /// until then.
+    /// </para>
+    /// <para>
+    /// The tint used to be written here as <c>Color.FromArgb(200, 0, 0, 0)</c>, which meant every
+    /// surface in the tool was sitting on a seventy-eight percent black wash that no palette could see
+    /// or account for — and a light theme drawn without knowing that would have come out grey. Taking
+    /// it from the theme is also the whole of what makes a see-through theme possible: lower the alpha
+    /// and the desktop is the background.
+    /// </para>
     /// </remarks>
     /// <param name="window">The window.</param>
     public static void Attach(Window window)
@@ -42,7 +51,64 @@ internal static class WindowChromeInterop
 
         // Asked for once the handle exists, so the window and its popped-out panels are rounded the same way.
         WindowEffects.RoundCorners(handle);
-        WindowEffects.EnableBlur(handle, Color.FromArgb(200, 0, 0, 0));
+    }
+
+    /// <summary>
+    /// What the window lies on, which on this build is nothing the system provides.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The window is layered, and that alone is what lets the desktop through: what it does not paint, it
+    /// does not cover. How much shows is the theme's <c>WindowTint</c>, painted by the window itself.
+    /// </para>
+    /// <para>
+    /// <b>There is no blur, and the reason is the operating system rather than anything here.</b> Asking
+    /// for one is a request — neither <c>SetWindowCompositionAttribute</c> nor <c>DwmSetWindowAttribute</c>
+    /// renders anything into this window, they ask the compositor to draw behind it — and on Windows 11
+    /// build 26200 nothing the compositor offers samples what is behind.
+    /// </para>
+    /// <para>
+    /// Measured in a bare ninety-line WPF window with none of this tool in it, over a maximised page of
+    /// twelve-pixel black-and-white stripes, reading the spread of a five-hundred-pixel run across the
+    /// middle. A blur flattens the stripes; a fill flattens them too, so the fills are told apart from
+    /// each other and from the sharp control by their value:
+    /// <list type="bullet">
+    /// <item>no accent: spread <c>254</c>. The stripes come through sharp, so the layering itself works.</item>
+    /// <item><c>ACCENT_ENABLE_TRANSPARENTGRADIENT</c>: flat <c>177</c>, the same at every gradient alpha.</item>
+    /// <item><c>ACCENT_ENABLE_BLURBEHIND</c>: flat <c>0</c>. The gradient paints at <em>full</em> opacity
+    /// whatever alpha it carries, so it fills rather than tints.</item>
+    /// <item><c>ACCENT_ENABLE_ACRYLICBLURBEHIND</c>: flat <c>0</c>. This is the call the tool originally
+    /// shipped with, and it did blur on an older build — the code was never wrong.</item>
+    /// <item><c>ACCENT_ENABLE_HOSTBACKDROP</c>: spread <c>254</c>, indistinguishable from no accent.</item>
+    /// </list>
+    /// </para>
+    /// <para>
+    /// <c>DWMWA_SYSTEMBACKDROP_TYPE</c> needs a window that is not layered <em>and</em> a client area the
+    /// frame has been extended into; without <c>DwmExtendFrameIntoClientArea</c> it draws nothing at all,
+    /// which is what made an earlier reading of it look like a dead end. With the frame extended it does
+    /// draw, and draws each material distinctly — Mica <c>#202020</c>, Acrylic <c>#545454</c>, Mica Alt
+    /// <c>#202020</c> — but every one of them is a flat fallback colour rather than a material. Held over
+    /// four wide bands of red, green, blue and white it picks up none of them, and it is the same value
+    /// active as inactive, with transparency effects on and on mains power. It is not sampling the
+    /// wallpaper either, which on this machine is deep blue.
+    /// </para>
+    /// <para>
+    /// So every route the system offers has been tried and none of them blurs. What is left is to capture
+    /// what lies behind the window and blur it in the tool's own tree, which is a different thing to
+    /// build: it costs a capture per move, per resize and per frame behind, and it is the one thing the
+    /// original never did. Real acrylic without that means the Windows App SDK compositor, whose
+    /// <c>DesktopWindowTarget</c> is absent from the projected metadata at both 1.8 and 2.4 and so would
+    /// have to be reached through hand-written COM.
+    /// </para>
+    /// </remarks>
+    /// <param name="window">The window.</param>
+    public static void Ground(Window window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+
+        // Explicitly none. The window inherits nothing, but saying so is what keeps the corrected
+        // constants honest - and asking for a material here does not work, for the reasons above.
+        WindowEffects.SetBackdrop(new WindowInteropHelper(window).Handle, WindowEffects.BackdropNone);
     }
 
     /// <summary>

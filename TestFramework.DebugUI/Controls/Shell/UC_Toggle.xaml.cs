@@ -96,7 +96,8 @@ public partial class UC_Toggle : UserControl
     private void Paint()
     {
         bTrack.Background = (Brush)FindResource(isOn ? ThemeKeys.Accent : ThemeKeys.SurfaceRaised);
-        eKnob.Background = (Brush)FindResource(isOn ? ThemeKeys.TextPrimary : ThemeKeys.TextFaint);
+        // On the accent when on and on the track when off: two different grounds, so two different inks.
+        eKnob.Background = (Brush)FindResource(isOn ? ThemeKeys.AccentInk : ThemeKeys.TextFaint);
         eKnob.HorizontalAlignment = isOn ? HorizontalAlignment.Right : HorizontalAlignment.Left;
         eKnob.Margin = isOn ? new Thickness(0, 0, 3, 0) : new Thickness(3, 0, 0, 0);
     }

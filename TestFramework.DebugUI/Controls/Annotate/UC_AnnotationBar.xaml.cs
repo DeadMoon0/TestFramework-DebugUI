@@ -28,7 +28,7 @@ public partial class UC_AnnotationBar : UserControl
     /// bar stays a bar; and none of them is one of the board's own state colours.
     /// </remarks>
     public static readonly ImmutableList<string> Inks =
-        [ThemeKeys.InkWhite, ThemeKeys.InkCyan, ThemeKeys.InkMagenta, ThemeKeys.InkViolet, ThemeKeys.InkOrange];
+        [ThemeKeys.InkNeutral, ThemeKeys.InkCyan, ThemeKeys.InkMagenta, ThemeKeys.InkViolet, ThemeKeys.InkOrange];
 
     /// <summary>The stroke weights on offer, in board units.</summary>
     public static readonly ImmutableList<double> Weights = [2, 4, 8];

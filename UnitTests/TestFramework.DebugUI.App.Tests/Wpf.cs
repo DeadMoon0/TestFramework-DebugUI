@@ -152,6 +152,11 @@ internal static class Wpf
                     Source = new Uri("pack://application:,,,/TestFramework.DebugUI;component/Theme/Theme.xaml")
                 });
 
+                // The same thing the tool's App does before it builds a window, and for the same reason:
+                // the XAML compiler freezes the brushes in a compiled dictionary, and a control that
+                // resolved a frozen one never follows a theme change again.
+                TestFramework.DebugUI.Theme.ThemeApplier.Prepare(application.Resources);
+
                 // Bound to before it is read: a control subscribes to the store as it is built, so
                 // there has to be one by the time any test constructs anything.
                 MainStore.Create().BuildAndMakeDefault();

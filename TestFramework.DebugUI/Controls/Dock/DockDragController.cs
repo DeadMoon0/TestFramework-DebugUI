@@ -215,7 +215,7 @@ internal sealed class DockDragController
             Width = Math.Max(0, drop.Hint.Width),
             Height = Math.Max(0, drop.Hint.Height),
             CornerRadius = new CornerRadius(drop.IsInsertion ? 2 : DockMetrics.CardRadius),
-            Background = drop.IsInsertion ? accent : new SolidColorBrush(Color.FromArgb(0x30, 0x46, 0x80, 0xFC)),
+            Background = drop.IsInsertion ? accent : ThemeFollow.Wash(ThemeKeys.Accent, 0x30),
             BorderBrush = drop.IsInsertion ? null : accent,
             BorderThickness = new Thickness(drop.IsInsertion ? 0 : 1.5)
         };

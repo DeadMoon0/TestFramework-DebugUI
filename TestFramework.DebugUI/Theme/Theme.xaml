@@ -62,6 +62,13 @@
     <SolidColorBrush x:Key="Accent" Color="#FF4680FC"/>
 
     <!--
+        What is drawn on top of the accent - a switch's knob, a label on a primary button. Not TextPrimary:
+        that is what reads on a surface, and the accent is a saturated mid-tone that goes light in some
+        themes and dark in others.
+    -->
+    <SolidColorBrush x:Key="AccentInk" Color="#FFFFFFFF"/>
+
+    <!--
         Diff colours. The same red and green as the lifecycle states, split into a wash behind the line
         and a lighter ink on top of it: StateError and StateComplete are sized to be read as a dot or a
         stroke, and at text weight over a dark surface they are harsh and, in the red's case, hard to
@@ -82,7 +89,7 @@
         paused. These are marker colours rather than state colours, and every mark is drawn over a dark halo as
         well, so a drawing reads as something laid on top rather than as another verdict.
     -->
-    <SolidColorBrush x:Key="InkWhite" Color="#FFF4F4F4"/>
+    <SolidColorBrush x:Key="InkNeutral" Color="#FFF4F4F4"/>
     <SolidColorBrush x:Key="InkCyan" Color="#FF35D6E8"/>
     <SolidColorBrush x:Key="InkMagenta" Color="#FFFF5FD2"/>
     <SolidColorBrush x:Key="InkViolet" Color="#FF9B7BFF"/>
@@ -107,11 +114,47 @@
     <!-- The recessed strips a step's connectors sit in, top and bottom. -->
     <SolidColorBrush x:Key="ConnectorStrip" Color="#FF242424"/>
 
+    <!--
+        What kind of thing a value is: a row, a document, some bytes, an entity, or something plain. Facts
+        about the value rather than anything that happened to it, so they are deliberately not the lifecycle
+        colours and deliberately not the accent.
+
+        They were written into ValueIcons as hex strings, which meant the value list was the one panel that
+        stayed dark-theme-coloured whatever the window was doing.
+    -->
+    <SolidColorBrush x:Key="ValueRelational" Color="#FF62A8C9"/>
+    <SolidColorBrush x:Key="ValueDocument" Color="#FF62C98F"/>
+    <SolidColorBrush x:Key="ValueBinary" Color="#FFC9A862"/>
+    <SolidColorBrush x:Key="ValueTabular" Color="#FFC46AC4"/>
+    <SolidColorBrush x:Key="ValuePlain" Color="#FF8FA7C9"/>
+
+    <!--
+        The tint of the acrylic blur Windows draws behind the whole window. It has always been there and
+        was always this colour, written into the interop call rather than into the palette - so every
+        surface above has been sitting on a wash nothing could see. A theme that lowers the alpha here is
+        a see-through theme, and needs nothing else to be one.
+    -->
+    <SolidColorBrush x:Key="WindowTint" Color="#C8000000"/>
+
+    <!--
+        The backdrop the window paints for itself, in front of that blur. One ground, a two-stop ramp for
+        the shapes and one light source: every recipe is drawn from these four and nothing else, which is
+        what stops a backdrop borrowed by another theme looking borrowed.
+
+        Transparent in a see-through theme. BackdropBase is still what remains when the blur is not there
+        - Remote Desktop, battery saver, transparency effects turned off - so it is not optional even for
+        a theme that paints nothing.
+    -->
+    <SolidColorBrush x:Key="BackdropBase" Color="#FF131416"/>
+    <SolidColorBrush x:Key="BackdropNear" Color="#FF2C2F35"/>
+    <SolidColorBrush x:Key="BackdropFar" Color="#FF191A1D"/>
+    <SolidColorBrush x:Key="BackdropGlow" Color="#33566E8C"/>
+
     <!-- Panels -->
 
     <Style x:Key="Panel" TargetType="Border">
         <Setter Property="CornerRadius" Value="4"/>
-        <Setter Property="Background" Value="{StaticResource SurfacePanel}"/>
+        <Setter Property="Background" Value="{DynamicResource SurfacePanel}"/>
         <Setter Property="Margin" Value="5"/>
     </Style>
 
@@ -126,33 +169,33 @@
     -->
     <Style x:Key="PanelOverlay" TargetType="Border">
         <Setter Property="CornerRadius" Value="8"/>
-        <Setter Property="Background" Value="{StaticResource SurfaceOverlay}"/>
+        <Setter Property="Background" Value="{DynamicResource SurfaceOverlay}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="BorderBrush" Value="{StaticResource PanelEdge}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource PanelEdge}"/>
         <Setter Property="Margin" Value="10"/>
     </Style>
 
     <Style x:Key="PanelHeading" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource TextFaint}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextFaint}"/>
         <Setter Property="FontSize" Value="10"/>
         <Setter Property="FontWeight" Value="Bold"/>
         <Setter Property="Margin" Value="10 8 10 6"/>
     </Style>
 
     <Style x:Key="BodyText" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="TextWrapping" Value="Wrap"/>
     </Style>
 
     <Style x:Key="MutedText" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
         <Setter Property="FontSize" Value="11"/>
         <Setter Property="TextWrapping" Value="Wrap"/>
     </Style>
 
     <Style x:Key="CodeText" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
         <Setter Property="FontFamily" Value="Cascadia Mono, Consolas, Courier New"/>
         <Setter Property="FontSize" Value="11"/>
         <Setter Property="TextWrapping" Value="Wrap"/>
@@ -163,8 +206,8 @@
         rounded to the same 4 as everything else.
     -->
     <Style x:Key="FlatButton" TargetType="Button">
-        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
-        <Setter Property="Background" Value="{StaticResource SurfaceRaised}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+        <Setter Property="Background" Value="{DynamicResource SurfaceRaised}"/>
         <Setter Property="FontSize" Value="11"/>
         <Setter Property="Padding" Value="10 5"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -177,10 +220,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="bRoot" Property="Background" Value="{StaticResource SurfaceRaisedHover}"/>
+                            <Setter TargetName="bRoot" Property="Background" Value="{DynamicResource SurfaceRaisedHover}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
-                            <Setter Property="Foreground" Value="{StaticResource TextFaint}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource TextFaint}"/>
                             <Setter Property="Cursor" Value="Arrow"/>
                             <Setter TargetName="bRoot" Property="Opacity" Value="0.5"/>
                         </Trigger>
@@ -283,8 +326,28 @@
         <Setter Property="Margin" Value="1 0"/>
     </Style>
 
+    <!--
+        A theme in the picker. Its own template rather than FlatButton because the whole point of it is the
+        picture inside: a button style that paints a background over its content would cover the very thing
+        being chosen, and the chosen one is marked by its border rather than by a fill for the same reason.
+    -->
+    <ControlTemplate x:Key="ThemeChip" TargetType="Button">
+        <Border x:Name="bRoot" CornerRadius="6"
+                Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                Padding="{TemplateBinding Padding}">
+            <ContentPresenter/>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="bRoot" Property="Background" Value="{DynamicResource SurfaceRaisedHover}"/>
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
     <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource FlatButton}">
-        <Setter Property="Background" Value="{StaticResource Accent}"/>
+        <Setter Property="Background" Value="{DynamicResource Accent}"/>
     </Style>
 
     <!--
@@ -292,39 +355,48 @@
         glyph is the content, and the fade on hover is identical for all three.
     -->
     <Style x:Key="WindowButton" TargetType="Button">
-        <Setter Property="Background" Value="#001B1B1B"/>
+        <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderThickness" Value="0"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Panel.ZIndex" Value="10"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type Button}">
-                    <Border Background="{TemplateBinding Background}">
+                    <Grid Background="{TemplateBinding Background}">
+                        <!--
+                            The wash fades its opacity rather than its colour. Animating the colour meant
+                            naming both ends of the fade as literals in this style, which is a dark wash a
+                            light theme cannot do anything about - and a style setter's value is frozen
+                            when the style is sealed, so a brush put here would stop following anyway.
+                        -->
+                        <Border x:Name="bWash" Background="{DynamicResource SurfaceRaisedHover}" Opacity="0"/>
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="bWash"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="1" Duration="0:0:0.2"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="bWash"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0" Duration="0:0:0.2"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
-        <Style.Triggers>
-            <Trigger Property="IsMouseOver" Value="True">
-                <Trigger.EnterActions>
-                    <BeginStoryboard>
-                        <Storyboard>
-                            <ColorAnimation Storyboard.TargetProperty="(Button.Background).(SolidColorBrush.Color)"
-                                            From="#001B1B1B" To="#BF1B1B1B" Duration="0:0:0.2"/>
-                        </Storyboard>
-                    </BeginStoryboard>
-                </Trigger.EnterActions>
-                <Trigger.ExitActions>
-                    <BeginStoryboard>
-                        <Storyboard>
-                            <ColorAnimation Storyboard.TargetProperty="(Button.Background).(SolidColorBrush.Color)"
-                                            From="#BF1B1B1B" To="#001B1B1B" Duration="0:0:0.2"/>
-                        </Storyboard>
-                    </BeginStoryboard>
-                </Trigger.ExitActions>
-            </Trigger>
-        </Style.Triggers>
     </Style>
 
     <!-- Scroll bars: slim, unobtrusive, no arrow buttons. Carried over unchanged. -->
@@ -409,12 +481,12 @@
             <Trigger Property="Orientation" Value="Horizontal">
                 <Setter Property="Width" Value="Auto"/>
                 <Setter Property="Height" Value="10"/>
-                <Setter Property="Template" Value="{StaticResource HorizontalScrollBar}"/>
+                <Setter Property="Template" Value="{DynamicResource HorizontalScrollBar}"/>
             </Trigger>
             <Trigger Property="Orientation" Value="Vertical">
                 <Setter Property="Width" Value="10"/>
                 <Setter Property="Height" Value="Auto"/>
-                <Setter Property="Template" Value="{StaticResource VerticalScrollBar}"/>
+                <Setter Property="Template" Value="{DynamicResource VerticalScrollBar}"/>
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -425,7 +497,7 @@
         <Setter Property="VerticalAlignment" Value="Stretch"/>
         <Setter Property="Width" Value="3"/>
         <Setter Property="Margin" Value="0 10 0 10"/>
-        <Setter Property="Background" Value="{StaticResource SurfaceDivider}"/>
+        <Setter Property="Background" Value="{DynamicResource SurfaceDivider}"/>
     </Style>
 
     <Style x:Key="GSRow" TargetType="GridSplitter">
@@ -434,7 +506,7 @@
         <Setter Property="VerticalAlignment" Value="Stretch"/>
         <Setter Property="Height" Value="3"/>
         <Setter Property="Margin" Value="10 0 10 0"/>
-        <Setter Property="Background" Value="{StaticResource SurfaceDivider}"/>
+        <Setter Property="Background" Value="{DynamicResource SurfaceDivider}"/>
     </Style>
 
 </ResourceDictionary>

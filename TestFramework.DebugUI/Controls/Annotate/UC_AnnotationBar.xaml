@@ -15,7 +15,7 @@
     -->
     <Border HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0 0 0 14"
             CornerRadius="4" Background="{StaticResource SurfaceOverlay}"
-            BorderBrush="#1FFFFFFF" BorderThickness="1" Padding="6 5">
+            BorderBrush="{StaticResource PanelEdge}" BorderThickness="1" Padding="6 5">
         <Border.Effect>
             <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.55" Color="Black"/>
         </Border.Effect>
@@ -27,7 +27,7 @@
                       Width="18" Height="18" Stretch="None"/>
             </Button>
 
-            <Border Width="1" Height="18" Margin="5 0" Background="#1FFFFFFF"/>
+            <Border Width="1" Height="18" Margin="5 0" Background="{StaticResource PanelEdge}"/>
 
             <Button x:Name="btPen" Style="{StaticResource CaptionIconButton}" Click="Tool_Click" Tag="Freehand">
                 <Path x:Name="pathPen" Data="{StaticResource IconPen}" Stroke="{StaticResource TextSecondary}"
@@ -53,18 +53,18 @@
                       Width="18" Height="18" Stretch="None"/>
             </Button>
 
-            <Border Width="1" Height="18" Margin="5 0" Background="#1FFFFFFF"/>
+            <Border Width="1" Height="18" Margin="5 0" Background="{StaticResource PanelEdge}"/>
 
             <!-- Filled with the ink itself rather than labelled, because a colour is the only thing a swatch
                  needs to say. -->
             <StackPanel x:Name="spInks" Orientation="Horizontal" VerticalAlignment="Center"/>
 
-            <Border Width="1" Height="18" Margin="5 0" Background="#1FFFFFFF"/>
+            <Border Width="1" Height="18" Margin="5 0" Background="{StaticResource PanelEdge}"/>
 
             <!-- Three weights. A stroke thick enough to circle a card is too thick to underline a word. -->
             <StackPanel x:Name="spWeights" Orientation="Horizontal" VerticalAlignment="Center"/>
 
-            <Border Width="1" Height="18" Margin="5 0" Background="#1FFFFFFF"/>
+            <Border Width="1" Height="18" Margin="5 0" Background="{StaticResource PanelEdge}"/>
 
             <Button x:Name="btUndo" Style="{StaticResource CaptionIconButton}" Click="btUndo_Click">
                 <Path Data="{StaticResource IconUndo}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.4"
@@ -82,7 +82,7 @@
                 </Viewbox>
             </Button>
 
-            <Border Width="1" Height="18" Margin="5 0" Background="#1FFFFFFF"/>
+            <Border Width="1" Height="18" Margin="5 0" Background="{StaticResource PanelEdge}"/>
 
             <Button x:Name="btClose" Style="{StaticResource CaptionIconButton}" Click="btClose_Click" ToolTip="Done">
                 <Path Data="{StaticResource IconClose}" Stroke="{StaticResource TextSecondary}" StrokeThickness="1.5"

@@ -31,7 +31,7 @@
                CustomPopupPlacementCallback="PlaceUnderBadge"
                StaysOpen="False" AllowsTransparency="True"
                Opened="popDetails_Opened" Closed="popDetails_Closed">
-            <Border Background="{StaticResource SurfaceOverlay}" BorderBrush="#26FFFFFF" BorderThickness="1" CornerRadius="4"
+            <Border Background="{StaticResource SurfaceOverlay}" BorderBrush="{StaticResource PanelEdge}" BorderThickness="1" CornerRadius="4"
                     Width="380" Padding="0 0 0 10">
                 <StackPanel>
                     <TextBlock Style="{StaticResource PanelHeading}" Text="TRANSPORT"/>

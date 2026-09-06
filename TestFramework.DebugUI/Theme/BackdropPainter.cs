@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Windows;
 using System.Windows.Media;
 using TestFramework.DebugUI.State.Theming;
@@ -46,6 +47,20 @@ internal static class BackdropPainter
     private static readonly Rect Area = new(0, 0, Width, Height);
 
     /// <summary>
+    /// The box a recipe is drawn in, which is not the same for all of them.
+    /// </summary>
+    /// <remarks>
+    /// Every recipe that is a rule shares one landscape box, because a rule can be written to whatever
+    /// proportions suit it. <see cref="BackdropRecipe.Origin"/> is a copy of a drawing that already had
+    /// its own — a square — and stretching it to a different one would be the one thing that theme must
+    /// not do. Asked for rather than assumed, so the control sizes its frame to the answer.
+    /// </remarks>
+    public static Size Box(BackdropRecipe recipe)
+        => recipe == BackdropRecipe.Origin
+            ? new Size(OriginRidges.Span, OriginRidges.Span)
+            : new Size(Width, Height);
+
+    /// <summary>
     /// Draws one backdrop.
     /// </summary>
     /// <remarks>
@@ -57,10 +72,12 @@ internal static class BackdropPainter
     {
         DrawingGroup group = new();
 
-        Fill(group, new RectangleGeometry(Area), ink.Ground);
+        Fill(group, new RectangleGeometry(new Rect(Box(recipe))), ink.Ground);
 
         switch (recipe)
         {
+            case BackdropRecipe.Origin: Origin(group, ink); break;
+
             case BackdropRecipe.Clear:
             case BackdropRecipe.Flat:
                 break;
@@ -81,6 +98,50 @@ internal static class BackdropPainter
     }
 
     // ---------------------------------------------------------------- the recipes
+
+    /// <summary>
+    /// The original ridges, exactly as they were drawn, in the theme's two ends.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The geometry is copied and the colour is not. The authored greys ran from <c>#262626</c> at the
+    /// back to <c>#161616</c> at the front in an even ramp, so walking the theme's far colour to its
+    /// near one across the twelve layers reproduces them to within a value — and gives the light
+    /// counterpart the same ridges without inverting anything by hand.
+    /// </para>
+    /// <para>
+    /// Lifted by <see cref="OriginRidges.Rise"/> because the authored canvas stood taller than the frame
+    /// that showed it and sat on its bottom edge. Without that the ridges ride three hundred units low
+    /// and the picture is of their tops rather than of them.
+    /// </para>
+    /// </remarks>
+    private static void Origin(DrawingGroup group, BackdropInk ink)
+    {
+        ImmutableArray<string> ridges = OriginRidges.All;
+
+        // The lift goes on a group of its own rather than on each path. Geometry.Parse hands back a
+        // frozen geometry, so setting a transform on one throws — and a transform per ridge would be
+        // twelve of them saying the same thing.
+        DrawingGroup lifted = new() { Transform = new TranslateTransform(0, -OriginRidges.Rise) };
+
+        for (int index = 0; index < ridges.Length; index++)
+        {
+            // Far first, because the paths are ordered back to front.
+            double depth = ridges.Length == 1 ? 0 : (double)index / (ridges.Length - 1);
+
+            Fill(lifted, Geometry.Parse(ridges[index]), Blend(ink.Far, ink.Near, depth));
+        }
+
+        group.Children.Add(lifted);
+    }
+
+    /// <summary>One colour some fraction of the way to another, alpha included.</summary>
+    private static Color Blend(Color from, Color to, double amount)
+        => Color.FromArgb(
+            (byte)(from.A + ((to.A - from.A) * amount)),
+            (byte)(from.R + ((to.R - from.R) * amount)),
+            (byte)(from.G + ((to.G - from.G) * amount)),
+            (byte)(from.B + ((to.B - from.B) * amount)));
 
     /// <summary>A honeycomb with cells missing and a few lit.</summary>
     private static void Hexfield(DrawingGroup group, BackdropInk ink)

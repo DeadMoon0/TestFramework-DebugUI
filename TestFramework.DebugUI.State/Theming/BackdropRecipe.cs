@@ -44,5 +44,16 @@ public enum BackdropRecipe
     Ridges,
 
     /// <summary>Fewer, rounder bands and a low sun.</summary>
-    Dunes
+    Dunes,
+
+    /// <summary>
+    /// The tool's original ridges, copied rather than described.
+    /// </summary>
+    /// <remarks>
+    /// The one recipe that is not a rule for drawing something. <see cref="Ridges"/> is the family the
+    /// original belonged to, redrawn to the painter's own proportions and shaded from the theme; this is
+    /// the twelve authored paths themselves, in the square they were authored in. It exists because a
+    /// theme that means "the way it used to look" cannot be an approximation of it.
+    /// </remarks>
+    Origin
 }

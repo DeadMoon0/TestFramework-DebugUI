@@ -151,13 +151,13 @@ internal static class ThemeChip
             {
                 Stretch = Stretch.Fill,
                 ViewboxUnits = BrushMappingMode.Absolute,
-                Viewbox = new Rect(0, 0, BackdropPainter.Width, BackdropPainter.Height)
+                Viewbox = new Rect(BackdropPainter.Box(theme.Backdrop.Recipe))
             }
         };
 
         // The window's blur, to the same scale as the picture. Using the window's radius here would
         // reduce every backdrop to a single smear, and then all ten previews would look alike.
-        double radius = theme.Backdrop.SafeBlur * PreviewWidth / BackdropPainter.Width;
+        double radius = theme.Backdrop.SafeBlur * PreviewWidth / BackdropPainter.Box(theme.Backdrop.Recipe).Width;
 
         if (radius > 0.2)
             backdrop.Effect = new BlurEffect { Radius = radius, KernelType = KernelType.Gaussian };

@@ -829,6 +829,183 @@ public static class BuiltInThemes
             BackdropGlow = new ThemeColour(0x00000000u)
         });
 
+    /// <summary>
+    /// Origin Dark. The tool as it looked before it had themes.
+    /// </summary>
+    /// <remarks>
+    /// Flat graphite and the azure accent, which Slate Dark also carries — the difference is the
+    /// backdrop. This is the original one: twelve layered ridges in the near-black greys they were
+    /// actually drawn in, from <c>#161616</c> at the back to <c>#262626</c> at the front, rather than
+    /// the hex field that replaced them. Softened a little, because the painter's canvas is enlarged to
+    /// fill the window and a crisp edge does not survive that.
+    /// </remarks>
+    public static ThemeDefinition OriginDark { get; } = ThemeDefinition.From(
+        id: "origin-dark",
+        name: "Origin Dark",
+        family: "Origin",
+        mode: ThemeMode.Dark,
+        backdrop: new ThemeBackdrop { Recipe = BackdropRecipe.Origin, Blur = 80 },
+        palette: new ThemePalette
+        {
+            // Surfaces
+            SurfaceSunken = new ThemeColour(0xFF171717u),
+            SurfacePanel = new ThemeColour(0x32000000u),
+            SurfaceRaised = new ThemeColour(0xFF232323u),
+            SurfaceRaisedHover = new ThemeColour(0xFF2C2C2Cu),
+            SurfaceCard = new ThemeColour(0xFF323232u),
+            SurfaceDivider = new ThemeColour(0xFF151515u),
+            SurfaceOverlay = new ThemeColour(0xFF1E1E1Eu),
+            ConnectorStrip = new ThemeColour(0xFF242424u),
+
+            // Edges and depth
+            PanelEdge = new ThemeColour(0x1FFFFFFFu),
+            IconGroupEdge = new ThemeColour(0x4DFFFFFFu),
+            Scrim = new ThemeColour(0xA6000000u),
+            PipeShadow = new ThemeColour(0x32000000u),
+
+            // Text
+            TextPrimary = new ThemeColour(0xFFEDEDEDu),
+            TextSecondary = new ThemeColour(0xFF9A9A9Au),
+            TextFaint = new ThemeColour(0xFF6A6A6Au),
+
+            // Lifecycle
+            StateNotRun = new ThemeColour(0xFF5A5A5Au),
+            StateRunning = new ThemeColour(0xFF4680FCu),
+            StateComplete = new ThemeColour(0xFF62C98Fu),
+            StateError = new ThemeColour(0xFFFC4646u),
+            StateTimeout = new ThemeColour(0xFFFCAF62u),
+            StateSkipped = new ThemeColour(0xFF7A7A7Au),
+            StatePaused = new ThemeColour(0xFFC46AC4u),
+
+            // Accent
+            Accent = new ThemeColour(0xFF4680FCu),
+            AccentInk = new ThemeColour(0xFFFFFFFFu),
+
+            // Flow
+            FlowVariable = new ThemeColour(0xFF2AFC4Du),
+            FlowVariableSurface = new ThemeColour(0xFF3F7C7Fu),
+            FlowArtifact = new ThemeColour(0xFFFCC22Au),
+            FlowArtifactSurface = new ThemeColour(0xFF4D7F3Fu),
+
+            // Diff
+            DiffAddedSurface = new ThemeColour(0x2662C98Fu),
+            DiffAddedText = new ThemeColour(0xFF9FE3BBu),
+            DiffRemovedSurface = new ThemeColour(0x26FC4646u),
+            DiffRemovedText = new ThemeColour(0xFFF4A0A0u),
+            DiffContextText = new ThemeColour(0xFF8A8A8Au),
+
+            // Ink
+            InkNeutral = new ThemeColour(0xFFF4F4F4u),
+            InkCyan = new ThemeColour(0xFF35D6E8u),
+            InkMagenta = new ThemeColour(0xFFFF5FD2u),
+            InkViolet = new ThemeColour(0xFF9B7BFFu),
+            InkOrange = new ThemeColour(0xFFFF9A3Cu),
+            InkHalo = new ThemeColour(0xA0000000u),
+
+            // Value kinds
+            ValueRelational = new ThemeColour(0xFF62A8C9u),
+            ValueDocument = new ThemeColour(0xFF62C98Fu),
+            ValueBinary = new ThemeColour(0xFFC9A862u),
+            ValueTabular = new ThemeColour(0xFFC46AC4u),
+            ValuePlain = new ThemeColour(0xFF8FA7C9u),
+
+            // Window and backdrop
+            // Opaque, because the ridges cover the window. This is the tool as it was once the background
+            // went in, which is the point at which the blur behind it stopped being visible at all.
+            WindowTint = new ThemeColour(0xFF141414u),
+            BackdropBase = new ThemeColour(0xFF141414u),
+            BackdropFar = new ThemeColour(0xFF262626u),
+            BackdropNear = new ThemeColour(0xFF161616u),
+            BackdropGlow = new ThemeColour(0x00000000u)
+        });
+
+    /// <summary>
+    /// Origin Light. The same flat monochrome in daylight.
+    /// </summary>
+    /// <remarks>
+    /// Paper greys rather than tinted ones, so it stays as colourless as its dark half — that is the
+    /// whole of what makes it the counterpart rather than another Slate. The azure accent carries
+    /// across, darkened enough to hold on white, and the ridges become the pale bands the greys invert
+    /// to. No glow: the original had none, and one here would be the only warm thing in the window.
+    /// </remarks>
+    public static ThemeDefinition OriginLight { get; } = ThemeDefinition.From(
+        id: "origin-light",
+        name: "Origin Light",
+        family: "Origin",
+        mode: ThemeMode.Light,
+        backdrop: new ThemeBackdrop { Recipe = BackdropRecipe.Origin, Blur = 80 },
+        palette: new ThemePalette
+        {
+            // Surfaces
+            SurfaceSunken = new ThemeColour(0xFFECECECu),
+            SurfacePanel = new ThemeColour(0xB8FFFFFFu),
+            SurfaceRaised = new ThemeColour(0xFFFFFFFFu),
+            SurfaceRaisedHover = new ThemeColour(0xFFF1F1F1u),
+            SurfaceCard = new ThemeColour(0xFFFFFFFFu),
+            SurfaceDivider = new ThemeColour(0xFFD8D8D8u),
+            SurfaceOverlay = new ThemeColour(0xFAFFFFFFu),
+            ConnectorStrip = new ThemeColour(0xFFEDEDEDu),
+
+            // Edges and depth
+            PanelEdge = new ThemeColour(0x2A1A1A1Au),
+            IconGroupEdge = new ThemeColour(0x4D1A1A1Au),
+            Scrim = new ThemeColour(0x4D141414u),
+            PipeShadow = new ThemeColour(0x1A141414u),
+
+            // Text
+            TextPrimary = new ThemeColour(0xFF141414u),
+            TextSecondary = new ThemeColour(0xFF565656u),
+            TextFaint = new ThemeColour(0xFF8A8A8Au),
+
+            // Lifecycle
+            StateNotRun = new ThemeColour(0xFFAAAAAAu),
+            StateRunning = new ThemeColour(0xFF1D5FE8u),
+            StateComplete = new ThemeColour(0xFF0E8A4Fu),
+            StateError = new ThemeColour(0xFFD32020u),
+            StateTimeout = new ThemeColour(0xFFB86A00u),
+            StateSkipped = new ThemeColour(0xFF8E8E8Eu),
+            StatePaused = new ThemeColour(0xFF8E33B4u),
+
+            // Accent
+            Accent = new ThemeColour(0xFF1D5FE8u),
+            AccentInk = new ThemeColour(0xFFFFFFFFu),
+
+            // Flow
+            FlowVariable = new ThemeColour(0xFF0BA13Cu),
+            FlowVariableSurface = new ThemeColour(0xFF5FA8B0u),
+            FlowArtifact = new ThemeColour(0xFFCE9200u),
+            FlowArtifactSurface = new ThemeColour(0xFF6FAE5Cu),
+
+            // Diff
+            DiffAddedSurface = new ThemeColour(0x300E8A4Fu),
+            DiffAddedText = new ThemeColour(0xFF0A6438u),
+            DiffRemovedSurface = new ThemeColour(0x30D32020u),
+            DiffRemovedText = new ThemeColour(0xFFA31414u),
+            DiffContextText = new ThemeColour(0xFF6E6E6Eu),
+
+            // Ink
+            InkNeutral = new ThemeColour(0xFF141414u),
+            InkCyan = new ThemeColour(0xFF0090A6u),
+            InkMagenta = new ThemeColour(0xFFDC0B93u),
+            InkViolet = new ThemeColour(0xFF6B3FE8u),
+            InkOrange = new ThemeColour(0xFFE06A00u),
+            InkHalo = new ThemeColour(0xB3FFFFFFu),
+
+            // Value kinds
+            ValueRelational = new ThemeColour(0xFF2C7A9Eu),
+            ValueDocument = new ThemeColour(0xFF2E8C5Cu),
+            ValueBinary = new ThemeColour(0xFF97701Fu),
+            ValueTabular = new ThemeColour(0xFF8E3E92u),
+            ValuePlain = new ThemeColour(0xFF5E5E5Eu),
+
+            // Window and backdrop
+            WindowTint = new ThemeColour(0xFFF4F4F4u),
+            BackdropBase = new ThemeColour(0xFFF6F6F6u),
+            BackdropFar = new ThemeColour(0xFFE2E2E2u),
+            BackdropNear = new ThemeColour(0xFFFAFAFAu),
+            BackdropGlow = new ThemeColour(0x00000000u)
+        });
+
     /// <summary>Every built-in, in the order the picker shows them.</summary>
     public static ImmutableArray<ThemeDefinition> All { get; } =
     [
@@ -840,6 +1017,8 @@ public static class BuiltInThemes
         TideLight,
         GlassDark,
         GlassLight,
+        OriginDark,
+        OriginLight,
         ContrastDark,
         ContrastLight
     ];

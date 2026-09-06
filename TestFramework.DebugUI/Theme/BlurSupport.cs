@@ -124,7 +124,10 @@ internal static class BlurSupport
     {
         try
         {
-            return new Windows.UI.ViewManagement.UISettings().AdvancedEffectsEnabled;
+            // Two questions, because no single flag answers both. The first is the transparency setting,
+            // which somebody turns off on purpose; the second is energy saving, which the machine can
+            // turn on by itself and which no transparency flag reflects.
+            return new Windows.UI.ViewManagement.UISettings().AdvancedEffectsEnabled && !EnergySaverOn();
         }
         catch (Exception)
         {
@@ -134,7 +137,7 @@ internal static class BlurSupport
 
     private static BlurBlock Reason()
     {
-        // Asked first because it overrides the setting below: energy saver suppresses the effects while
+        // Asked first because it overrides the setting below: energy saving suppresses the effects while
         // the transparency setting still reads as on, which is what makes this so hard to see.
         if (EnergySaverOn())
             return BlurBlock.EnergySaver;
@@ -145,11 +148,35 @@ internal static class BlurSupport
         return BlurBlock.Unknown;
     }
 
+    /// <summary>The power mode Windows is actually running in, whatever the slider was left on.</summary>
+    private static readonly Guid BestPowerEfficiency = new("961CC777-2547-4F9D-8174-7D86181B8A7A");
+
+    /// <summary>
+    /// Whether Windows is saving power, which is what turns the compositor's effects off.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The <em>effective</em> overlay rather than the actual one, and that distinction is the whole
+    /// answer. Energy saving does not move the slider: it leaves the actual overlay wherever the reader
+    /// put it and forces the effective one to power efficiency. Measured on a machine with energy saving
+    /// on — actual <c>Best performance</c>, effective <c>Best power efficiency</c> — while the blur was
+    /// definitely off.
+    /// </para>
+    /// <para>
+    /// <b>Four more obvious sources were tried first and every one of them was wrong.</b> With energy
+    /// saving on and the blur measurably filling flat black,
+    /// <c>UISettings.AdvancedEffectsEnabled</c> read <c>true</c>,
+    /// <c>PowerManager.EnergySaverStatus</c> read <c>Disabled</c>,
+    /// <c>SYSTEM_POWER_STATUS.SystemStatusFlag</c> read <c>0</c>, and
+    /// <c>GUID_ENERGY_SAVER_STATUS</c> — the setting named after the feature — read <c>0</c> as well.
+    /// None of them is a substitute for this one, and none of them should be re-tried as a simplification.
+    /// </para>
+    /// </remarks>
     private static bool EnergySaverOn()
     {
         try
         {
-            return GetSystemPowerStatus(out SystemPowerStatus status) && status.SystemStatusFlag == 1;
+            return PowerGetEffectiveOverlayScheme(out Guid scheme) == 0 && scheme == BestPowerEfficiency;
         }
         catch (Exception)
         {
@@ -174,20 +201,6 @@ internal static class BlurSupport
         }
     }
 
-    /// <summary>
-    /// The power state. <c>SystemStatusFlag</c> is the only field read: it is one when energy saver is on.
-    /// </summary>
-    [StructLayout(LayoutKind.Sequential)]
-    private struct SystemPowerStatus
-    {
-        public byte ACLineStatus;
-        public byte BatteryFlag;
-        public byte BatteryLifePercent;
-        public byte SystemStatusFlag;
-        public int BatteryLifeTime;
-        public int BatteryFullLifeTime;
-    }
-
-    [DllImport("kernel32.dll")]
-    private static extern bool GetSystemPowerStatus(out SystemPowerStatus status);
+    [DllImport("powrprof.dll")]
+    private static extern uint PowerGetEffectiveOverlayScheme(out Guid scheme);
 }

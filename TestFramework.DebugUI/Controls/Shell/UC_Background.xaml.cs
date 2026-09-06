@@ -25,6 +25,16 @@ namespace TestFramework.DebugUI.Controls.Shell;
 /// </remarks>
 public partial class UC_Background : UserControl
 {
+    /// <summary>
+    /// How much larger than its frame the painted rectangle is.
+    /// </summary>
+    /// <remarks>
+    /// Blurring a shape to its own boundary fades the boundary out, and a backdrop with four faded
+    /// edges reads as a photograph laid on the window rather than as the window's own back. The excess
+    /// is centred and clipped away, so what is left is blur that came from somewhere.
+    /// </remarks>
+    private const double Overhang = 1.2;
+
     /// <summary>Creates the background, showing nothing until it is given a theme.</summary>
     public UC_Background()
     {
@@ -53,13 +63,26 @@ public partial class UC_Background : UserControl
 
         Visibility = Visibility.Visible;
 
+        // Asked of the recipe rather than fixed, because one of them is a copy of a drawing that was
+        // authored square. Stretching that to the landscape box the rules are written in would flatten
+        // the ridges it exists to reproduce.
+        Size box = BackdropPainter.Box(backdrop.Recipe);
+
+        gFrame.Width = box.Width;
+        gFrame.Height = box.Height;
+
+        // The rectangle stays deliberately larger than the frame so the blur's soft edge falls outside
+        // the clip; the proportion is what matters, not the numbers it was first written with.
+        rBackdrop.Width = box.Width * Overhang;
+        rBackdrop.Height = box.Height * Overhang;
+
         rBackdrop.Fill = new DrawingBrush(BackdropPainter.Paint(backdrop.Recipe, ink))
         {
             // Pinned to the space the painter draws in rather than left to the drawing's own bounds:
             // a recipe whose shapes do not reach the edges would otherwise be stretched to fill.
             Stretch = Stretch.Fill,
             ViewboxUnits = BrushMappingMode.Absolute,
-            Viewbox = new Rect(0, 0, BackdropPainter.Width, BackdropPainter.Height)
+            Viewbox = new Rect(box)
         };
 
         rBackdrop.Effect = backdrop.SafeBlur > 0

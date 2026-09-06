@@ -103,6 +103,25 @@ public sealed record ThemeDefinition
             ? colour
             : throw new KeyNotFoundException($"'{key}' is not a theme colour.");
 
+    /// <summary>
+    /// Whether anything behind the window can be seen through it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both layers have to let light through, and either one of them alone can stop it: an opaque tint
+    /// covers the desktop however clear the backdrop is, and a backdrop that paints wall to wall covers
+    /// it however thin the tint is. So this is an <c>and</c>, not an <c>or</c>.
+    /// </para>
+    /// <para>
+    /// Asked rather than declared, because a theme that shows nothing gains nothing from being frosted —
+    /// the compositor would blur a desktop that is entirely painted over. Deriving it means a theme
+    /// cannot be wrong about itself, which a <c>Frosted</c> flag next to an opaque tint could be.
+    /// </para>
+    /// </remarks>
+    public bool ShowsWhatIsBehind
+        => Colour(nameof(ThemePalette.WindowTint)).Alpha < byte.MaxValue
+        && Colour(nameof(ThemePalette.BackdropBase)).Alpha < byte.MaxValue;
+
     /// <summary>Builds a definition from an authored palette.</summary>
     public static ThemeDefinition From(
         string id,

@@ -109,13 +109,14 @@ public partial class UC_Settings : UserControl
         bool breakOnFailure,
         IReadOnlyList<ThemeDefinition> themes,
         string currentThemeId,
-        string themesPath)
+        string themesPath,
+        BlurBlock block)
     {
         ArgumentNullException.ThrowIfNull(watch);
 
         Current = watch;
 
-        ShowThemes(themes, currentThemeId);
+        ShowThemes(themes, currentThemeId, block);
         tbThemesPath.Text = themesPath;
 
         tgWatch.SetQuietly(watch.Enabled);
@@ -198,7 +199,14 @@ public partial class UC_Settings : UserControl
     /// differently from the rest, so "which is chosen" is not a property to toggle — and there are ten
     /// of them, once, when a panel opens.
     /// </remarks>
-    public void ShowThemes(IReadOnlyList<ThemeDefinition> themes, string currentThemeId)
+    /// <param name="themes">Everything on offer.</param>
+    /// <param name="currentThemeId">The one that is on.</param>
+    /// <param name="block">
+    /// Why the compositor is not blurring, if it is not. A see-through theme cannot be delivered while
+    /// it holds, so its chip is shown faded and says why rather than being hidden — a theme that
+    /// disappears from the picker reads as a theme that was removed.
+    /// </param>
+    public void ShowThemes(IReadOnlyList<ThemeDefinition> themes, string currentThemeId, BlurBlock block = BlurBlock.None)
     {
         ArgumentNullException.ThrowIfNull(themes);
 
@@ -208,7 +216,7 @@ public partial class UC_Settings : UserControl
         {
             bool chosen = string.Equals(theme.Id, currentThemeId, StringComparison.OrdinalIgnoreCase);
 
-            Button chip = ThemeChip.Build(theme, chosen, this);
+            Button chip = ThemeChip.Build(theme, chosen, this, block);
             string id = theme.Id;
 
             chip.Click += (_, _) => ThemeChosen?.Invoke(id);

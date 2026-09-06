@@ -52,6 +52,15 @@ public partial class MainWindow : Window
     private readonly ThemeService theme;
 
     /// <summary>
+    /// Keeps the subscription to Windows' "am I drawing effects" flag alive.
+    /// </summary>
+    /// <remarks>
+    /// Never read. It is held only so the object the event lives on is not collected, which would end
+    /// the subscription silently and leave the picker showing a stale answer.
+    /// </remarks>
+    private readonly object? blurWatch;
+
+    /// <summary>
     /// The steps the user has asked to stop at.
     /// </summary>
     /// <remarks>
@@ -238,11 +247,7 @@ public partial class MainWindow : Window
         theme.Changed += definition =>
         {
             ucBackground.Show(definition.Backdrop, theme.BackdropInk);
-
-            // The ground the whole window lies on. Not a brush anything resolves, so nothing follows it for
-            // free — and this is the only place it is set, which is what a see-through theme depends on: the
-            // window is layered, so how much of the desktop shows is exactly this colour's alpha.
-            bTint.Background = new SolidColorBrush(theme.WindowTint);
+            Ground(definition);
         };
         theme.Use(saved.ThemeId, animate: false);
         breakpoints.Restore(saved.Breakpoints);
@@ -345,6 +350,10 @@ public partial class MainWindow : Window
 
         ucSettings.ThemesFolderRequested += OpenThemesFolder;
 
+        // Held for as long as the window is, because the subscription lives on this object and a
+        // collected one stops calling back. Windows raises it from its own thread.
+        blurWatch = BlurSupport.WhenChanged(() => Dispatcher.BeginInvoke(RefreshThemes));
+
         // Held in the static so the reader thread can consult it without a dispatch, and in the file so a
         // person who works this way finds it still armed next time.
         ucSettings.BreakOnFailureChanged += value =>
@@ -373,7 +382,25 @@ public partial class MainWindow : Window
         ShowSettings();
     }
 
+    /// <summary>
+    /// Redraws the theme picker after Windows has changed its mind about compositor effects.
+    /// </summary>
+    /// <remarks>
+    /// Only while the panel is open. A picker nobody is looking at is rebuilt when it is next shown,
+    /// which is what <see cref="ShowSettings"/> does anyway.
+    /// </remarks>
+    private void RefreshThemes()
+    {
+        if (ucSettings.Visibility == Visibility.Visible)
+            ucSettings.ShowThemes(theme.Available, theme.Current.Id, BlurSupport.Detect());
+    }
+
     /// <summary>Fills the settings panel in and brings it out.</summary>
+    /// <remarks>
+    /// Blur support is asked for here rather than kept, because it is not the tool's to decide and can
+    /// change between one opening of the panel and the next — a laptop crossing a battery threshold
+    /// turns energy saver on with no window involved.
+    /// </remarks>
     private void ShowSettings()
         => ucSettings.Show(
             saved.Watch,
@@ -381,7 +408,8 @@ public partial class MainWindow : Window
             saved.BreakOnFailure,
             theme.Available,
             theme.Current.Id,
-            theme.Store.DirectoryPath);
+            theme.Store.DirectoryPath,
+            BlurSupport.Detect());
 
     /// <summary>
     /// Shows the themes folder, having first put something in it.
@@ -658,8 +686,32 @@ public partial class MainWindow : Window
     {
         WindowChromeInterop.Attach(this);
 
-        WindowChromeInterop.Ground(this);
+        // Again, because the theme was chosen in the constructor and there was no handle to ground then.
+        Ground(theme.Current);
+    }
 
+    /// <summary>
+    /// Lays the window on its ground: a compositor blur if the theme shows anything behind it, its own
+    /// flat tint if it does not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The tint goes to one place or the other, never both. When the compositor is blurring it applies
+    /// the tint to the blur, so <c>bTint</c> has to paint nothing or the window is tinted twice; when
+    /// there is no blur there is nothing to hand it to, and <c>bTint</c> is the ground itself.
+    /// </para>
+    /// <para>
+    /// Called from the theme change <em>and</em> from <c>SourceInitialized</c>, because neither happens
+    /// reliably after the other: the first theme is chosen in the constructor, before there is a handle
+    /// to ground, and every theme after it arrives long after the window has one.
+    /// </para>
+    /// </remarks>
+    private void Ground(ThemeDefinition definition)
+    {
+        bool frosted = definition.ShowsWhatIsBehind;
+
+        bTint.Background = frosted ? null : new SolidColorBrush(theme.WindowTint);
+        WindowChromeInterop.Ground(this, frosted ? theme.WindowTint : null);
     }
 
     /// <summary>Keeps the window's corners in step with its state.</summary>

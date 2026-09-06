@@ -92,6 +92,31 @@ public class BuiltInThemesTests
     }
 
     /// <summary>
+    /// That a theme knows whether the desktop can be seen through it, which is what decides the blur.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The window asks the compositor to blur what is behind it only for a theme that answers yes, so
+    /// getting this wrong is either a see-through theme with a sharp desktop behind it or a compositor
+    /// effect running underneath a surface that covers it completely.
+    /// </para>
+    /// <para>
+    /// Both halves matter and each can veto: a Clear recipe with an opaque tint shows nothing, and a
+    /// thin tint over a backdrop that paints wall to wall shows nothing either.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void OnlyAThemeThatPaintsNothingShowsWhatIsBehindIt()
+    {
+        foreach (ThemeDefinition theme in BuiltInThemes.All)
+        {
+            bool clear = theme.Backdrop.Recipe == BackdropRecipe.Clear;
+
+            Assert.Equal(clear, theme.ShowsWhatIsBehind);
+        }
+    }
+
+    /// <summary>
     /// That a theme meant to be read at maximum contrast is not also translucent.
     /// </summary>
     /// <remarks>

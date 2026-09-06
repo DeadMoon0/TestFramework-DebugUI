@@ -29,14 +29,23 @@ internal static class ThemeChip
     private const double PreviewWidth = 62;
     private const double PreviewHeight = 40;
 
+    /// <summary>How far a chip fades when its theme cannot be delivered. Faded, not hidden: it is still an offer.</summary>
+    private const double DimmedWhenUnavailable = 0.4;
+
     /// <summary>Builds the chip for one theme.</summary>
     /// <param name="theme">The theme to show.</param>
     /// <param name="chosen">Whether it is the one currently on.</param>
     /// <param name="owner">Where the chip's own colours — its border, its label — are looked up.</param>
-    public static Button Build(ThemeDefinition theme, bool chosen, FrameworkElement owner)
+    /// <param name="block">
+    /// Why the compositor is not blurring, if it is not. Only a theme that shows what is behind it
+    /// cares: the rest paint their own ground and look the same either way.
+    /// </param>
+    public static Button Build(ThemeDefinition theme, bool chosen, FrameworkElement owner, BlurBlock block = BlurBlock.None)
     {
         ArgumentNullException.ThrowIfNull(theme);
         ArgumentNullException.ThrowIfNull(owner);
+
+        bool unavailable = theme.ShowsWhatIsBehind && block != BlurBlock.None;
 
         StackPanel content = new() { Orientation = Orientation.Vertical };
 
@@ -53,18 +62,29 @@ internal static class ThemeChip
             HorizontalAlignment = HorizontalAlignment.Center
         });
 
-        return new Button
+        Button chip = new()
         {
             Content = content,
-            Cursor = System.Windows.Input.Cursors.Hand,
+            Cursor = unavailable ? System.Windows.Input.Cursors.Arrow : System.Windows.Input.Cursors.Hand,
             Margin = new Thickness(0, 0, 8, 8),
             Padding = new Thickness(5),
             BorderThickness = new Thickness(1),
             BorderBrush = (Brush)owner.FindResource(chosen ? ThemeKeys.Accent : ThemeKeys.PanelEdge),
             Background = (Brush)owner.FindResource(chosen ? ThemeKeys.SurfaceRaised : ThemeKeys.SurfaceSunken),
             Template = (ControlTemplate)owner.FindResource(ThemeKeys.ThemeChip),
-            ToolTip = theme.IsCustom ? $"{theme.Name} — from {theme.Id}.json" : theme.Name
+            IsEnabled = !unavailable,
+            Opacity = unavailable ? DimmedWhenUnavailable : 1,
+            ToolTip = unavailable
+                ? BlurSupport.Explain(theme.Name, block)
+                : theme.IsCustom ? $"{theme.Name} — from {theme.Id}.json" : theme.Name
         };
+
+        // The whole point of dimming the chip is the explanation behind it, and a disabled control does
+        // not show its tooltip unless it is told to. Without this the reader is left with a theme they
+        // cannot click and nothing saying why.
+        ToolTipService.SetShowOnDisabled(chip, true);
+
+        return chip;
     }
 
     /// <summary>

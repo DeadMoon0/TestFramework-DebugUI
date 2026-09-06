@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Windows.Media;
 
 namespace TestFramework.DebugUI;
 
@@ -112,6 +113,99 @@ internal static class WindowEffects
         {
         }
     }
+
+    /// <summary>The window attribute that carries an accent policy.</summary>
+    private const int AccentPolicyAttribute = 19;
+
+    /// <summary>No accent: the window is composited plainly.</summary>
+    private const int AccentDisabled = 0;
+
+    /// <summary>Blur what is behind the window and tint it. What the tool has always asked for.</summary>
+    private const int AccentAcrylicBlurBehind = 4;
+
+    /// <summary>
+    /// Asks the compositor to blur whatever is behind the window and tint the result.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This does not render a blur into the window. It asks the compositor to draw one behind it, which
+    /// is why the window still has to be see-through for any of it to show, and why the tint is handed
+    /// over here rather than painted: the compositor applies it to the blurred sample, so painting it
+    /// again on top would darken the window twice.
+    /// </para>
+    /// <para>
+    /// <b>This is silently disabled by Windows' energy saver</b>, which turns every compositor effect
+    /// into a flat fill — a black sheet here, and flat fallback colours for Mica and Acrylic. It reads
+    /// exactly like the API having been removed, and it is worth ruling out before concluding anything
+    /// about a build of Windows.
+    /// </para>
+    /// </remarks>
+    /// <param name="handle">The window.</param>
+    /// <param name="tint">The colour laid over the blur. Its alpha is how much of the blur survives.</param>
+    public static void Frost(IntPtr handle, Color tint)
+        => Accent(handle, AccentAcrylicBlurBehind, Gradient(tint));
+
+    /// <summary>The gradient is ABGR, which is the easiest thing here to get wrong and the hardest to see.</summary>
+    private static uint Gradient(Color tint)
+        => (uint)tint.A << 24 | (uint)tint.B << 16 | (uint)tint.G << 8 | tint.R;
+
+    /// <summary>Takes the blur away, for a theme that paints its own ground.</summary>
+    public static void Unfrost(IntPtr handle)
+        => Accent(handle, AccentDisabled, 0);
+
+    private static void Accent(IntPtr handle, int state, uint gradient)
+    {
+        if (handle == IntPtr.Zero)
+            return;
+
+        IntPtr policy = IntPtr.Zero;
+
+        try
+        {
+            AccentPolicy accent = new() { AccentState = state, AccentFlags = 0, GradientColor = gradient, AnimationId = 0 };
+
+            policy = Marshal.AllocHGlobal(Marshal.SizeOf(accent));
+            Marshal.StructureToPtr(accent, policy, fDeleteOld: false);
+
+            WindowCompositionAttributeData data = new()
+            {
+                Attribute = AccentPolicyAttribute,
+                Data = policy,
+                SizeOfData = Marshal.SizeOf(accent)
+            };
+
+            _ = SetWindowCompositionAttribute(handle, ref data);
+        }
+        catch (Exception)
+        {
+            // Undocumented, and so allowed to not be there. A window without a blur is still a window.
+        }
+        finally
+        {
+            if (policy != IntPtr.Zero)
+                Marshal.FreeHGlobal(policy);
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct AccentPolicy
+    {
+        public int AccentState;
+        public int AccentFlags;
+        public uint GradientColor;
+        public int AnimationId;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WindowCompositionAttributeData
+    {
+        public int Attribute;
+        public IntPtr Data;
+        public int SizeOfData;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
 
     [DllImport("dwmapi.dll", PreserveSig = true)]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, uint size);

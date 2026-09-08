@@ -25,8 +25,6 @@ namespace TestFramework.DebugUI.State.Theming;
 /// </remarks>
 public sealed class ThemeStore
 {
-    private const string FolderName = "TestFramework";
-    private const string ToolFolderName = "DebugUI";
     private const string ThemesFolderName = "themes";
 
     private readonly string directory;
@@ -49,11 +47,11 @@ public sealed class ThemeStore
     }
 
     /// <summary>Where custom themes live unless told otherwise.</summary>
-    public static string DefaultDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        FolderName,
-        ToolFolderName,
-        ThemesFolderName);
+    /// <remarks>
+    /// See <see cref="ToolPaths"/> for why this is not under <c>AppData</c>. A theme is written by
+    /// hand, in a folder someone opened themselves, so it has to be the folder the tool reads.
+    /// </remarks>
+    public static string DefaultDirectory => Path.Combine(ToolPaths.ToolFolder, ThemesFolderName);
 
     /// <summary>The folder this store reads.</summary>
     public string DirectoryPath => directory;

@@ -8,9 +8,18 @@ namespace TestFramework.DebugUI.Launcher;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Local application data, not roaming. Cached application versions and run journals are both large
-/// and both about this machine; roaming them would drag the lot across a domain profile for no
-/// benefit.
+/// The profile root, deliberately not <c>AppData</c>, and this is the project the choice is really
+/// about. The launcher ships as an MSIX, and Windows virtualizes a packaged application's writes
+/// under <c>AppData</c> into a per-package store that no unpackaged process can see. The journal
+/// folder below would have been created into that store, Core would have gone on finding nothing,
+/// and run recording would have read as switched off on every machine in the world with nothing
+/// reporting a failure. Outside <c>AppData</c> there is one folder and both processes see it.
+/// </para>
+/// <para>
+/// What that costs: a classic roaming profile excludes <c>AppData\Local</c> and does not exclude the
+/// profile root, so the cached versions below can follow a user between machines, which is exactly
+/// what the previous location was chosen to prevent. Accepted knowingly — a handshake that cannot
+/// work is worse than a cache that travels — and the retention limit keeps the size of it bounded.
 /// </para>
 /// <para>
 /// The journal folder is the load-bearing one. Core decides whether to record a run by whether that
@@ -22,7 +31,13 @@ namespace TestFramework.DebugUI.Launcher;
 /// </remarks>
 public sealed class LauncherPaths
 {
-    private const string RootFolderName = "TestFramework";
+    /// <remarks>
+    /// Must match the root <c>TestFramework.Core</c> resolves the run journal under. The launcher
+    /// does not reference Core — a dependency-free shell is the point of it — so the agreement cannot
+    /// be a shared constant, and it is held by a test instead rather than by this comment.
+    /// </remarks>
+    private const string RootFolderName = ".testframework";
+
     private const string JournalFolderName = "Debug";
     private const string VersionsFolderName = "versions";
     private const string StagingFolderName = "staging";
@@ -30,9 +45,9 @@ public sealed class LauncherPaths
     /// <summary>The name of the application the launcher starts.</summary>
     public const string ApplicationExecutable = "TestFramework.DebugUI.exe";
 
-    /// <summary>Creates the paths under the current user's local application data.</summary>
+    /// <summary>Creates the paths under the current user's profile.</summary>
     public LauncherPaths()
-        : this(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), RootFolderName))
+        : this(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), RootFolderName))
     {
     }
 

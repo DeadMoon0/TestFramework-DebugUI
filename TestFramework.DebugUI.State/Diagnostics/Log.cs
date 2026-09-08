@@ -34,8 +34,6 @@ public static class Log
     /// </remarks>
     private const long MaximumBytes = 1024 * 1024;
 
-    private const string FolderName = "TestFramework";
-    private const string ToolFolderName = "DebugUI";
     private const string FileName = "debugui.log";
 
     private static readonly object Gate = new();
@@ -47,15 +45,11 @@ public static class Log
 
     /// <summary>Gets where the log lives unless told otherwise.</summary>
     /// <remarks>
-    /// Beside the settings and the run journal, for the reason the settings give: the launcher keeps
-    /// several versions side by side and replaces them wholesale, so anything written into a
-    /// version's own folder is gone at the next update.
+    /// Beside the settings and the run journal — see <see cref="ToolPaths"/> for why that is not
+    /// under <c>AppData</c>. It matters more for the log than for anything else here: this is the
+    /// file someone is asked to send, so it has to be at the path they were given.
     /// </remarks>
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        FolderName,
-        ToolFolderName,
-        FileName);
+    public static string DefaultPath => Path.Combine(ToolPaths.ToolFolder, FileName);
 
     /// <summary>
     /// Sends the log somewhere else, which is what the tests use.

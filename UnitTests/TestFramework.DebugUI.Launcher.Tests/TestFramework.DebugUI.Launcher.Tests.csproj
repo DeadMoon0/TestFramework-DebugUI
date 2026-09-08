@@ -20,6 +20,14 @@
 		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
 		<PackageReference Include="xunit" Version="2.9.2" />
 		<PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+
+		<!--
+			Referenced by the tests and deliberately not by the launcher, which stays a dependency-free
+			shell. It is here so the folder the launcher creates can be compared with the folder Core
+			looks for: that agreement spans two packages and two processes, and this is the only place
+			both sides are loadable at once.
+		-->
+		<PackageReference Include="TestFramework.Core" Version="0.5.0" />
 	</ItemGroup>
 
 	<ItemGroup>

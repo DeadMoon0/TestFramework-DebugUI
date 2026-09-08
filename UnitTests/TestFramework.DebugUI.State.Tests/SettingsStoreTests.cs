@@ -107,7 +107,7 @@ public class SettingsStoreTests : IDisposable
     [Fact]
     public void SavingCreatesTheFolderItNeeds()
     {
-        // First run on a new machine: nothing under LocalAppData exists yet.
+        // First run on a new machine: the tool's folder does not exist yet.
         Assert.False(Directory.Exists(folder));
 
         new SettingsStore(File0).Save(UiSettings.Defaults);

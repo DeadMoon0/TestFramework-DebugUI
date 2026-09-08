@@ -23,8 +23,6 @@ namespace TestFramework.DebugUI.State.Settings;
 /// </remarks>
 public sealed class SettingsStore
 {
-    private const string FolderName = "TestFramework";
-    private const string ToolFolderName = "DebugUI";
     private const string FileName = "settings.json";
 
     private readonly string path;
@@ -47,11 +45,7 @@ public sealed class SettingsStore
     }
 
     /// <summary>Where settings live unless told otherwise.</summary>
-    public static string DefaultPath => Path.Combine(
-        System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
-        FolderName,
-        ToolFolderName,
-        FileName);
+    public static string DefaultPath => Path.Combine(ToolPaths.ToolFolder, FileName);
 
     /// <summary>The file this store reads and writes.</summary>
     public string FilePath => path;

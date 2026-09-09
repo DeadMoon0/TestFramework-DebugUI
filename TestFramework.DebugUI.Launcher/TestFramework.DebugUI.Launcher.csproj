@@ -2,11 +2,21 @@
 
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
-		<TargetFramework>net8.0-windows10.0.20348.0</TargetFramework>
+
+		<!--
+			Plain net8.0-windows, and the only project in the family that is. Naming a Windows SDK
+			version here — as every other project does — implicitly references the WinRT projection, and
+			that is a 24 MB Microsoft.Windows.SDK.NET.dll in the output of a launcher that never calls a
+			WinRT API: 26 MB of payload for 1.2 MB of program, in the one project whose whole job is to
+			be installable in a second. SupportedOSPlatformVersion went with it, because it cannot be
+			higher than the target platform version; nothing is lost, since WPF on .NET 8 requires
+			Windows 10 through the runtime regardless of what this file declares.
+		-->
+		<TargetFramework>net8.0-windows</TargetFramework>
+
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>disable</ImplicitUsings>
 		<UseWPF>true</UseWPF>
-		<SupportedOSPlatformVersion>10.0.20348.0</SupportedOSPlatformVersion>
 		<RootNamespace>TestFramework.DebugUI.Launcher</RootNamespace>
 		<ApplicationIcon>Icon.ico</ApplicationIcon>
 	</PropertyGroup>
@@ -35,5 +45,16 @@
 		-->
 		<InternalsVisibleTo Include="TestFramework.DebugUI.Launcher.Tests" />
 	</ItemGroup>
+
+	<Target Name="RefuseTheWindowsSdkProjection" AfterTargets="Build">
+		<!--
+			What keeps the TargetFramework above the way it is. The comment there explains why; this is
+			why the explanation does not have to be read. Putting an SDK version back is the obvious
+			tidying — it would make this project match every other one — and its cost is invisible in
+			source, so it fails the build instead.
+		-->
+		<Error Condition="Exists('$(OutDir)Microsoft.Windows.SDK.NET.dll')"
+		       Text="The launcher's output contains Microsoft.Windows.SDK.NET.dll: 24 MB of WinRT projection this project never calls. Something named a Windows SDK version on TargetFramework; take it off again and see the comment there." />
+	</Target>
 
 </Project>

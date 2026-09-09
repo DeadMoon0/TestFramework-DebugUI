@@ -172,8 +172,11 @@
                             Width="46" WindowChrome.IsHitTestVisibleInChrome="True">
                         <Viewbox>
                             <Canvas Height="100" Width="100">
+                                <!-- Both caps, for the reason the close button's comment gives: one named
+                                     cap makes the line half a stroke longer at one end than the other. -->
                                 <Line X1="37" Y1="49.5" X2="63" Y2="49.5" StrokeThickness="1.99"
-                                      StrokeEndLineCap="Round" Stroke="{StaticResource TextPrimary}" RenderOptions.EdgeMode="Aliased"/>
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      Stroke="{StaticResource TextPrimary}" RenderOptions.EdgeMode="Aliased"/>
                             </Canvas>
                         </Viewbox>
                     </Button>
@@ -188,14 +191,33 @@
                     </Button>
                     <Button x:Name="btClose" Style="{StaticResource WindowButton}" Click="btClose_Click"
                             Width="46" WindowChrome.IsHitTestVisibleInChrome="True">
-                        <Viewbox>
-                            <Canvas Height="100" Width="100">
-                                <Line X1="39" Y1="39" X2="61" Y2="61" StrokeThickness="1.99"
-                                      StrokeEndLineCap="Round" Stroke="{StaticResource TextPrimary}" RenderOptions.EdgeMode="Aliased"/>
-                                <Line X1="61" Y1="39" X2="39" Y2="61" StrokeThickness="1.99"
-                                      StrokeEndLineCap="Round" Stroke="{StaticResource TextPrimary}" RenderOptions.EdgeMode="Aliased"/>
-                            </Canvas>
-                        </Viewbox>
+                        <!--
+                            Both caps are named, and that is the point. This was two Lines carrying
+                            StrokeEndLineCap="Round" and nothing for the start, which defaults to Flat
+                            — and both of them ran top-to-bottom, so both top arms got the flat cap
+                            and both bottom arms got the round one. A round cap reaches half a stroke
+                            width past its endpoint and a flat cap stops dead on it, so the cross came
+                            out visibly short at the top with symmetric geometry. A single line can
+                            hide that; four arms meeting in the middle cannot.
+
+                            It is also anti-aliased, unlike the two buttons above, and that difference
+                            is deliberate too. Those are a horizontal line and an axis-aligned square:
+                            aliasing snaps their edges onto whole pixels and they come out crisp, which
+                            is the only reason RenderOptions.EdgeMode is set there. A diagonal has no
+                            whole pixel to snap to, and the Viewbox made it worse by scaling a 100-unit
+                            canvas down by 0.4 — a 1.99 stroke rendering 0.8px wide, most pixels along
+                            the diagonal below half coverage and rounding away, leaving a dotted
+                            stair-step.
+
+                            So: one Path, authored at the size it is actually drawn at rather than
+                            scaled down, which puts its thickness in real units instead of leaving it
+                            to depend on that 0.4. Slightly heavier than the 1px its neighbours end up
+                            with, because a diagonal of equal weight reads thinner than an orthogonal
+                            one.
+                        -->
+                        <Path Data="M 0,0 L 10,10 M 10,0 L 0,10"
+                              Stroke="{StaticResource TextPrimary}" StrokeThickness="1.2"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
                     </Button>
                 </StackPanel>
             </Grid>

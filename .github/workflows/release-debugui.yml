@@ -24,9 +24,24 @@ name: Release DebugUI
 # around by committing a NuGet.config pointing at a local path — a release built from a feed nobody
 # else has is not a release.
 #
+# Three assets, and they are for different people:
+#
+#   TestFramework.DebugUI.Setup.exe     what a person downloads. Installs the launcher, per-user.
+#   TestFramework.DebugUI.zip           what the launcher downloads. The contract named above.
+#   TestFramework.DebugUI.Launcher.zip  the launcher on its own, for anyone who would rather not
+#                                       run an installer at all.
+#
+# The installer is not signed, and deliberately so: without a code-signing certificate a self-signed
+# Authenticode signature buys nothing — SmartScreen treats it exactly like an unsigned file — so it
+# would be effort spent on an unchanged warning. Anyone downloading it sees "Windows protected your
+# PC" and needs More info -> Run anyway. MSIX was considered and rejected for the same reason: it
+# refuses to install at all without a trusted signature, with no equivalent door.
+#
 # Framework-dependent, not self-contained: whoever runs the launcher already needs the .NET desktop
 # runtime, so shipping a second copy of it inside every update would multiply the download for no
-# gain. Switch by adding --self-contained -r win-x64 to the publish step if that stops being true.
+# gain. The installer is what makes that assumption safe — it detects a missing runtime and offers to
+# fetch it. Switch by adding --self-contained -r win-x64 to the publish step if that stops being true,
+# and note that self-contained WPF is around a hundred megabytes per retained version.
 
 on:
   push:
@@ -103,11 +118,40 @@ jobs:
           Compress-Archive -Path publish/app/* -DestinationPath artifacts/TestFramework.DebugUI.zip -Force
           Compress-Archive -Path publish/launcher/* -DestinationPath artifacts/TestFramework.DebugUI.Launcher.zip -Force
 
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          # Inno Setup ships on the GitHub Windows image, but that is not a promise anyone made. Install
+          # it if the compiler is not where it should be, rather than losing a release to an image change.
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress -y
+          }
+
+          if (-not (Test-Path $iscc)) {
+            throw "Inno Setup's compiler is not at $iscc, and installing it did not put it there."
+          }
+
+          # The script takes its payload from beside itself, so the launcher's published output has to
+          # be there before it runs.
+          New-Item -ItemType Directory -Force -Path Installer/launcher | Out-Null
+          Copy-Item publish/launcher/* Installer/launcher -Recurse -Force
+
+          & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" Installer/TestFramework.DebugUI.iss
+
+          if ($LASTEXITCODE -ne 0) {
+            throw "The installer did not compile."
+          }
+
+          Move-Item Installer/TestFramework.DebugUI.Setup.exe artifacts/ -Force
+
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
           name: DebugUI ${{ steps.version.outputs.version }}
           generate_release_notes: true
           files: |
+            artifacts/TestFramework.DebugUI.Setup.exe
             artifacts/TestFramework.DebugUI.zip
             artifacts/TestFramework.DebugUI.Launcher.zip

@@ -419,3 +419,7 @@ FodyWeavers.xsd
 
 # VS Code C# cache files
 *.lscache
+# Installer build inputs and output. The payload is copied in beside the script at release time,
+# and the compiled setup is an artifact, not a source file.
+Installer/launcher/
+Installer/*.exe

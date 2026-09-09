@@ -31,13 +31,20 @@ public partial class MainWindow : Window
         Loaded += async (_, _) => await RunAsync().ConfigureAwait(true);
     }
 
-    /// <summary>How long a started version is given to come up before it is treated as broken.</summary>
+    /// <summary>How long a started version is watched before it counts as having come up.</summary>
     /// <remarks>
-    /// An upper bound, not a wait: the usual answer arrives in a fraction of it, as soon as the
-    /// application's message loop is pumping. It only runs to the end when something is wrong, which
-    /// is the one time waiting is worth it.
+    /// <para>
+    /// This one is waited out in full on a <em>successful</em> start, because staying alive is the
+    /// evidence and there is no way to have that early. Long enough to cover the ways a version
+    /// fails to start — a missing runtime, an exception before the first window — all of which land
+    /// in well under a second, and short enough that the launcher is not in the way.
+    /// </para>
+    /// <para>
+    /// It is not visible time: the window hides as soon as something is running, so the wait happens
+    /// behind the application it just started.
+    /// </para>
     /// </remarks>
-    public static readonly TimeSpan Grace = TimeSpan.FromSeconds(8);
+    public static readonly TimeSpan Grace = TimeSpan.FromSeconds(3);
 
     private async Task RunAsync()
     {
@@ -110,10 +117,20 @@ public partial class MainWindow : Window
 
             using Process? started = Start(version);
 
-            if (started is not null && await SurvivedAsync(started).ConfigureAwait(true))
+            if (started is not null)
             {
-                records.Write(record.Survived(version));
-                return true;
+                // Out of the way while the grace period runs. What someone should be looking at is
+                // the application that just started, not a splash hanging in front of it making up
+                // its mind — and if this version turns out to be broken the window comes back.
+                Hide();
+
+                if (await SurvivedAsync(started).ConfigureAwait(true))
+                {
+                    records.Write(record.Survived(version));
+                    return true;
+                }
+
+                Show();
             }
 
             record = record.Quarantining(version);
@@ -132,37 +149,39 @@ public partial class MainWindow : Window
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <see cref="Process.WaitForInputIdle(int)"/> returns as soon as the application's message loop
-    /// is pumping, which is the nearest thing to "a window appeared" that does not involve hunting
-    /// for one. It answers in a fraction of a second when things are fine.
+    /// One signal: is the process still there after <see cref="Grace"/>, and if it is not, did it
+    /// leave cleanly. Every way a version fails to start ends the same way — the apphost cannot find
+    /// a runtime, an exception escapes before the first window — and that way is a quick exit with a
+    /// code that is not zero.
     /// </para>
     /// <para>
-    /// The two ways of being lenient are deliberate. A process still running but not yet idle is
-    /// treated as fine, because punishing a cold start on a loaded machine would quarantine a build
-    /// that works. And a process that exited cleanly is treated as fine too: someone opening the tool
-    /// and closing it inside eight seconds is their own business, not a broken version.
+    /// This began as <c>WaitForInputIdle</c>, which returns as soon as an application's message loop
+    /// is pumping and so promised the same answer sooner. It was wrong: the underlying Win32 call
+    /// <em>succeeds immediately for a process that has no message loop at all</em>, so a version that
+    /// was not a GUI application — or had already died — was reported as having come up. Measured,
+    /// not reasoned about: a stub that did nothing but exit with 1 was waved straight through. A
+    /// signal that lies in exactly the case being tested for is worse than a slower honest one.
+    /// </para>
+    /// <para>
+    /// A clean exit inside the grace period counts as success on purpose. Someone opening the tool
+    /// and closing it again within three seconds is their own business, not a broken version.
     /// </para>
     /// </remarks>
     private static async Task<bool> SurvivedAsync(Process started)
     {
-        bool ready;
-
         try
         {
-            // Off the UI thread: it blocks, and the whole point is that the status text keeps moving.
-            ready = await Task.Run(() => started.WaitForInputIdle((int)Grace.TotalMilliseconds)).ConfigureAwait(true);
-        }
-        catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            ready = false;
-        }
+            using CancellationTokenSource grace = new(Grace);
 
-        if (ready)
+            await started.WaitForExitAsync(grace.Token).ConfigureAwait(true);
+
+            // It exited inside the grace period, so the code is the whole answer.
+            return started.ExitCode == 0;
+        }
+        catch (OperationCanceledException)
+        {
+            // Still running when the grace ran out. That is what having come up looks like.
             return true;
-
-        try
-        {
-            return !started.HasExited || started.ExitCode == 0;
         }
         catch (Exception e) when (e is InvalidOperationException or System.ComponentModel.Win32Exception)
         {

@@ -83,6 +83,8 @@ public sealed class VersionStore(LauncherPaths paths)
 
         await DownloadAsync(release.DownloadUrl, archive, client, progress, cancellationToken).ConfigureAwait(false);
 
+        Verify(archive, release.Digest);
+
         string unpacked = Path.Combine(staging, "app");
         ZipFile.ExtractToDirectory(archive, unpacked, overwriteFiles: true);
 
@@ -92,6 +94,37 @@ public sealed class VersionStore(LauncherPaths paths)
         Directory.Move(RootOf(unpacked), destination);
 
         Clear(staging);
+    }
+
+    /// <summary>
+    /// Checks a downloaded package against the digest the release named.
+    /// </summary>
+    /// <remarks>
+    /// Throws when they disagree, and the caller treats that like any other failed download: fall
+    /// back to what is installed. Silence would be the wrong answer here — this is the one moment the
+    /// launcher takes an executable off the internet and puts it somewhere it will later run — but so
+    /// would refusing to start, so it fails the update rather than the launcher.
+    /// </remarks>
+    /// <exception cref="InvalidDataException">The package is not the one the release describes.</exception>
+    internal static void Verify(string archive, string? digest)
+    {
+        // No digest is not a failure. Releases predating the feed reporting one have nothing to check
+        // against, and rejecting those would strand anyone on an old build.
+        if (string.IsNullOrWhiteSpace(digest))
+            return;
+
+        const string prefix = "sha256:";
+
+        if (!digest.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        string expected = digest[prefix.Length..].Trim();
+
+        using FileStream file = File.OpenRead(archive);
+        string actual = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(file));
+
+        if (!string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException($"The download does not match the digest the release named. Expected {expected}, got {actual}.");
     }
 
     /// <summary>

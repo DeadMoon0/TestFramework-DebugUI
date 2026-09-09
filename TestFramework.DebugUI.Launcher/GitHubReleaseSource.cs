@@ -97,13 +97,21 @@ public sealed class GitHubReleaseSource : IReleaseSource, IDisposable
         if (version is null)
             return null;
 
-        string? url = release["assets"] is JArray assets ? PackageIn(assets) : null;
+        Asset? package = release["assets"] is JArray assets ? PackageIn(assets) : null;
 
-        if (url is null)
+        if (package is null)
             return null;
 
-        return new ReleaseInfo { Version = version, DownloadUrl = new Uri(url) };
+        return new ReleaseInfo
+        {
+            Version = version,
+            DownloadUrl = new Uri(package.Url),
+            Digest = package.Digest
+        };
     }
+
+    /// <summary>One downloadable file on a release.</summary>
+    private sealed record Asset(string Name, string Url, string? Digest);
 
     /// <summary>
     /// Finds the application package among a release's assets.
@@ -113,22 +121,24 @@ public sealed class GitHubReleaseSource : IReleaseSource, IDisposable
     /// name was settled, and deliberately declines to choose when there is more than one — guessing
     /// there is how the wrong application gets installed silently.
     /// </remarks>
-    private static string? PackageIn(JArray assets)
+    private static Asset? PackageIn(JArray assets)
     {
-        List<(string Name, string Url)> archives =
+        List<Asset> archives =
         [
             .. assets
-                .Select(asset => (Name: asset.Value<string>("name") ?? string.Empty, Url: asset.Value<string>("browser_download_url")))
-                .Where(asset => asset.Url is not null && asset.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                .Select(asset => (asset.Name, Url: asset.Url!))
+                .Select(asset => new Asset(
+                    asset.Value<string>("name") ?? string.Empty,
+                    asset.Value<string>("browser_download_url") ?? string.Empty,
+                    asset.Value<string>("digest")))
+                .Where(asset => asset.Url.Length > 0 && asset.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
         ];
 
-        (string Name, string Url) named = archives.FirstOrDefault(asset => string.Equals(asset.Name, PackageAsset, StringComparison.OrdinalIgnoreCase));
+        Asset? named = archives.FirstOrDefault(asset => string.Equals(asset.Name, PackageAsset, StringComparison.OrdinalIgnoreCase));
 
-        if (named.Url is not null)
-            return named.Url;
+        if (named is not null)
+            return named;
 
-        return archives.Count == 1 ? archives[0].Url : null;
+        return archives.Count == 1 ? archives[0] : null;
     }
 
     /// <inheritdoc />

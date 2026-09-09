@@ -12,6 +12,19 @@ public sealed record ReleaseInfo
 
     /// <summary>Gets where the packaged application can be downloaded from.</summary>
     public required Uri DownloadUrl { get; init; }
+
+    /// <summary>
+    /// Gets the SHA-256 the feed says the package has, when it says.
+    /// </summary>
+    /// <remarks>
+    /// Optional because it has to be: releases cut before the feed reported a digest have none, and
+    /// refusing to install those would turn a hardening step into a way of stranding people on old
+    /// builds. So it is checked when it is offered and skipped when it is not — which is worth having
+    /// even so, since this is the one point where the launcher takes code off the internet and runs
+    /// it, and "the transport was encrypted" is a weaker claim than "the bytes are the ones the
+    /// release names".
+    /// </remarks>
+    public string? Digest { get; init; }
 }
 
 /// <summary>

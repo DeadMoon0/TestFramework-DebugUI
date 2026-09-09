@@ -88,6 +88,59 @@ public sealed class VersionStoreTests : IDisposable
             Directory.Delete(root, recursive: true);
     }
 
+    [Fact]
+    public void APackageMatchingTheDigestTheReleaseNamedIsAccepted()
+    {
+        string archive = Payload("the real package");
+
+        VersionStore.Verify(archive, "sha256:" + Sha256Of("the real package"));
+    }
+
+    [Fact]
+    public void APackageThatIsNotTheOneTheReleaseDescribesIsRefused()
+    {
+        // The one point where the launcher takes code off the internet and puts it somewhere it will
+        // later run. "The transport was encrypted" is a weaker claim than "the bytes are the ones
+        // the release names", and this is the difference between them.
+        string archive = Payload("something else entirely");
+
+        Assert.Throws<InvalidDataException>(() => VersionStore.Verify(archive, "sha256:" + Sha256Of("the real package")));
+    }
+
+    [Fact]
+    public void APackageWithNoDigestToCheckAgainstIsAccepted()
+    {
+        // Releases cut before the feed reported a digest have none. Refusing those would turn a
+        // hardening step into a way of stranding people on old builds.
+        string archive = Payload("anything");
+
+        VersionStore.Verify(archive, null);
+        VersionStore.Verify(archive, "   ");
+    }
+
+    [Fact]
+    public void ADigestInSomeAlgorithmWeDoNotKnowIsIgnoredRatherThanFailed()
+    {
+        // Being handed an algorithm this launcher cannot compute is not evidence of tampering, and
+        // treating it as such would break every existing launcher the day the feed changed format.
+        string archive = Payload("anything");
+
+        VersionStore.Verify(archive, "sha512:whatever");
+    }
+
+    private string Payload(string content)
+    {
+        Directory.CreateDirectory(root);
+
+        string path = Path.Combine(root, "package.zip");
+        File.WriteAllText(path, content);
+
+        return path;
+    }
+
+    private static string Sha256Of(string content) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content)));
+
     private LauncherPaths Paths() => new(root);
 
     private VersionStore Store() => new(Paths());

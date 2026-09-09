@@ -53,6 +53,10 @@ DisableDirPage=yes
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 
+; Inno fills ProductVersion from AppVersion but leaves FileVersion empty, and the setup file is the
+; one thing a person can point at when asking why an install went wrong. Say which one it is.
+VersionInfoVersion={#AppVersion}
+
 OutputDir=.
 OutputBaseFilename=TestFramework.DebugUI.Setup
 SetupIconFile=..\TestFramework.DebugUI.Launcher\Icon.ico

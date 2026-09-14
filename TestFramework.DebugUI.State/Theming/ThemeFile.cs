@@ -7,9 +7,10 @@ namespace TestFramework.DebugUI.State.Theming;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Sparse on purpose. A file that had to list all forty-three colours would be wrong the day a
-/// forty-fourth is added — every hand-written theme in the world would start missing a key, and the
-/// tool would have to decide what to do about it. Inheriting a built-in removes that question: what is
+/// Sparse on purpose. A file that had to list every colour would be wrong the day one more is added —
+/// every hand-written theme in the world would start missing a key, and the tool would have to decide
+/// what to do about it. (No count is quoted here for the same reason: it would be one more thing to
+/// keep true.) Inheriting a built-in removes that question: what is
 /// not mentioned is whatever the base says now, including colours that did not exist when the file was
 /// written.
 /// </para>

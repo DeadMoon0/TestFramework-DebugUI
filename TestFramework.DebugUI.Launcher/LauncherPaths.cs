@@ -9,17 +9,25 @@ namespace TestFramework.DebugUI.Launcher;
 /// <remarks>
 /// <para>
 /// The profile root, deliberately not <c>AppData</c>, and this is the project the choice is really
-/// about. The launcher ships as an MSIX, and Windows virtualizes a packaged application's writes
-/// under <c>AppData</c> into a per-package store that no unpackaged process can see. The journal
-/// folder below would have been created into that store, Core would have gone on finding nothing,
-/// and run recording would have read as switched off on every machine in the world with nothing
-/// reporting a failure. Outside <c>AppData</c> there is one folder and both processes see it.
+/// about, because this is the side that creates the journal folder below. Windows virtualizes a
+/// <em>packaged</em> application's writes under <c>AppData</c> into a per-package store that no
+/// unpackaged process can see: were the launcher ever packaged, it would create that folder into its
+/// own store, Core would go on finding nothing, and run recording would read as switched off on
+/// every machine in the world with nothing reporting a failure. Outside <c>AppData</c> there is one
+/// folder and both processes see it, whatever either of them is packaged as.
+/// </para>
+/// <para>
+/// It is not packaged today — this ships as a per-user installer, MSIX having been rejected because
+/// it will not install at all without a trusted signature — so <c>AppData\Local</c> would work as
+/// things stand. The point is that nothing here would have to change if that were revisited, and the
+/// failure mode of getting it wrong is one nobody would be told about.
 /// </para>
 /// <para>
 /// What that costs: a classic roaming profile excludes <c>AppData\Local</c> and does not exclude the
 /// profile root, so the cached versions below can follow a user between machines, which is exactly
-/// what the previous location was chosen to prevent. Accepted knowingly — a handshake that cannot
-/// work is worse than a cache that travels — and the retention limit keeps the size of it bounded.
+/// what the previous location was chosen to prevent. Accepted knowingly — a handshake that holds
+/// whatever the packaging is beats a cache that stays put — and the retention limit keeps the size of
+/// it bounded.
 /// </para>
 /// <para>
 /// The journal folder is the load-bearing one. Core decides whether to record a run by whether that

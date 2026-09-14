@@ -4,6 +4,8 @@ Use this folder in two passes: user-facing guidance first, transport internals s
 
 ## User-Facing Documents
 
+- [INSTALLING.md](./INSTALLING.md): what to download, where it goes, how updating and rolling back work
+- [THEMING.md](./THEMING.md): the built-in themes, writing your own, and why a see-through theme goes flat
 - [Arc42.md](./Arc42.md): module architecture floor and current runtime boundaries
 - [ERROR-HANDLING-DEBUGUI.md](./ERROR-HANDLING-DEBUGUI.md): connection, transport, and breakpoint recovery guidance
 

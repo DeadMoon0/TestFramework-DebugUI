@@ -10,7 +10,7 @@ public sealed record ReleaseInfo
     /// <summary>Gets the version the release publishes.</summary>
     public required Version Version { get; init; }
 
-    /// <summary>Gets where the packaged application can be downloaded from.</summary>
+    /// <summary>Gets where the application archive can be downloaded from.</summary>
     public required Uri DownloadUrl { get; init; }
 
     /// <summary>

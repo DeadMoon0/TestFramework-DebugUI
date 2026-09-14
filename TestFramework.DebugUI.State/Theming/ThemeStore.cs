@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
+using System.Text;
 using Newtonsoft.Json;
 using TestFramework.DebugUI.State.Diagnostics;
 
@@ -106,7 +107,10 @@ public sealed class ThemeStore
             Directory.CreateDirectory(directory);
 
             if (!File.Exists(path))
-                File.WriteAllText(path, Example);
+                File.WriteAllText(path, Example.ReplaceLineEndings());
+                // ^ The literal's line endings come from however this source file was checked out,
+                //   and the breaks inside a wrapped list are written as \n. Normalising once here is
+                //   what stops the example arriving with two kinds of line ending in it.
 
             return path;
         }
@@ -164,21 +168,89 @@ public sealed class ThemeStore
         }
     }
 
+    /// <summary>Every id a theme file may inherit from, as the example lists them.</summary>
+    private static string InheritableIds =>
+        Wrapped(BuiltInThemes.All.Select(theme => theme.Id), "Inherit from any of: ".Length);
+
+    /// <summary>Every backdrop a theme file may name, as the example lists them.</summary>
+    private static string BackdropNames =>
+        Wrapped(Enum.GetNames<BackdropRecipe>(), "Backdrops: ".Length);
+
+    /// <summary>
+    /// Lays a generated list out across comment lines, the way a hand-typed one was laid out.
+    /// </summary>
+    /// <remarks>
+    /// The lists these replace were wrapped, and the file is one somebody opens in an editor to change
+    /// a colour — so a single line of every theme's name, growing with each one added, would be worse
+    /// than the staleness that generating them fixed.
+    /// </remarks>
+    /// <param name="names">The list, in the order it should read.</param>
+    /// <param name="firstLineUsed">
+    /// How much of the first line the label before it has already taken. Without it the first line
+    /// runs over by exactly the length of the words introducing it, which is the line most likely to
+    /// be too long and the one nothing else would account for.
+    /// </param>
+    private static string Wrapped(IEnumerable<string> names, int firstLineUsed)
+    {
+        const int Width = 74;
+
+        StringBuilder all = new();
+        int lineLength = firstLineUsed;
+
+        foreach (string name in names)
+        {
+            if (all.Length > 0)
+            {
+                all.Append(',');
+
+                if (lineLength + name.Length > Width)
+                {
+                    all.Append(ExampleCommentBreak);
+                    lineLength = 0;
+                }
+                else
+                {
+                    all.Append(' ');
+                    lineLength++;
+                }
+            }
+
+            all.Append(name);
+            lineLength += name.Length + 1;
+        }
+
+        return all.ToString();
+    }
+
+    /// <summary>What a wrapped list starts its next line with, indentation and comment marker included.</summary>
+    /// <remarks>
+    /// Two spaces, which is where the example's lines sit once the raw string literal's own
+    /// indentation has been stripped — not where they sit in this file. The written file is what has
+    /// to line up, and <see cref="WriteExample"/> settles the line ending for all of it.
+    /// </remarks>
+    private const string ExampleCommentBreak = "\n  // ";
+
     /// <summary>
     /// The example file, comments and all.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The comments are not a mistake and must not be "fixed": the reader this store uses accepts them,
     /// and they are the only documentation of the format that arrives in the same place as the thing
     /// being documented.
+    /// </para>
+    /// <para>
+    /// The two lists in it are read off the things they list rather than typed out, because a list
+    /// typed out here is a list that goes stale — which is exactly what happened to both of them when
+    /// the Origin pair was added, and nothing failed to say so.
+    /// </para>
     /// </remarks>
-    private const string Example = """
+    private static readonly string Example = $$"""
         {
           // A theme is a built-in with some things changed. Everything you leave out stays
           // as "inherits" has it, including colours added by a later version of the tool.
           //
-          // Inherit from any of: slate-dark, slate-light, ember-dark, ember-light,
-          // tide-dark, tide-light, glass-dark, glass-light, contrast-dark, contrast-light.
+          // Inherit from any of: {{InheritableIds}}.
           //
           // The file name is the theme's id, so this one is "my-theme".
 
@@ -190,7 +262,7 @@ public sealed class ThemeStore
             "StateTimeout": "#FFE8C547"
           },
 
-          // Backdrops: Clear, Flat, Hexfield, Orbits, Scatter, Lattice, Arcs, Ridges, Dunes.
+          // Backdrops: {{BackdropNames}}.
           // Clear paints nothing at all, and lets the desktop show through WindowTint.
           "backdrop": {
             "recipe": "Orbits",

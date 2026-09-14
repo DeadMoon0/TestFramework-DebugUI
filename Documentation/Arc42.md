@@ -82,6 +82,12 @@ The current deployment shape is simple:
 
 The app runs locally on the developer machine and connects to test processes through the named-pipe transport.
 
+What is shipped is the launcher, per-user and unsigned, as an Inno Setup installer built in the release
+workflow; the application is a release asset the launcher fetches by name. Program and data are kept
+apart - the launcher under `%LOCALAPPDATA%\Programs`, everything belonging to the user under
+`%USERPROFILE%\.testframework`, which is outside `AppData` so the journal folder works as a handshake
+regardless of how either side is packaged. [INSTALLING.md](./INSTALLING.md) has the detail.
+
 ## 8. Cross-Cutting Concepts
 
 - Canonical run state: the UI should reason about `Run -> Stage -> Layer -> Step -> Attempt`, not about raw message ordering.

@@ -12,6 +12,14 @@ The DebugUI focuses on these consumer workflows:
 - pause at breakpoints and continue intentionally, and ask a paused run for a fresh look
 - reopen a recorded run later, after both the test host and the UI have exited
 
+## Install
+
+Download `TestFramework.DebugUI.Setup.exe` from the [latest release](https://github.com/DeadMoon0/TestFramework-DebugUI/releases) and run it. It installs per-user, needs no administrator rights, and offers the .NET 8 desktop runtime if it is missing. Windows will warn that the file is unsigned - **More info -> Run anyway**; there is no certificate behind this project.
+
+What it installs is a small launcher, which fetches and starts the application itself and keeps the last three versions around. Installing it is also what switches on run journalling: Core records a run only when `%USERPROFILE%\.testframework\Debug` exists, and creating that folder is the launcher's first job.
+
+Full detail - assets, folder layout, updating, rolling back, cutting a release - is in [Documentation/INSTALLING.md](./Documentation/INSTALLING.md).
+
 ## Start Here
 
 Use this order if you are new to the debugging surface:
@@ -50,6 +58,16 @@ The UI listens on that pipe, projects the incoming signals into canonical state,
 - breakpoint-aware step inspection
 - the run's widgets, and the comparison of this run's values against the last clean run of the same test
 
+## Appearance
+
+Twelve themes ship as six light/dark pairs - Slate, Ember, Tide, Glass, Contrast and Origin - and the picker is in Settings. `slate-dark` is the default.
+
+You can also write your own: a theme file is a built-in with some things changed, so it lists only what it replaces. **Open themes folder** in Settings writes a commented example into `%USERPROFILE%\.testframework\DebugUI	hemes` and opens it.
+
+One thing worth knowing before you reach for the see-through themes: if energy saver is on, or transparency effects are off in Windows, the compositor will not blur and such a theme is dimmed in the picker with the reason in its tooltip. Energy saver is the usual culprit, and it takes the effect away without appearing to change a setting.
+
+See [Documentation/THEMING.md](./Documentation/THEMING.md) for the format, the colour keys, the backdrop recipes and the blur rules.
+
 ## Known Limitations
 
 DebugUI is stable both for watching a live run and for reopening a recorded one. What is genuinely limited:
@@ -73,6 +91,8 @@ The separate-broker redesign once planned was retired: the journal provides the 
 User-facing docs:
 
 - [TestFramework.DebugUI/README.md](./TestFramework.DebugUI/README.md)
+- [Documentation/INSTALLING.md](./Documentation/INSTALLING.md)
+- [Documentation/THEMING.md](./Documentation/THEMING.md)
 - [Documentation/Arc42.md](./Documentation/Arc42.md)
 - [Documentation/ERROR-HANDLING-DEBUGUI.md](./Documentation/ERROR-HANDLING-DEBUGUI.md)
 

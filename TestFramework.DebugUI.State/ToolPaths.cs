@@ -18,12 +18,12 @@ namespace TestFramework.DebugUI.State;
 /// directory is gone at the next update, which is the one moment a user is most likely to notice.
 /// </para>
 /// <para>
-/// The profile root, deliberately not <c>AppData</c>. The launcher ships as an MSIX, and a packaged
-/// application's writes under <c>AppData</c> are virtualized into a per-package store: the log would
-/// not be at the path anyone is asked to send, and a theme file dropped in by hand would be read from
-/// a different folder than the one the tool writes. Outside <c>AppData</c> there is one folder and
-/// every process sees it — which is also what makes Core's journal root usable as a handshake, since
-/// the run that writes it is not this process and is not packaged.
+/// The profile root, deliberately not <c>AppData</c>, which follows the launcher rather than being
+/// decided here: this folder sits beside the journal root, and that one cannot live under
+/// <c>AppData</c> without risking a handshake that fails silently if either side is ever packaged
+/// (<c>LauncherPaths</c> makes the argument). Two of the things kept here want it for their own sake
+/// anyway — the log is at a path somebody is asked to send, and a theme file is one they drop in by
+/// hand — and neither survives being virtualized into a per-package store the person cannot see.
 /// </para>
 /// </remarks>
 public static class ToolPaths

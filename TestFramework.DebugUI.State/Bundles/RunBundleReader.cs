@@ -79,6 +79,8 @@ public static class RunBundleReader
                 $"This bundle was written by a newer version of the tool (format {manifest.FormatVersion}, this reads up to {BundleFormat.Version}).");
         }
 
+        EnsureEveryPathStaysInside(manifest, runsDirectory);
+
         Directory.CreateDirectory(runsDirectory);
 
         List<BundleRun> imported = [];
@@ -152,6 +154,54 @@ public static class RunBundleReader
             Missing = [.. missing]
         };
     }
+
+    /// <summary>
+    /// Refuses the whole bundle when any path its manifest names would land outside the runs folder.
+    /// </summary>
+    /// <remarks>
+    /// Every path the import writes comes from the bundle itself, and a bundle is a file someone else wrote.
+    /// A journal or metadata name must be a plain file name, and an artifact must resolve inside its run's
+    /// artifact folder: <c>..</c>, a rooted path or a drive-relative one is how a manifest used to write a file
+    /// of the sender's choosing anywhere the user could write. Checked for every run before the first file
+    /// lands, so a refused bundle leaves nothing behind that looks like half an import.
+    /// </remarks>
+    private static void EnsureEveryPathStaysInside(BundleManifest manifest, string runsDirectory)
+    {
+        string runs = Path.GetFullPath(runsDirectory);
+
+        foreach (BundleRun run in manifest.Runs)
+        {
+            string journalPath = PlainFileIn(runs, run.JournalFileName, run.Name);
+            PlainFileIn(runs, run.MetadataFileName, run.Name);
+
+            string artifacts = Path.GetFullPath(BundleFormat.ArtifactFolderFor(journalPath));
+
+            foreach (BundleFile file in run.Files)
+            {
+                string relative = file.RelativePath.Replace('/', Path.DirectorySeparatorChar);
+                if (Path.IsPathRooted(relative) || !IsInside(artifacts, Path.GetFullPath(Path.Combine(artifacts, relative))))
+                    throw Outside(run.Name, file.RelativePath);
+            }
+        }
+    }
+
+    private static string PlainFileIn(string runs, string name, string runName)
+    {
+        if (string.IsNullOrWhiteSpace(name) || name is "." or ".." || Path.GetFileName(name) != name)
+            throw Outside(runName, name);
+
+        string path = Path.GetFullPath(Path.Combine(runs, name));
+        if (!IsInside(runs, path))
+            throw Outside(runName, name);
+
+        return path;
+    }
+
+    private static bool IsInside(string folder, string path)
+        => path.StartsWith(Path.TrimEndingDirectorySeparator(folder) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+
+    private static UnreadableException Outside(string runName, string path)
+        => new($"This bundle was not imported: its run '{runName}' names the file '{path}', which would land outside the runs folder. A bundle the tool wrote never does that, so this one was altered or built by hand.");
 
     /// <summary>Reads only the manifest, for showing someone what a bundle holds before taking it in.</summary>
     public static BundleManifest Describe(string bundlePath)

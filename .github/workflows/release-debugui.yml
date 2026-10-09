@@ -17,12 +17,9 @@ name: Release DebugUI
 # launcher also follows a single wrapping folder down, so an archive built the other way still
 # installs — but flat is what this produces and what the tests cover.
 #
-# BEFORE THIS CAN WORK: TestFramework.Core must be on nuget.org. TestFramework.DebugUI.State
-# references it by PackageReference at a version that currently exists only in a local feed above
-# this repository, so `dotnet restore` here fails until that package is published. That is the same
-# unpublished-chain blocker recorded in AUDIT-FINDINGS.md (B5), and it is deliberately not worked
-# around by committing a NuGet.config pointing at a local path — a release built from a feed nobody
-# else has is not a release.
+# Restore uses nuget.org only. Every package this repository references has to be published there
+# before it can be released; a NuGet.config pointing at a local feed is deliberately not committed,
+# because a release built from a feed nobody else has is not a release.
 #
 # Three assets, and they are for different people:
 #

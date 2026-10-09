@@ -1,0 +1,43 @@
+name: Unit Tests
+
+# A fresh checkout is the only build that cannot see files a working copy has collected. Without this
+# the first clean build of the repository is the release tag, and that is where a stale generated
+# global-usings file, left inside a project folder by an old build, was hiding missing usings from
+# every local build.
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unit-tests-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: unit-tests
+    # Windows, because WPF cannot be built anywhere else.
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore TestFramework.DebugUI.slnx
+
+      - name: Build
+        run: dotnet build TestFramework.DebugUI.slnx --configuration Release --no-restore
+
+      - name: Run unit tests
+        run: dotnet test TestFramework.DebugUI.slnx --configuration Release --no-build --logger "trx"

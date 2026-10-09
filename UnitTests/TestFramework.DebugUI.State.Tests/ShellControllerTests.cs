@@ -149,10 +149,17 @@ public sealed class ShellControllerTests(JournalFixture fixture)
         using Harness harness = new(RunsDirectory, scope.PipeName);
         harness.Controller.Start();
 
+        HashSet<string> recordedBefore = [.. SessionIds(harness)];
+
         await RunTimelineAsync("released");
 
+        // Nothing held is also the state before the run's events arrive, so the run has to have been
+        // seen finishing first. The store hears of it through a coalesced dispatch, later than the
+        // controller does, and a check made in between finds no run to open at all.
         await WaitForAsync(
-            () => harness.Controller.RetainedSessionCount == 0,
+            () => harness.Store.GetValue(state => state.Runs.All)
+                      .Any(run => run.IsFinished && !recordedBefore.Contains(run.SessionId))
+                  && harness.Controller.RetainedSessionCount == 0,
             "A finished run's events were still held after its journal had them.");
 
         // And the run is no worse off for it: opening it rebuilds the board from the journal.

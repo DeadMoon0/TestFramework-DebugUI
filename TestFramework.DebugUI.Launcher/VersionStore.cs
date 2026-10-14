@@ -69,7 +69,11 @@ public sealed class VersionStore(LauncherPaths paths)
     /// no folder that <see cref="Installed"/> would report as a working version. The move is the
     /// commit.
     /// </remarks>
-    public async Task InstallAsync(ReleaseInfo release, HttpClient client, IProgress<double>? progress, CancellationToken cancellationToken)
+    public Task InstallAsync(ReleaseInfo release, HttpClient client, IProgress<double>? progress, CancellationToken cancellationToken)
+        => InstallAsync(release, client, progress, StallTimeout, cancellationToken);
+
+    /// <summary>Downloads a release and puts it in place, giving up on a download silent for <paramref name="stallTimeout"/>.</summary>
+    internal async Task InstallAsync(ReleaseInfo release, HttpClient client, IProgress<double>? progress, TimeSpan stallTimeout, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(release);
         ArgumentNullException.ThrowIfNull(client);
@@ -81,17 +85,26 @@ public sealed class VersionStore(LauncherPaths paths)
 
         string archive = Path.Combine(staging, "package.zip");
 
-        await DownloadAsync(release.DownloadUrl, archive, client, progress, cancellationToken).ConfigureAwait(false);
+        await DownloadAsync(release.DownloadUrl, archive, client, progress, stallTimeout, cancellationToken).ConfigureAwait(false);
 
         Verify(archive, release.Digest);
 
         string unpacked = Path.Combine(staging, "app");
         ZipFile.ExtractToDirectory(archive, unpacked, overwriteFiles: true);
 
+        // Checked before the move, because the move is the commit: a folder without the application would be
+        // ignored by Installed(), and the next start would download the same wrong package again, every start.
+        string root = RootOf(unpacked);
+        if (!File.Exists(Path.Combine(root, LauncherPaths.ApplicationExecutable)))
+        {
+            Clear(staging);
+            throw new InvalidDataException($"The release {release.Version} package holds no {LauncherPaths.ApplicationExecutable}, so it was not installed.");
+        }
+
         string destination = paths.FolderFor(release.Version);
         Clear(destination);
         Directory.CreateDirectory(paths.VersionsFolder);
-        Directory.Move(RootOf(unpacked), destination);
+        Directory.Move(root, destination);
 
         Clear(staging);
     }
@@ -145,23 +158,39 @@ public sealed class VersionStore(LauncherPaths paths)
         return folders.Length == 1 ? folders[0] : unpacked;
     }
 
-    private static async Task DownloadAsync(Uri url, string destination, HttpClient client, IProgress<double>? progress, CancellationToken cancellationToken)
+    /// <summary>
+    /// How long a download may go without receiving a byte before it counts as failed.
+    /// </summary>
+    /// <remarks>
+    /// A stall, not a total: a slow connection still finishes, and only one that has stopped is given up on. The
+    /// download used to wait without limit, so a stalled CDN kept the launcher on its progress bar and the installed
+    /// version - the fallback - was never reached.
+    /// </remarks>
+    internal static readonly TimeSpan StallTimeout = TimeSpan.FromSeconds(30);
+
+    private static async Task DownloadAsync(Uri url, string destination, HttpClient client, IProgress<double>? progress, TimeSpan stallTimeout, CancellationToken cancellationToken)
     {
-        using HttpResponseMessage response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+        using CancellationTokenSource stall = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        stall.CancelAfter(stallTimeout);
+
+        using HttpResponseMessage response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, stall.Token).ConfigureAwait(false);
 
         response.EnsureSuccessStatusCode();
 
         long? total = response.Content.Headers.ContentLength;
 
-        await using Stream source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using Stream source = await response.Content.ReadAsStreamAsync(stall.Token).ConfigureAwait(false);
         await using FileStream file = File.Create(destination);
 
         byte[] buffer = new byte[81_920];
         long written = 0;
         int read;
 
-        while ((read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+        while ((read = await source.ReadAsync(buffer, stall.Token).ConfigureAwait(false)) > 0)
         {
+            // Every byte that arrives restarts the clock.
+            stall.CancelAfter(stallTimeout);
+
             await file.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
             written += read;
 

@@ -28,7 +28,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        Loaded += async (_, _) => await RunAsync().ConfigureAwait(true);
+        Loaded += async (_, _) => await RunOrSayWhyNotAsync().ConfigureAwait(true);
     }
 
     /// <summary>How long a started version is watched before it counts as having come up.</summary>
@@ -45,6 +45,26 @@ public partial class MainWindow : Window
     /// </para>
     /// </remarks>
     public static readonly TimeSpan Grace = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// Runs the launcher, and says what went wrong rather than vanishing when something nobody planned for does.
+    /// </summary>
+    /// <remarks>
+    /// An exception escaping an async event handler ends the process without a word: the window closes and the
+    /// person clicks the icon again. Creating the journal folder on a locked profile, reading a damaged launch
+    /// record - anything not already handled - ends here, on the window.
+    /// </remarks>
+    private async Task RunOrSayWhyNotAsync()
+    {
+        try
+        {
+            await RunAsync().ConfigureAwait(true);
+        }
+        catch (Exception e)
+        {
+            Stop($"The launcher stopped on something it did not expect: {e.GetType().Name}: {e.Message}");
+        }
+    }
 
     private async Task RunAsync()
     {
@@ -201,7 +221,7 @@ public partial class MainWindow : Window
 
             return true;
         }
-        catch (Exception e) when (e is HttpRequestException or IOException or UnauthorizedAccessException or InvalidDataException)
+        catch (Exception e) when (e is HttpRequestException or IOException or UnauthorizedAccessException or InvalidDataException or OperationCanceledException)
         {
             pbProgress.IsIndeterminate = true;
 

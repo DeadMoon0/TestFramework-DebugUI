@@ -117,9 +117,9 @@ public sealed class GitHubReleaseSource : IReleaseSource, IDisposable
     /// Finds the application package among a release's assets.
     /// </summary>
     /// <remarks>
-    /// The canonical name first. The fallback to any single zip exists for a release cut before the
-    /// name was settled, and deliberately declines to choose when there is more than one — guessing
-    /// there is how the wrong application gets installed silently.
+    /// The canonical name only. There used to be a fallback to "any single zip", and a release publishes two - the
+    /// application and the launcher - so the fallback fired exactly when the application's upload had failed, and
+    /// installed the launcher's package as the application, again on every start.
     /// </remarks>
     private static Asset? PackageIn(JArray assets)
     {
@@ -133,12 +133,7 @@ public sealed class GitHubReleaseSource : IReleaseSource, IDisposable
                 .Where(asset => asset.Url.Length > 0 && asset.Url.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
         ];
 
-        Asset? named = archives.FirstOrDefault(asset => string.Equals(asset.Name, PackageAsset, StringComparison.OrdinalIgnoreCase));
-
-        if (named is not null)
-            return named;
-
-        return archives.Count == 1 ? archives[0] : null;
+        return archives.FirstOrDefault(asset => string.Equals(asset.Name, PackageAsset, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <inheritdoc />

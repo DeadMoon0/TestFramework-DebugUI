@@ -16,7 +16,7 @@ public class ReleaseReadingTests
     public void AReleaseIsReadFromItsTagAndItsPackage()
     {
         ReleaseInfo release = GitHubReleaseSource.Read("""
-            { "tag_name": "v0.5.0", "assets": [ { "browser_download_url": "https://example.invalid/DebugUI-0.5.0.zip" } ] }
+            { "tag_name": "v0.5.0", "assets": [ { "name": "TestFramework.DebugUI.zip", "browser_download_url": "https://example.invalid/DebugUI-0.5.0.zip" } ] }
             """)!;
 
         Assert.Equal(Version.Parse("0.5.0"), release.Version);
@@ -66,10 +66,21 @@ public class ReleaseReadingTests
         ReleaseInfo release = GitHubReleaseSource.Read("""
             { "tag_name": "v0.5.0", "assets": [
                 { "name": "checksums.txt", "browser_download_url": "https://example.invalid/checksums.txt" },
-                { "name": "DebugUI.zip", "browser_download_url": "https://example.invalid/DebugUI.zip" } ] }
+                { "name": "TestFramework.DebugUI.zip", "browser_download_url": "https://example.invalid/DebugUI.zip" } ] }
             """)!;
 
         Assert.EndsWith("DebugUI.zip", release.DownloadUrl.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AReleaseWhoseOnlyZipIsNotTheApplication_OffersNothingToInstall()
+    {
+        // The launcher's package alone is what a release looks like when the application's upload failed. The old
+        // fallback took "any single zip" and installed it as the application.
+        Assert.Null(GitHubReleaseSource.Read("""
+            { "tag_name": "v0.5.0", "assets": [
+                { "name": "TestFramework.DebugUI.Launcher.zip", "browser_download_url": "https://example.invalid/launcher.zip" } ] }
+            """));
     }
 
     [Fact]

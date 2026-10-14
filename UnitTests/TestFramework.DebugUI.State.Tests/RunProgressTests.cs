@@ -269,6 +269,40 @@ public class RunProgressTests : IDisposable
     }
 
     [Fact]
+    public void AnEventThatArrivesTwice_IsShownAndCountedOnce()
+    {
+        // What selecting a live run used to do: the newest events reached the board from the ingest queue and
+        // again from the run's kept history, and a failed assertion was counted twice.
+        StateStore<MainState> store = CreateStore();
+        DebugEnvelope init = Init("s1", "First");
+        DebugEnvelope failed = Assertion("s1", succeeded: false);
+
+        store.Dispatch(MainActions.IngestBatch, Batch(init, failed));
+        store.Dispatch(MainActions.IngestBatch, Batch(failed));
+
+        Assert.Equal(1, Run(store, "s1").Progress!.AssertionsFailed);
+        Assert.Single(store.GetValue(state => state.Board.ActiveRun.Assertions));
+    }
+
+    [Fact]
+    public void SelectingARunAgain_ShowsItsEventsOnTheFreshBoard_WithoutCountingThemAgain()
+    {
+        StateStore<MainState> store = CreateStore();
+        DebugEnvelope init = Init("s1", "First");
+        DebugEnvelope passed = Assertion("s1", succeeded: true);
+
+        store.Dispatch(MainActions.IngestBatch, Batch(init, passed, Init("s2", "Second")));
+        store.Dispatch(MainActions.SelectRun, "s2");
+        store.Dispatch(MainActions.SelectRun, "s1");
+
+        // The replay a selection triggers: the same events, by the same numbers.
+        store.Dispatch(MainActions.IngestBatch, Batch(init, passed));
+
+        Assert.Single(store.GetValue(state => state.Board.ActiveRun.Assertions));
+        Assert.Equal(1, Run(store, "s1").Progress!.AssertionsPassed);
+    }
+
+    [Fact]
     public void FinishingRecordsHowLongTheRunTook()
     {
         StateStore<MainState> store = CreateStore();
@@ -284,7 +318,10 @@ public class RunProgressTests : IDisposable
 
     private static ImmutableList<DebugEnvelope> Batch(params DebugEnvelope[] envelopes) => [.. envelopes];
 
-    private static DebugEnvelope Wrap(IPipeSignal signal) => DebugEnvelopeCodec.Wrap(signal, 1);
+    private static long sequence;
+
+    // Numbered upward, as every producer numbers them: the reducer treats a number it has already seen as a repeat.
+    private static DebugEnvelope Wrap(IPipeSignal signal) => DebugEnvelopeCodec.Wrap(signal, System.Threading.Interlocked.Increment(ref sequence));
 
     private static DebugEnvelope Init(string sessionId, string name) => Wrap(new PipeInitTimelineRunSignal
     {

@@ -260,6 +260,11 @@ public sealed class ShellController : IShellCommands, IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ObjectDisposedException.ThrowIf(disposed, this);
 
+        // Whatever the reader has queued goes in first, while another run is still on the board. Otherwise the
+        // queue's newest events would land on the fresh board ahead of the replayed history, and the history -
+        // older by sequence - would be dropped as already shown.
+        ingest.Flush();
+
         store.Dispatch(MainActions.SelectRun, sessionId);
 
         if (histories.TryGetValue(sessionId, out RunHistory? history))

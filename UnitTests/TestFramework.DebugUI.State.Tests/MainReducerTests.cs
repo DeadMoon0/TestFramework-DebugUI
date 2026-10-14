@@ -200,7 +200,10 @@ public class MainReducerTests : IDisposable
 
     private static ImmutableList<DebugEnvelope> Batch(params DebugEnvelope[] envelopes) => [.. envelopes];
 
-    private static DebugEnvelope Wrap(IPipeSignal signal) => DebugEnvelopeCodec.Wrap(signal, 1);
+    private static long sequence;
+
+    // Numbered upward, as every producer numbers them: the reducer treats a number it has already seen as a repeat.
+    private static DebugEnvelope Wrap(IPipeSignal signal) => DebugEnvelopeCodec.Wrap(signal, System.Threading.Interlocked.Increment(ref sequence));
 
     private static DebugEnvelope Init(string sessionId, string name) => Wrap(new PipeInitTimelineRunSignal
     {

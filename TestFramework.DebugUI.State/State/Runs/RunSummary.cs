@@ -147,6 +147,15 @@ public sealed record RunSummary
     public RunProgress? Progress { get; init; }
 
     /// <summary>
+    /// Gets the sequence number of the last event counted into this summary.
+    /// </summary>
+    /// <remarks>
+    /// Sequence numbers rise per session, so an event at or below this one has been counted already - a replay, or
+    /// the same event arriving by the queue and by the replay - and counting it again would double an assertion.
+    /// </remarks>
+    public long? LastSeq { get; init; }
+
+    /// <summary>
     /// Gets how the run stands, in the one word a list needs.
     /// </summary>
     /// <remarks>

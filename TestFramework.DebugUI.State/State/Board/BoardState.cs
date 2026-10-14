@@ -20,4 +20,15 @@ public record struct BoardState()
 
     /// <summary>How this run stands against the last run of the same test that passed.</summary>
     public ComparisonState Comparison = new();
+
+    /// <summary>
+    /// The sequence number of the last event projected onto this board, or <see langword="null"/> before the first.
+    /// </summary>
+    /// <remarks>
+    /// Events can reach the board twice: selecting a live run replays the events it kept, and the newest of those may
+    /// also still be on their way through the ingest queue. Projections append, so a second copy doubles log lines,
+    /// assertion entries and widgets. A fresh board - which is what selecting a run makes - starts without one, so a
+    /// replay is projected.
+    /// </remarks>
+    public long? LastSeq = null;
 }

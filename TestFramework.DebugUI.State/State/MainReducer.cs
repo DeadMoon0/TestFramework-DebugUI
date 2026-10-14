@@ -84,9 +84,13 @@ public sealed class MainReducer : Reducer<MainState>
         if (!string.Equals(state.Runs.SelectedSessionId, envelope.SessionId, StringComparison.Ordinal))
             return state;
 
+        // Already on this board: the transport's own sequence says so.
+        if (state.Board.LastSeq is { } projected && envelope.Seq <= projected)
+            return state;
+
         return state with
         {
-            Board = state.Board with { ActiveRun = RunProjection.Apply(state.Board.ActiveRun, signal) }
+            Board = state.Board with { ActiveRun = RunProjection.Apply(state.Board.ActiveRun, signal), LastSeq = envelope.Seq }
         };
     }
 
@@ -106,6 +110,7 @@ public sealed class MainReducer : Reducer<MainState>
                 StartedAtUtc = envelope.AtUtc,
                 IsLive = true,
                 FullyQualifiedName = init.Identity?.FullyQualifiedName,
+                LastSeq = envelope.Seq,
                 ProjectPath = ProjectOf(init),
                 ProjectFilePath = init.Identity?.ProjectFilePath,
                 CanRerun = init.Identity?.CanRerun ?? false,
@@ -140,6 +145,11 @@ public sealed class MainReducer : Reducer<MainState>
         }
 
         RunSummary existing = state.Runs.All[index];
+
+        // Counted already. Without this a replayed assertion was tallied a second time.
+        if (existing.LastSeq is { } counted && envelope.Seq <= counted)
+            return state;
+
         RunSummary updated = signal switch
         {
             PipeTimelineRunFinishedSignal => existing with
@@ -176,9 +186,9 @@ public sealed class MainReducer : Reducer<MainState>
             _ => existing
         };
 
-        return ReferenceEquals(existing, updated)
-            ? state
-            : state with { Runs = state.Runs with { All = state.Runs.All.SetItem(index, updated) } };
+        updated = updated with { LastSeq = envelope.Seq };
+
+        return state with { Runs = state.Runs with { All = state.Runs.All.SetItem(index, updated) } };
     }
 
     /// <summary>

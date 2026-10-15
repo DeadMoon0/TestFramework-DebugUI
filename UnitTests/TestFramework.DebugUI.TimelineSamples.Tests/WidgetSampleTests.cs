@@ -1,3 +1,6 @@
+using System;
+using System.IO;
+using System.Threading.Tasks;
 using TestFramework.Core.Debugger;
 using TestFramework.Core.Steps;
 using TestFramework.Core.Steps.Options;

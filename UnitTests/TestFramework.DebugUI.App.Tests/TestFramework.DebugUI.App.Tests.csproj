@@ -8,9 +8,6 @@
 		-->
 		<TargetFramework>net8.0-windows10.0.20348.0</TargetFramework>
 		<UseWPF>true</UseWPF>
-		<Nullable>enable</Nullable>
-		<ImplicitUsings>disable</ImplicitUsings>
-		<TreatWarningsAsErrors>True</TreatWarningsAsErrors>
 		<IsPackable>false</IsPackable>
 		<IsTestProject>true</IsTestProject>
 	</PropertyGroup>

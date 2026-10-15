@@ -1,0 +1,14 @@
+<Project>
+
+  <!--
+    The family's compiler contract, once for every project here. TreatWarningsAsErrors used to be set per project
+    and only under 'Debug|AnyCPU' / 'Release|AnyCPU' conditions, so any other configuration or platform built with
+    warnings allowed - the shape every package repository's props file exists to remove.
+  -->
+  <PropertyGroup>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

@@ -35,7 +35,7 @@ Use this order if you are new to the debugging surface:
 The normal workflow is:
 
 1. Start the DebugUI app.
-2. Run a timeline with the built-in debugger output path enabled.
+2. Run a timeline. Core's built-in pipe debugger is on by default, so there is nothing to enable.
 3. Inspect the active run tree and continue breakpoints from the window when needed.
 
 The runtime already knows the default pipe name. You only need to override it when multiple debugger sessions must stay isolated.

@@ -682,20 +682,19 @@ public sealed class ShellController : IShellCommands, IDisposable
     }
 
     /// <summary>
-    /// Resolves where recorded runs live, tolerating not being able to.
-    /// </summary>
-    /// <remarks>
-    /// A machine with no journal root is the ordinary case before the tool has been installed. The
-    /// window still opens and still watches live runs; there is simply nothing recorded to list.
-    /// </remarks>
-    /// <summary>
     /// The folder runs are recorded in, or null when it cannot be determined.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// A machine with no journal root is the ordinary case before the tool has been installed. The
+    /// window still opens and still watches live runs; there is simply nothing recorded to list.
+    /// </para>
+    /// <para>
     /// Public because the effects need the same answer: <see cref="ComparisonEffects"/> reads earlier
     /// runs out of this folder, and it is built when the store is, before any controller exists. Two
     /// separate defaults would mean the comparison reading a different folder than the one the runs
     /// were listed from.
+    /// </para>
     /// </remarks>
     public static string? DefaultRunsDirectory()
     {

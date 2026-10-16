@@ -10,7 +10,7 @@ using TestFramework.DebugUI.State.Diagnostics;
 namespace TestFramework.DebugUI.State.Theming;
 
 /// <summary>
-/// The themes available to the tool: the ten compiled in, plus whatever is in the themes folder.
+/// The themes available to the tool: the ones compiled in, plus whatever is in the themes folder.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -21,7 +21,7 @@ namespace TestFramework.DebugUI.State.Theming;
 /// <para>
 /// <b>Nothing here throws at the caller.</b> A theme is a preference. An unreadable folder, a file that
 /// is not JSON, a theme naming a base that does not exist — each of those resolves to a reported line
-/// and the ten built-ins, because none of them is worth a tool that will not start.
+/// and the built-ins, because none of them is worth a tool that will not start.
 /// </para>
 /// </remarks>
 public sealed class ThemeStore

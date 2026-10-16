@@ -38,14 +38,16 @@ trusted signature, with no equivalent door.
 Program and data are kept apart on purpose:
 
 ```
-%LOCALAPPDATA%\Programs\TestFramework      the launcher. Installed, upgraded and removed by the installer.
-%USERPROFILE%\.testframework\versions      application versions the launcher downloaded.
-%USERPROFILE%\.testframework\Debug         run journals.
-%USERPROFILE%\.testframework\DebugUI       settings, themes and the tool's log.
+%LOCALAPPDATA%\Programs\TestFramework         the launcher. Installed, upgraded and removed by the installer.
+%USERPROFILE%\.testframework\versions         application versions the launcher downloaded.
+%USERPROFILE%\.testframework\launcher.json    the version the launcher last started, and any that failed to start.
+%USERPROFILE%\.testframework\recording.armed  the launcher's note that it has switched recording on once.
+%USERPROFILE%\.testframework\Debug            run journals.
+%USERPROFILE%\.testframework\DebugUI          settings, themes and the tool's log.
 ```
 
 Uninstalling takes the program and the downloaded versions. It leaves your settings, custom themes and
-recorded runs alone.
+recorded runs alone, and the launcher's two small files beside them.
 
 Two notes on those paths:
 

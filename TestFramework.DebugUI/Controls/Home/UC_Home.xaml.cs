@@ -76,10 +76,10 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
     /// </remarks>
     private string shape = string.Empty;
 
-    /// <summary>Creates the page and binds it.</summary>
-        /// <summary>What this page can ask the shell to do.</summary>
+    /// <summary>What this page can ask the shell to do.</summary>
     private readonly IShellCommands commands;
 
+    /// <summary>Creates the page and binds it.</summary>
     /// <param name="commands">What this page can ask the shell to do.</param>
     public UC_Home(IShellCommands commands)
     {

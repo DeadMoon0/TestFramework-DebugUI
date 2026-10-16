@@ -99,58 +99,78 @@ public sealed class MainReducer : Reducer<MainState>
         int index = state.Runs.All.FindIndex(run => string.Equals(run.SessionId, envelope.SessionId, StringComparison.Ordinal));
 
         if (index < 0)
+            return signal is PipeInitTimelineRunSignal init ? AddLiveRun(state, envelope, init) : state;
+
+        return UpdateRun(state, envelope, signal, index);
+    }
+
+    /// <summary>
+    /// Lists a run the UI has not seen before, and shows it when nothing else should be on screen.
+    /// </summary>
+    private static MainState AddLiveRun(MainState state, DebugEnvelope envelope, PipeInitTimelineRunSignal init)
+    {
+        RunSummary summary = new()
         {
-            if (signal is not PipeInitTimelineRunSignal init)
-                return state;
+            SessionId = envelope.SessionId,
+            Name = init.Name,
+            StartedAtUtc = envelope.AtUtc,
+            IsLive = true,
+            FullyQualifiedName = init.Identity?.FullyQualifiedName,
+            LastSeq = envelope.Seq,
+            ProjectPath = ProjectOf(init),
+            ProjectFilePath = init.Identity?.ProjectFilePath,
+            CanRerun = init.Identity?.CanRerun ?? false,
+            Source = SourceLocation.From(init.Identity?.SourceFilePath, init.Identity?.SourceLineNumber ?? 0),
 
-            RunSummary summary = new()
+            // The run says how big it is up front, so the home page can show "3 of 14" from the
+            // first step rather than a count that grows as it goes.
+            Progress = RunProgress.Empty with { Steps = DeclaredSteps(init) }
+        };
+
+        // Newest first, so the picker's default order needs no sorting.
+        state = state with { Runs = state.Runs with { All = state.Runs.All.Insert(0, summary) } };
+
+        // Nothing selected yet means this is the first run the UI has seen; showing it beats
+        // showing an empty board and making the user pick.
+        if (state.Runs.SelectedSessionId is null)
+            return state with { Runs = state.Runs with { SelectedSessionId = envelope.SessionId } };
+
+        // The run someone asked for by pressing re-run. They are waiting to watch it, so it is
+        // shown rather than filed behind the run already on screen — which is the one they just
+        // decided was not enough.
+        if (state.Shell.AwaitedRerun is { } awaited && string.Equals(awaited, summary.Test, StringComparison.Ordinal))
+        {
+            return state with
             {
-                SessionId = envelope.SessionId,
-                Name = init.Name,
-                StartedAtUtc = envelope.AtUtc,
-                IsLive = true,
-                FullyQualifiedName = init.Identity?.FullyQualifiedName,
-                LastSeq = envelope.Seq,
-                ProjectPath = ProjectOf(init),
-                ProjectFilePath = init.Identity?.ProjectFilePath,
-                CanRerun = init.Identity?.CanRerun ?? false,
-                Source = SourceLocation.From(init.Identity?.SourceFilePath, init.Identity?.SourceLineNumber ?? 0),
-
-                // The run says how big it is up front, so the home page can show "3 of 14" from the
-                // first step rather than a count that grows as it goes.
-                Progress = RunProgress.Empty with { Steps = DeclaredSteps(init) }
+                Runs = state.Runs with { SelectedSessionId = envelope.SessionId },
+                Shell = state.Shell with { AwaitedRerun = null }
             };
-
-            // Newest first, so the picker's default order needs no sorting.
-            state = state with { Runs = state.Runs with { All = state.Runs.All.Insert(0, summary) } };
-
-            // Nothing selected yet means this is the first run the UI has seen; showing it beats
-            // showing an empty board and making the user pick.
-            if (state.Runs.SelectedSessionId is null)
-                return state with { Runs = state.Runs with { SelectedSessionId = envelope.SessionId } };
-
-            // The run someone asked for by pressing re-run. They are waiting to watch it, so it is
-            // shown rather than filed behind the run already on screen — which is the one they just
-            // decided was not enough.
-            if (state.Shell.AwaitedRerun is { } awaited && string.Equals(awaited, summary.Test, StringComparison.Ordinal))
-            {
-                return state with
-                {
-                    Runs = state.Runs with { SelectedSessionId = envelope.SessionId },
-                    Shell = state.Shell with { AwaitedRerun = null }
-                };
-            }
-
-            return state;
         }
 
+        return state;
+    }
+
+    /// <summary>
+    /// Folds one event into the summary of a run that is already listed.
+    /// </summary>
+    private static MainState UpdateRun(MainState state, DebugEnvelope envelope, IPipeSignal signal, int index)
+    {
         RunSummary existing = state.Runs.All[index];
 
         // Counted already. Without this a replayed assertion was tallied a second time.
         if (existing.LastSeq is { } counted && envelope.Seq <= counted)
             return state;
 
-        RunSummary updated = signal switch
+        RunSummary updated = Summarise(existing, envelope, signal) with { LastSeq = envelope.Seq };
+
+        return state with { Runs = state.Runs with { All = state.Runs.All.SetItem(index, updated) } };
+    }
+
+    /// <summary>
+    /// What a listed run's summary says once one more of its events is known.
+    /// </summary>
+    private static RunSummary Summarise(RunSummary existing, DebugEnvelope envelope, IPipeSignal signal)
+        => signal switch
         {
             PipeTimelineRunFinishedSignal => existing with
             {
@@ -185,11 +205,6 @@ public sealed class MainReducer : Reducer<MainState>
             },
             _ => existing
         };
-
-        updated = updated with { LastSeq = envelope.Seq };
-
-        return state with { Runs = state.Runs with { All = state.Runs.All.SetItem(index, updated) } };
-    }
 
     /// <summary>
     /// Folds one step transition into a run's running count.

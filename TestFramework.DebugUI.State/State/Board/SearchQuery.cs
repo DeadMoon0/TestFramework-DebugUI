@@ -135,91 +135,12 @@ public sealed class SearchQuery
         if (string.IsNullOrWhiteSpace(text))
             return Empty;
 
-        ImmutableList<SearchPattern>.Builder terms = ImmutableList.CreateBuilder<SearchPattern>();
-        HashSet<SearchScope> scopes = [];
-        HashSet<SearchCondition> conditions = [];
-
-        SearchPattern? stage = null;
-        SearchPattern? step = null;
-        SearchPattern? emitter = null;
-        DebugLogLevel? level = null;
-        string? problem = null;
+        Reading reading = new();
 
         foreach (string token in Tokenize(text))
-        {
-            int colon = token.IndexOf(':', StringComparison.Ordinal);
-            string prefix = colon > 0 ? token[..colon].ToLowerInvariant() : string.Empty;
-            string rest = colon > 0 ? token[(colon + 1)..] : string.Empty;
+            reading.Take(token);
 
-            switch (prefix)
-            {
-                // A prefix this understands with a value it does not is a typo, and it is said so. Falling
-                // through to treat "in:stpes" as a word to search for would return nothing and look like the
-                // run simply did not contain it.
-                case "in":
-                    if (TryReadScope(rest, out SearchScope scope))
-                        scopes.Add(scope);
-                    else
-                        problem ??= $"\"{rest}\" is not something to search in. Try steps, logs, values or checks.";
-
-                    continue;
-
-                case "is":
-                    if (TryReadCondition(rest, out SearchCondition condition))
-                        conditions.Add(condition);
-                    else
-                        problem ??= $"\"{rest}\" is not a condition. Try failed, retried, slower, faster, changed or held.";
-
-                    continue;
-
-                case "level":
-                    if (TryReadLevel(rest, out DebugLogLevel read))
-                    {
-                        level = read;
-
-                        // Asking for a level is asking about log lines. Leaving the other kinds in would
-                        // return every step in the run beside the three lines that were actually wanted.
-                        scopes.Add(SearchScope.Logs);
-                    }
-                    else
-                    {
-                        problem ??= $"\"{rest}\" is not a log level. A run reports information, warning and error.";
-                    }
-
-                    continue;
-
-                case "stage" when Read(rest, ref problem) is { } pattern:
-                    stage = pattern;
-                    continue;
-
-                case "step" when Read(rest, ref problem) is { } pattern:
-                    step = pattern;
-                    continue;
-
-                case "event" when Read(rest, ref problem) is { } pattern:
-                    emitter = pattern;
-                    scopes.Add(SearchScope.Logs);
-                    continue;
-
-                default:
-                    if (Read(token, ref problem) is { } word)
-                        terms.Add(word);
-
-                    continue;
-            }
-        }
-
-        return new SearchQuery
-        {
-            Terms = terms.ToImmutable(),
-            Scopes = [.. scopes],
-            Conditions = [.. conditions],
-            Stage = stage,
-            Step = step,
-            Event = emitter,
-            Level = level,
-            Problem = problem
-        };
+        return reading.ToQuery();
     }
 
     /// <summary>Every filter prefix, for the help the bar shows when nothing has been typed.</summary>
@@ -359,5 +280,108 @@ public sealed class SearchQuery
 
         if (token.Length > 0)
             yield return token.ToString();
+    }
+    /// <summary>
+    /// What has been understood of a search so far, one token at a time.
+    /// </summary>
+    private sealed class Reading
+    {
+        private readonly ImmutableList<SearchPattern>.Builder terms = ImmutableList.CreateBuilder<SearchPattern>();
+        private readonly HashSet<SearchScope> scopes = [];
+        private readonly HashSet<SearchCondition> conditions = [];
+
+        private SearchPattern? stage;
+        private SearchPattern? step;
+        private SearchPattern? emitter;
+        private DebugLogLevel? level;
+        private string? problem;
+
+        internal void Take(string token)
+        {
+            int colon = token.IndexOf(':', StringComparison.Ordinal);
+            string prefix = colon > 0 ? token[..colon].ToLowerInvariant() : string.Empty;
+            string rest = colon > 0 ? token[(colon + 1)..] : string.Empty;
+
+            switch (prefix)
+            {
+                // A prefix this understands with a value it does not is a typo, and it is said so. Falling
+                // through to treat "in:stpes" as a word to search for would return nothing and look like the
+                // run simply did not contain it.
+                case "in":
+                    TakeScope(rest);
+                    return;
+
+                case "is":
+                    TakeCondition(rest);
+                    return;
+
+                case "level":
+                    TakeLevel(rest);
+                    return;
+
+                case "stage" when Read(rest, ref problem) is { } pattern:
+                    stage = pattern;
+                    return;
+
+                case "step" when Read(rest, ref problem) is { } pattern:
+                    step = pattern;
+                    return;
+
+                case "event" when Read(rest, ref problem) is { } pattern:
+                    emitter = pattern;
+                    scopes.Add(SearchScope.Logs);
+                    return;
+
+                default:
+                    if (Read(token, ref problem) is { } word)
+                        terms.Add(word);
+
+                    return;
+            }
+        }
+
+        internal SearchQuery ToQuery() => new()
+        {
+            Terms = terms.ToImmutable(),
+            Scopes = [.. scopes],
+            Conditions = [.. conditions],
+            Stage = stage,
+            Step = step,
+            Event = emitter,
+            Level = level,
+            Problem = problem
+        };
+
+        private void TakeScope(string rest)
+        {
+            if (TryReadScope(rest, out SearchScope scope))
+                scopes.Add(scope);
+            else
+                problem ??= $"\"{rest}\" is not something to search in. Try steps, logs, values or checks.";
+        }
+
+        private void TakeCondition(string rest)
+        {
+            if (TryReadCondition(rest, out SearchCondition condition))
+                conditions.Add(condition);
+            else
+                problem ??= $"\"{rest}\" is not a condition. Try failed, retried, slower, faster, changed or held.";
+        }
+
+        private void TakeLevel(string rest)
+        {
+            if (TryReadLevel(rest, out DebugLogLevel read))
+            {
+                level = read;
+
+                // Asking for a level is asking about log lines. Leaving the other kinds in would
+                // return every step in the run beside the three lines that were actually wanted.
+                scopes.Add(SearchScope.Logs);
+            }
+            else
+            {
+                problem ??= $"\"{rest}\" is not a log level. A run reports information, warning and error.";
+            }
+        }
     }
 }

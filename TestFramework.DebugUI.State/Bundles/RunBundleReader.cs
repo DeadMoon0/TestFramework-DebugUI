@@ -73,12 +73,7 @@ public static class RunBundleReader
 
         BundleManifest manifest = ReadManifest(archive);
 
-        if (manifest.FormatVersion > BundleFormat.Version)
-        {
-            throw new UnreadableException(
-                $"This bundle was written by a newer version of the tool (format {manifest.FormatVersion}, this reads up to {BundleFormat.Version}).");
-        }
-
+        EnsureFormatIsReadable(manifest);
         EnsureEveryPathStaysInside(manifest, runsDirectory);
 
         Directory.CreateDirectory(runsDirectory);
@@ -99,50 +94,8 @@ public static class RunBundleReader
                 continue;
             }
 
-            string folder = BundleFormat.FolderFor(run.SessionId);
-
-            if (Entry(archive, $"{folder}/{run.JournalFileName}") is not { } journalEntry
-                || Entry(archive, $"{folder}/{run.MetadataFileName}") is not { } metadataEntry)
-            {
-                continue;
-            }
-
-            // The artifacts land first. A run that appears in the list before its files are beside it is a run
-            // whose values will not open for as long as the unpacking takes.
-            string artifacts = BundleFormat.ArtifactFolderFor(journalPath);
-
-            foreach (BundleFile file in run.Files)
-            {
-                if (file.WasMissing)
-                {
-                    missing.Add(file.RelativePath);
-                    continue;
-                }
-
-                if (Entry(archive, $"{folder}/{file.RelativePath}") is not { } fileEntry)
-                {
-                    missing.Add(file.RelativePath);
-                    continue;
-                }
-
-                string destination = Path.Combine(artifacts, file.RelativePath.Replace('/', Path.DirectorySeparatorChar));
-
-                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                fileEntry.ExtractToFile(destination, overwrite: true);
-
-                if (!Matches(destination, file.ContentHash))
-                    corrupt.Add(file.RelativePath);
-            }
-
-            // Before the journal is listed, like the artifacts: a run that appears with its marks arriving a
-            // moment later would open showing an empty board somebody had annotated.
-            if (Entry(archive, $"{folder}/{BundleFormat.AnnotationsFile}") is { } annotationsEntry)
-                annotationsEntry.ExtractToFile(Annotations.AnnotationStore.PathFor(journalPath), overwrite: true);
-
-            metadataEntry.ExtractToFile(metadataPath, overwrite: true);
-            journalEntry.ExtractToFile(journalPath, overwrite: true);
-
-            imported.Add(run);
+            if (TryImportRun(archive, run, metadataPath, journalPath, corrupt, missing))
+                imported.Add(run);
         }
 
         return new Result
@@ -153,6 +106,81 @@ public static class RunBundleReader
             Corrupt = [.. corrupt],
             Missing = [.. missing]
         };
+    }
+
+    private static void EnsureFormatIsReadable(BundleManifest manifest)
+    {
+        if (manifest.FormatVersion > BundleFormat.Version)
+        {
+            throw new UnreadableException(
+                $"This bundle was written by a newer version of the tool (format {manifest.FormatVersion}, this reads up to {BundleFormat.Version}).");
+        }
+    }
+
+    /// <summary>
+    /// Unpacks one run beside the others, reporting whether the bundle carried enough of it to list.
+    /// </summary>
+    private static bool TryImportRun(
+        ZipArchive archive,
+        BundleRun run,
+        string metadataPath,
+        string journalPath,
+        List<string> corrupt,
+        List<string> missing)
+    {
+        string folder = BundleFormat.FolderFor(run.SessionId);
+
+        if (Entry(archive, $"{folder}/{run.JournalFileName}") is not { } journalEntry
+            || Entry(archive, $"{folder}/{run.MetadataFileName}") is not { } metadataEntry)
+        {
+            return false;
+        }
+
+        // The artifacts land first. A run that appears in the list before its files are beside it is a run
+        // whose values will not open for as long as the unpacking takes.
+        ExtractArtifacts(archive, run, folder, BundleFormat.ArtifactFolderFor(journalPath), corrupt, missing);
+
+        // Before the journal is listed, like the artifacts: a run that appears with its marks arriving a
+        // moment later would open showing an empty board somebody had annotated.
+        if (Entry(archive, $"{folder}/{BundleFormat.AnnotationsFile}") is { } annotationsEntry)
+            annotationsEntry.ExtractToFile(Annotations.AnnotationStore.PathFor(journalPath), overwrite: true);
+
+        metadataEntry.ExtractToFile(metadataPath, overwrite: true);
+        journalEntry.ExtractToFile(journalPath, overwrite: true);
+
+        return true;
+    }
+
+    private static void ExtractArtifacts(
+        ZipArchive archive,
+        BundleRun run,
+        string folder,
+        string artifacts,
+        List<string> corrupt,
+        List<string> missing)
+    {
+        foreach (BundleFile file in run.Files)
+        {
+            if (file.WasMissing)
+            {
+                missing.Add(file.RelativePath);
+                continue;
+            }
+
+            if (Entry(archive, $"{folder}/{file.RelativePath}") is not { } fileEntry)
+            {
+                missing.Add(file.RelativePath);
+                continue;
+            }
+
+            string destination = Path.Combine(artifacts, file.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            fileEntry.ExtractToFile(destination, overwrite: true);
+
+            if (!Matches(destination, file.ContentHash))
+                corrupt.Add(file.RelativePath);
+        }
     }
 
     /// <summary>

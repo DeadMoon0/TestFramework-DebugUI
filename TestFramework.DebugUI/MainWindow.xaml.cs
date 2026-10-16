@@ -9,6 +9,7 @@ using TestFramework.DebugUI.Controls.Board;
 using TestFramework.DebugUI.Controls.Dock;
 using TestFramework.DebugUI.Controls.Feed;
 using TestFramework.DebugUI.Controls.Search;
+using TestFramework.DebugUI.Controls.Settings;
 using TestFramework.DebugUI.Controls.Share;
 using TestFramework.DebugUI.Docking;
 using TestFramework.DebugUI.State;
@@ -64,6 +65,9 @@ public partial class MainWindow : Window
 
     /// <summary>What travels with a shared run, in <c>bExportSlot</c>.</summary>
     private readonly UC_Export ucExport;
+
+    /// <summary>The tool's own settings and the machine switches, in <c>bSettingsSlot</c>.</summary>
+    private readonly UC_Settings ucSettings;
 
     private readonly SettingsStore settings = new();
 
@@ -187,6 +191,9 @@ public partial class MainWindow : Window
 
         ucExport = new UC_Export(context) { Visibility = Visibility.Collapsed };
         bExportSlot.Child = ucExport;
+
+        ucSettings = new UC_Settings(breakpoints, recording) { Visibility = Visibility.Collapsed };
+        bSettingsSlot.Child = ucSettings;
 
         WireBoard();
         WireRunBar();
@@ -430,7 +437,7 @@ public partial class MainWindow : Window
         panelStrip.Rebuild();
     }
 
-    /// <summary>Saves the breakpoints as they change, and gives the settings panel what it switches.</summary>
+    /// <summary>Saves the breakpoints as they change, and follows what the settings panel switches.</summary>
     private void WireSettings()
     {
         // Saved on change rather than on exit. A tool that is killed - and this one is attached to
@@ -438,10 +445,8 @@ public partial class MainWindow : Window
         breakpoints.Changed += SaveBreakpoints;
 
         ucSettings.Closed += () => ucSettings.Visibility = Visibility.Collapsed;
-        ucSettings.UseBreakpoints(breakpoints);
 
         // The panel flips the marker; the state is what every other surface reads, so they change together.
-        ucSettings.UseRecording(recording);
         ucSettings.RecordingChanged += now => store.Dispatch(ShellActions.SetRecording, now);
         PublishRecording();
     }

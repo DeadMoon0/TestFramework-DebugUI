@@ -34,12 +34,24 @@ namespace TestFramework.DebugUI.Controls.Settings;
 /// </remarks>
 public partial class UC_Settings : UserControl
 {
-    private BreakpointService? breakpoints;
+    /// <summary>The marks this panel counts and clears.</summary>
+    private readonly BreakpointService breakpoints;
 
-    private RecordingSwitch? recording;
+    /// <summary>The switch this panel shows and flips, or null when this machine's journal root cannot be told.</summary>
+    private readonly RecordingSwitch? recording;
 
-    public UC_Settings()
+    /// <summary>Creates the panel with what it switches.</summary>
+    /// <param name="breakpoints">The marks it counts and clears.</param>
+    /// <param name="recording">
+    /// The recording switch, or null when this machine's journal root cannot be told - an answer the panel
+    /// shows, not a handover still to come.
+    /// </param>
+    public UC_Settings(BreakpointService breakpoints, RecordingSwitch? recording)
     {
+        ArgumentNullException.ThrowIfNull(breakpoints);
+        this.breakpoints = breakpoints;
+        this.recording = recording;
+
         InitializeComponent();
 
         tgWatch.Toggled += value => Raise(Current with { Enabled = value });
@@ -54,33 +66,11 @@ public partial class UC_Settings : UserControl
         // breaks, which has nothing to do with where the window goes when it is put away.
         tgBreakOnFailure.Toggled += value => BreakOnFailureChanged?.Invoke(value);
 
-        Unloaded += (_, _) =>
-        {
-            if (breakpoints is not null)
-                breakpoints.Changed -= ShowBreakpointCount;
-        };
-    }
-
-    /// <summary>
-    /// Gives the panel the marks it counts and clears.
-    /// </summary>
-    public void UseBreakpoints(BreakpointService service)
-    {
-        ArgumentNullException.ThrowIfNull(service);
-
-        if (breakpoints is not null)
-            breakpoints.Changed -= ShowBreakpointCount;
-
-        breakpoints = service;
         breakpoints.Changed += ShowBreakpointCount;
-
         ShowBreakpointCount();
-    }
 
-    /// <summary>
-    /// Gives the panel the switch it shows and flips, or null when this machine's journal root cannot be told.
-    /// </summary>
-    public void UseRecording(RecordingSwitch? value) => recording = value;
+        Unloaded += (_, _) => breakpoints.Changed -= ShowBreakpointCount;
+    }
 
     /// <summary>Raised when the user changes something.</summary>
     public event Action<WatchSettings>? Changed;
@@ -272,7 +262,7 @@ public partial class UC_Settings : UserControl
 
     private void ShowBreakpointCount()
     {
-        int count = breakpoints?.Snapshot().Count ?? 0;
+        int count = breakpoints.Snapshot().Count;
 
         tbBreakpoints.Text = count switch
         {
@@ -375,7 +365,7 @@ public partial class UC_Settings : UserControl
     /// </remarks>
     private void Panel_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) => e.Handled = true;
 
-    private void btClearBreakpoints_Click(object sender, RoutedEventArgs e) => breakpoints?.Clear();
+    private void btClearBreakpoints_Click(object sender, RoutedEventArgs e) => breakpoints.Clear();
 
     private void btOpenRuns_Click(object sender, RoutedEventArgs e)
     {

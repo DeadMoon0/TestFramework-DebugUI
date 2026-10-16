@@ -4,7 +4,6 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:shell="clr-namespace:TestFramework.DebugUI.Controls.Shell"
-        xmlns:settings="clr-namespace:TestFramework.DebugUI.Controls.Settings"
         xmlns:annotate="clr-namespace:TestFramework.DebugUI.Controls.Annotate"
         mc:Ignorable="d"
         Title="TestFrameworkDebugger" Height="800" Width="1400" WindowStyle="None" Background="#01000000"
@@ -17,10 +16,10 @@
         and nothing more. What the reader actually sees behind everything is the acrylic tint Windows
         draws, and then whatever UC_Background paints in front of it.
 
-        The views that show the store are not declared here. WPF builds what markup declares with no
-        arguments, and a view cannot be built without the store it shows - so each of them has a named
-        slot below that carries its place in the layout, and the window builds the view and puts it in.
-        Whatever is declared here directly shows nothing of the store.
+        The views that need something to be built with are not declared here. WPF builds what markup
+        declares with no arguments, and a view cannot be built without the store it shows or the services it
+        switches - so each of them has a named slot below that carries its place in the layout, and the
+        window builds the view and puts it in. Whatever is declared here directly needs nothing.
     -->
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="40" UseAeroCaptionButtons="True"/>
@@ -252,9 +251,8 @@
                 -->
                 <Border x:Name="bSearchSlot" HorizontalAlignment="Center" VerticalAlignment="Top" Panel.ZIndex="5"/>
 
-                <!-- Where the window opens. Which run to look at is the question you have before you
-                     have any question about a run, so it is answered first and covers everything. -->
-                <settings:UC_Settings x:Name="ucSettings" Panel.ZIndex="4" Visibility="Collapsed"/>
+                <!-- Settings, built by the window. -->
+                <Border x:Name="bSettingsSlot" Panel.ZIndex="4"/>
 
                 <!-- Above the runs page, because sharing is asked for from it and the answer belongs in front
                      of the question. Below settings, which is above everything. -->

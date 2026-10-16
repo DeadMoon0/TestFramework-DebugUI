@@ -52,10 +52,11 @@ namespace TestFramework.DebugUI
 
             // Before the window, and that is not a style choice. A control resolves its brushes while
             // it is being built, so the palette has to be made movable first or every control in the
-            // first window keeps a brush no theme can ever move again.
-            ThemeApplier.Prepare(Resources);
+            // first window keeps a brush no theme can ever move again. The window takes what this
+            // returns, so it cannot be built first; Prepare throws if any other window already was.
+            PreparedTheme palette = ThemeApplier.Prepare(Resources);
 
-            MainWindow window = new();
+            MainWindow window = new(palette);
             MainWindow = window;
 
             instance.Activated += window.OpenFromAnotherLaunch;

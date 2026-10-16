@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Windows;
 using System.Windows.Media;
 using TestFramework.DebugUI.State.Theming;
 
@@ -24,21 +23,21 @@ namespace TestFramework.DebugUI.Theme;
 /// </remarks>
 internal sealed class ThemeService
 {
-    private readonly ResourceDictionary resources;
+    private readonly PreparedTheme prepared;
     private readonly Action<string>? report;
 
     /// <summary>
     /// Reads what is available and settles on a theme, without applying it yet.
     /// </summary>
-    /// <param name="resources">The dictionary holding the theme's brushes.</param>
+    /// <param name="prepared">The dictionary holding the theme's brushes, prepared.</param>
     /// <param name="store">Where custom themes come from.</param>
     /// <param name="report">Told about a theme file that could not be used.</param>
-    public ThemeService(ResourceDictionary resources, ThemeStore store, Action<string>? report = null)
+    public ThemeService(PreparedTheme prepared, ThemeStore store, Action<string>? report = null)
     {
-        ArgumentNullException.ThrowIfNull(resources);
+        ArgumentNullException.ThrowIfNull(prepared);
         ArgumentNullException.ThrowIfNull(store);
 
-        this.resources = resources;
+        this.prepared = prepared;
         this.report = report;
 
         Store = store;
@@ -77,7 +76,7 @@ internal sealed class ThemeService
 
         Current = wanted;
 
-        foreach (string problem in ThemeApplier.Apply(resources, wanted, animate))
+        foreach (string problem in ThemeApplier.Apply(prepared, wanted, animate))
             report?.Invoke(problem);
 
         Changed?.Invoke(wanted);

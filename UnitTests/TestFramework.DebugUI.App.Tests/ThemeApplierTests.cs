@@ -34,7 +34,7 @@ public class ThemeApplierTests
         Wpf.Run(() =>
         {
             List<string> unapplied = BuiltInThemes.All
-                .SelectMany(theme => ThemeApplier.Apply(Application.Current.Resources, theme, animate: false)
+                .SelectMany(theme => ThemeApplier.Apply(Wpf.Palette, theme, animate: false)
                     .Select(problem => $"{theme.Id}: {problem}"))
                 .ToList();
 
@@ -86,10 +86,10 @@ public class ThemeApplierTests
         {
             SolidColorBrush accent = (SolidColorBrush)Application.Current.Resources[ThemeKeys.Accent];
 
-            ThemeApplier.Apply(Application.Current.Resources, BuiltInThemes.EmberDark, animate: false);
+            ThemeApplier.Apply(Wpf.Palette, BuiltInThemes.EmberDark, animate: false);
             Color warm = accent.Color;
 
-            ThemeApplier.Apply(Application.Current.Resources, BuiltInThemes.TideDark, animate: false);
+            ThemeApplier.Apply(Wpf.Palette, BuiltInThemes.TideDark, animate: false);
             Color cool = accent.Color;
 
             // Same instance throughout: nothing was re-resolved and nothing was replaced, which is the
@@ -121,7 +121,7 @@ public class ThemeApplierTests
     {
         Wpf.Run(() =>
         {
-            ThemeApplier.Apply(Application.Current.Resources, BuiltInThemes.SlateDark, animate: false);
+            ThemeApplier.Apply(Wpf.Palette, BuiltInThemes.SlateDark, animate: false);
 
             object first = Application.Current.Resources[ThemeKeys.SurfaceOverlay];
 
@@ -130,7 +130,7 @@ public class ThemeApplierTests
 
             foreach (ThemeDefinition theme in BuiltInThemes.All)
             {
-                ThemeApplier.Apply(Application.Current.Resources, theme, animate: false);
+                ThemeApplier.Apply(Wpf.Palette, theme, animate: false);
 
                 Assert.Same(first, Application.Current.Resources[ThemeKeys.SurfaceOverlay]);
                 Assert.Equal(
@@ -138,7 +138,7 @@ public class ThemeApplierTests
                     ((SolidColorBrush)early.Background).Color);
             }
 
-            ThemeApplier.Apply(Application.Current.Resources, BuiltInThemes.SlateDark, animate: false);
+            ThemeApplier.Apply(Wpf.Palette, BuiltInThemes.SlateDark, animate: false);
         });
     }
 
@@ -153,7 +153,7 @@ public class ThemeApplierTests
     /// again. Measured: the direct assignment beside it stayed shared and followed perfectly.
     /// </para>
     /// <para>
-    /// So the setters in the theme use <c>DynamicResource</c>, and only they. There are seventeen of them
+    /// So the setters in the theme use <c>DynamicResource</c>, and only they. There are a handful of them
     /// against several hundred direct uses, which is why this costs nothing worth counting.
     /// </para>
     /// </remarks>
@@ -162,23 +162,55 @@ public class ThemeApplierTests
     {
         Wpf.Run(() =>
         {
-            ThemeApplier.Apply(Application.Current.Resources, BuiltInThemes.SlateDark, animate: false);
+            ThemeApplier.Apply(Wpf.Palette, BuiltInThemes.SlateDark, animate: false);
 
             Border styled = new() { Style = (Style)Application.Current.Resources["PanelOverlay"] };
             Border direct = new() { Background = (Brush)Application.Current.Resources[ThemeKeys.SurfaceOverlay] };
 
             Wpf.Layout(new StackPanel { Children = { styled, direct } }, 200, 200);
 
-            ThemeApplier.Apply(Application.Current.Resources, BuiltInThemes.ContrastLight, animate: false);
+            ThemeApplier.Apply(Wpf.Palette, BuiltInThemes.ContrastLight, animate: false);
 
             Color expected = ThemeApplier.ToColor(BuiltInThemes.ContrastLight.Colour(ThemeKeys.SurfaceOverlay));
 
             Assert.Equal(expected, ((SolidColorBrush)direct.Background).Color);
             Assert.Equal(expected, ((SolidColorBrush)styled.Background).Color);
 
-            ThemeApplier.Apply(Application.Current.Resources, BuiltInThemes.SlateDark, animate: false);
+            ThemeApplier.Apply(Wpf.Palette, BuiltInThemes.SlateDark, animate: false);
         });
     }
+
+    /// <summary>
+    /// That preparing the palette for the first time once a window exists is refused.
+    /// </summary>
+    /// <remarks>
+    /// That window resolved its brushes while it was built, and would hold the frozen originals for
+    /// good: a window that changes theme everywhere except in itself. Failing at start-up says so the
+    /// first time anybody runs the tool, rather than the first time anybody changes the theme.
+    /// </remarks>
+    [Fact]
+    public void PreparingThePaletteAfterAWindowWasBuiltIsRefused()
+    {
+        InvalidOperationException refused = Assert.Throws<InvalidOperationException>(
+            () => ThemeApplier.RefuseLatePreparation(preparedBefore: false, windowsOpen: 1));
+
+        Assert.Contains("before constructing the first window", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PreparingThePaletteBeforeAnyWindowIsAllowed()
+        => Assert.Null(Record.Exception(() => ThemeApplier.RefuseLatePreparation(preparedBefore: false, windowsOpen: 0)));
+
+    /// <summary>
+    /// That a palette prepared in time may be prepared again while windows are open.
+    /// </summary>
+    /// <remarks>
+    /// Preparing is idempotent, and the brushes the windows hold are already the movable ones, so a
+    /// repeat is harmless and must not be mistaken for a late first call.
+    /// </remarks>
+    [Fact]
+    public void PreparingThePaletteAgainWhileWindowsAreOpenIsAllowed()
+        => Assert.Null(Record.Exception(() => ThemeApplier.RefuseLatePreparation(preparedBefore: true, windowsOpen: 3)));
 
     /// <summary>
     /// That the tool ends up back in the theme it ships in, whatever order these tests ran in.
@@ -192,8 +224,8 @@ public class ThemeApplierTests
     {
         Wpf.Run(() =>
         {
-            ThemeApplier.Apply(Application.Current.Resources, BuiltInThemes.ContrastLight, animate: false);
-            ThemeApplier.Apply(Application.Current.Resources, BuiltInThemes.Get(BuiltInThemes.DefaultId), animate: false);
+            ThemeApplier.Apply(Wpf.Palette, BuiltInThemes.ContrastLight, animate: false);
+            ThemeApplier.Apply(Wpf.Palette, BuiltInThemes.Get(BuiltInThemes.DefaultId), animate: false);
 
             SolidColorBrush sunken = (SolidColorBrush)Application.Current.Resources[ThemeKeys.SurfaceSunken];
 

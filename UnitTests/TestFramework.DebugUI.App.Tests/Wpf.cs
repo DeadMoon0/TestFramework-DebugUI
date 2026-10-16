@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using Axiom.State;
 using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.App.Tests;
 
@@ -43,6 +44,19 @@ internal static class Wpf
     private static readonly object Gate = new();
 
     private static Dispatcher? dispatcher;
+
+    private static PreparedTheme? palette;
+
+    /// <summary>The application's brushes as the harness prepared them, for a test that applies a theme.</summary>
+    public static PreparedTheme Palette
+    {
+        get
+        {
+            Ensure();
+
+            return palette ?? throw new InvalidOperationException("The WPF test harness did not prepare the palette.");
+        }
+    }
 
     /// <summary>Builds and inspects a control, on a thread where that is allowed.</summary>
     /// <param name="work">What to build and assert.</param>
@@ -155,7 +169,7 @@ internal static class Wpf
                 // The same thing the tool's App does before it builds a window, and for the same reason:
                 // the XAML compiler freezes the brushes in a compiled dictionary, and a control that
                 // resolved a frozen one never follows a theme change again.
-                TestFramework.DebugUI.Theme.ThemeApplier.Prepare(application.Resources);
+                palette = ThemeApplier.Prepare(application.Resources);
 
                 // Bound to before it is read: a control subscribes to the store as it is built, so
                 // there has to be one by the time any test constructs anything.

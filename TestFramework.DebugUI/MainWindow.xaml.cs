@@ -119,7 +119,12 @@ public partial class MainWindow : Window
     private Controls.Home.UC_Home HomePage => ucDock.Get<Controls.Home.UC_Home>(PanelId.Home);
 
     /// <summary>Creates the window and the store behind it.</summary>
-    public MainWindow()
+    /// <param name="palette">
+    /// The application's brushes, made movable. Asked for rather than reached for, because this
+    /// window's markup resolves them while it is built, and a window built before they were prepared
+    /// would never follow a theme change.
+    /// </param>
+    internal MainWindow(PreparedTheme palette)
     {
         // The reducers are listed by MainStore, so this window and the tests build the same store.
         // The effects are given their collaborators rather than reaching for them: the comparison
@@ -249,7 +254,7 @@ public partial class MainWindow : Window
         // Applied here, in the constructor, so the first frame the window paints is already in the
         // right theme. Without the fade, because there is no previous colour to fade from and a window
         // that cross-fades into existence reads as a window that has not finished loading.
-        theme = new ThemeService(Application.Current.Resources, new ThemeStore(ReportTheme), ReportTheme);
+        theme = new ThemeService(palette, new ThemeStore(ReportTheme), ReportTheme);
         theme.Changed += definition =>
         {
             ucBackground.Show(definition.Backdrop, theme.BackdropInk);

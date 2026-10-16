@@ -43,7 +43,7 @@ namespace TestFramework.DebugUI.Theme;
 /// <para>
 /// The cost is one binding per colour for the whole application — not one per themed property, which is
 /// what <c>DynamicResource</c> would have cost across a board with thousands of elements. The exception
-/// is a <c>Style</c> setter, which freezes its value when the style is sealed; the seventeen of those in
+/// is a <c>Style</c> setter, which freezes its value when the style is sealed; the setters of that kind in
 /// the theme do use <c>DynamicResource</c>, and only they.
 /// </para>
 /// </remarks>
@@ -54,8 +54,8 @@ internal static class ThemeApplier
     /// </summary>
     /// <remarks>
     /// Short enough not to be a transition anybody waits through, long enough that the window is
-    /// visibly the same window afterwards rather than a different one. A hard cut across forty-eight
-    /// colours reads as a redraw, which is the one thing this is not.
+    /// visibly the same window afterwards rather than a different one. A hard cut across every colour
+    /// in the palette reads as a redraw, which is the one thing this is not.
     /// </remarks>
     public static readonly TimeSpan Fade = TimeSpan.FromMilliseconds(160);
 
@@ -75,6 +75,9 @@ internal static class ThemeApplier
     /// <summary>What this class put in the dictionary, so it can tell its own work from the markup's.</summary>
     private static readonly Dictionary<string, SolidColorBrush> Prepared = new(StringComparer.Ordinal);
 
+    /// <summary>Whether a preparation has already run in this process.</summary>
+    private static bool preparedOnce;
+
     /// <summary>
     /// Makes the theme's brushes movable, before anything has a chance to hold one.
     /// </summary>
@@ -87,15 +90,60 @@ internal static class ThemeApplier
     /// the window doing it for itself.
     /// </para>
     /// <para>
+    /// Both directions of that order are held rather than trusted. What needs the prepared brushes takes
+    /// the <see cref="PreparedTheme"/> this returns, so it cannot run first; and a first preparation
+    /// that finds a window already open throws, because that window has resolved its brushes and nothing
+    /// can make it follow a theme again. A window is what can be checked: WPF registers every window
+    /// with the application as it is constructed, but keeps no record of a control built on its own,
+    /// and a control on its own is not something the tool ever shows.
+    /// </para>
+    /// <para>
     /// Idempotent: a colour this class already put in the dictionary is recognised by identity and
     /// left alone, so calling it again costs one lookup per colour.
     /// </para>
     /// </remarks>
-    /// <returns>The colours the markup has no brush for, which is a defect rather than a bad theme.</returns>
-    public static IReadOnlyList<string> Prepare(ResourceDictionary resources)
+    /// <exception cref="InvalidOperationException">
+    /// This is the first preparation, and a window has already been built.
+    /// </exception>
+    public static PreparedTheme Prepare(ResourceDictionary resources)
     {
         ArgumentNullException.ThrowIfNull(resources);
 
+        RefuseLatePreparation(preparedOnce, OpenWindows());
+
+        IReadOnlyList<string> missing = PrepareBrushes(resources);
+        preparedOnce = true;
+
+        return new PreparedTheme(resources, missing);
+    }
+
+    /// <summary>
+    /// Throws when a first preparation comes after a window was built.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Prepare"/> so the rule can be checked without a window: the palette is
+    /// process-wide, and a process that has prepared it once cannot be made to look as if it had not.
+    /// </remarks>
+    /// <param name="preparedBefore">Whether the palette was prepared earlier in this process.</param>
+    /// <param name="windowsOpen">How many windows the application holds.</param>
+    internal static void RefuseLatePreparation(bool preparedBefore, int windowsOpen)
+    {
+        if (preparedBefore || windowsOpen == 0)
+            return;
+
+        throw new InvalidOperationException(
+            $"The theme's brushes were prepared after {windowsOpen} window(s) had been built. A window resolves its " +
+            "brushes while it is constructed, so those windows would never follow a theme change. Call " +
+            "ThemeApplier.Prepare before constructing the first window.");
+    }
+
+    /// <summary>The windows the application has built so far, or none outside an application.</summary>
+    private static int OpenWindows() => Application.Current?.Windows.Count ?? 0;
+
+    /// <summary>Puts a movable brush in place of every palette brush that is not one yet.</summary>
+    /// <returns>The colours the markup has no brush for, which is a defect rather than a bad theme.</returns>
+    private static IReadOnlyList<string> PrepareBrushes(ResourceDictionary resources)
+    {
         List<string> missing = [];
 
         foreach (string key in ThemePalette.Keys)
@@ -140,20 +188,20 @@ internal static class ThemeApplier
     /// a programming mistake rather than a bad theme, and it is a mistake nothing else would report: the
     /// surface would simply keep the previous theme's colour and look almost right.
     /// </remarks>
-    /// <param name="resources">The dictionary holding the theme's brushes.</param>
+    /// <param name="prepared">The dictionary holding the theme's brushes, prepared.</param>
     /// <param name="theme">The theme to apply.</param>
     /// <param name="animate">
     /// Whether to cross-fade. False at start-up, where there is no previous colour to fade from and the
     /// window has not been shown yet.
     /// </param>
-    public static IReadOnlyList<string> Apply(ResourceDictionary resources, ThemeDefinition theme, bool animate)
+    public static IReadOnlyList<string> Apply(PreparedTheme prepared, ThemeDefinition theme, bool animate)
     {
-        ArgumentNullException.ThrowIfNull(resources);
+        ArgumentNullException.ThrowIfNull(prepared);
         ArgumentNullException.ThrowIfNull(theme);
 
-        // Cheap and idempotent, so there is no order these two have to be called in for the colours to
-        // come out right - only for the brushes to be the ones the controls are already holding.
-        IReadOnlyList<string> missing = Prepare(resources);
+        // Cheap and idempotent, and it answers what is missing from the dictionary as it stands now
+        // rather than as it stood when it was first prepared.
+        IReadOnlyList<string> missing = PrepareBrushes(prepared.Resources);
 
         foreach ((string key, ThemeColour colour) in theme.Colours)
         {

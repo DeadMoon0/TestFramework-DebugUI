@@ -1,3 +1,5 @@
+![Icon](https://raw.githubusercontent.com/DeadMoon0/TestFramework-Common/96ef4240c1e55ba95a20b99285219a61407c6355/Assets/Icon.svg)
+
 # TestFramework-DebugUI
 
 TestFramework-DebugUI is the desktop inspection surface for TestFramework timeline runs.
@@ -62,7 +64,7 @@ The UI listens on that pipe, projects the incoming signals into canonical state,
 
 Twelve themes ship as six light/dark pairs - Slate, Ember, Tide, Glass, Contrast and Origin - and the picker is in Settings. `slate-dark` is the default.
 
-You can also write your own: a theme file is a built-in with some things changed, so it lists only what it replaces. **Open themes folder** in Settings writes a commented example into `%USERPROFILE%\.testframework\DebugUI	hemes` and opens it.
+You can also write your own: a theme file is a built-in with some things changed, so it lists only what it replaces. **Open themes folder** in Settings writes a commented example into `%USERPROFILE%\.testframework\DebugUI\themes` and opens it.
 
 One thing worth knowing before you reach for the see-through themes: if energy saver is on, or transparency effects are off in Windows, the compositor will not blur and such a theme is dimmed in the picker with the reason in its tooltip. Energy saver is the usual culprit, and it takes the effect away without appearing to change a setting.
 

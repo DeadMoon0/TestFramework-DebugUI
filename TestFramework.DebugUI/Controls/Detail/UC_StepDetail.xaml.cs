@@ -48,7 +48,11 @@ public partial class UC_StepDetail : UserControl, IDisposable
     private LogNode[] entries = [];
 
     /// <summary>Which widgets the filmstrip is currently drawn from, so it is rebuilt only when they change.</summary>
-    private string shownWidgets = string.Empty;
+    /// <remarks>
+    /// Null means nothing is drawn for the current step yet. Not the empty string: that is also the signature
+    /// of a step with no widgets, so resetting to it let such a step keep the previous step's pictures.
+    /// </remarks>
+    private string? shownWidgets;
 
     /// <summary>Raised when the reader asks to see one of this step's widgets on its own.</summary>
     /// <remarks>
@@ -117,7 +121,7 @@ public partial class UC_StepDetail : UserControl, IDisposable
         // A different step has different evidence, so what is drawn belongs to the step before this
         // one until it is rebuilt. Cleared rather than compared, because the signature of two steps'
         // widgets can legitimately match.
-        shownWidgets = string.Empty;
+        shownWidgets = null;
 
         if (step is null)
         {

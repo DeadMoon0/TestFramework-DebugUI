@@ -108,6 +108,17 @@ internal sealed class DockFloats
     {
         DockFloatWindow window = new(owner);
 
+        AcceptDrops(window);
+        FollowMoves(window);
+        DockOnRelease(window);
+        CloseWithPanels(window);
+
+        return window;
+    }
+
+    /// <summary>Lets a panel be dropped into a floating window, joining its tabs.</summary>
+    private void AcceptDrops(DockFloatWindow window)
+    {
         // A float takes drops like a well does, which is what lets a panel be dragged from the main window into a
         // window that is already floating. There are no zones inside one: a float is a single tabbed card, so a
         // drop anywhere in it joins the strip.
@@ -130,7 +141,11 @@ internal sealed class DockFloats
             if (at >= 0)
                 Arrangement.Apply(layout => layout.MoveIntoFloat(dragged, at, int.MaxValue));
         };
+    }
 
+    /// <summary>Records where a floating window has been moved to.</summary>
+    private void FollowMoves(DockFloatWindow window)
+    {
         window.Moved += bounds =>
         {
             int at = windows.IndexOf(window);
@@ -138,7 +153,11 @@ internal sealed class DockFloats
             if (at >= 0)
                 Arrangement.Apply(layout => layout.MoveFloat(at, bounds));
         };
+    }
 
+    /// <summary>Docks the panel a floating window shows when the window is released over the host.</summary>
+    private void DockOnRelease(DockFloatWindow window)
+    {
         // Moving a float over the main window is the only way a single panel gets docked again: it has no tab to
         // drag, and its caption belongs to the window. So the system's own move doubles as the drag, and the hint
         // appears under it exactly as it would for one.
@@ -168,7 +187,11 @@ internal sealed class DockFloats
 
             Arrangement.Apply(layout => layout.Move(carried, side, index));
         };
+    }
 
+    /// <summary>Closes every panel a floating window holds when the window itself is closed.</summary>
+    private void CloseWithPanels(DockFloatWindow window)
+    {
         window.CloseRequested += () =>
         {
             int at = windows.IndexOf(window);
@@ -186,8 +209,6 @@ internal sealed class DockFloats
                 return closed;
             });
         };
-
-        return window;
     }
 
     /// <summary>

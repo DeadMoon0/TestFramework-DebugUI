@@ -197,11 +197,11 @@ internal sealed class BoardComposer
     /// Big enough to hold what a reader actually wants — the name, what became of it, how long it
     /// took, what it produced — because a board of small boxes tells you only that things happened
     /// in an order, which is the one thing you already knew.
-    /// </remarks>
-    /// <remarks>
+    /// <para>
     /// Internal rather than private so a card can be built and measured in a test. What goes wrong in
     /// here goes wrong geometrically — two things laid out over each other — and that is invisible to
     /// every assertion that does not lay the card out.
+    /// </para>
     /// </remarks>
     internal UIElement BuildStep(BoardVisuals visuals, LayoutResult board, LayoutNode node)
     {
@@ -209,8 +209,44 @@ internal sealed class BoardComposer
         TextBlock name = new() { Foreground = (Brush)resources.FindResource(ThemeKeys.TextPrimary), FontSize = 16, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(8, 0, 0, 0) };
         TextBlock note = new() { Foreground = (Brush)resources.FindResource(ThemeKeys.TextSecondary), FontSize = 11, Margin = new Thickness(0, 4, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
         TextBlock outputs = new() { Foreground = (Brush)resources.FindResource(ThemeKeys.TextFaint), FontSize = 11, Margin = new Thickness(0, 8, 0, 0), TextTrimming = TextTrimming.CharacterEllipsis };
+        TextBlock elapsed = BuildElapsed();
 
+        Grid heading = BuildHeading(status, name, elapsed);
+        Border widget = BuildWidgetWell();
+        StackPanel body = BuildCardBody(node, heading, note, widget, outputs);
 
+        Border box = new()
+        {
+            CornerRadius = new CornerRadius(4),
+            Background = (Brush)resources.FindResource(ThemeKeys.SurfaceCard),
+            BorderThickness = new Thickness(2),
+            BorderBrush = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            Child = Plated(board, node, body)
+        };
+
+        string stageName = node.StageName;
+        int stepId = node.StepId ?? 0;
+
+        WireCardClicks(box, stageName, stepId);
+
+        Border breakpoint = BuildBreakpointMarker(stageName, stepId);
+
+        // The marker sits beside the card rather than inside it, because a card that has not run yet is
+        // dimmed to four-tenths — and a breakpoint set on a step that has not run is precisely the case
+        // worth being able to see. Dimming is applied to the box; the marker is not in it.
+        Grid host = new() { Width = node.Width, Height = node.Height };
+
+        host.Children.Add(box);
+        host.Children.Add(breakpoint);
+
+        visuals.Steps[node.Id] = new StepVisual(box, status, name, note, outputs, elapsed, breakpoint, widget);
+        return host;
+    }
+
+    /// <summary>Builds the step's timing, which sits at the right-hand end of its heading.</summary>
+    private TextBlock BuildElapsed()
+    {
         // The heading's right-hand end is the emptiest part of a card and the timing is what a reader
         // scans down a column for, so it goes there rather than at the end of the status line where
         // it competes with the state and the attempt count for the same eye.
@@ -223,6 +259,12 @@ internal sealed class BoardComposer
             Margin = new Thickness(8, 0, 0, 0)
         };
 
+        return elapsed;
+    }
+
+    /// <summary>Builds a card's heading row: the status dot, the name, the timing and the marker's corner.</summary>
+    private static Grid BuildHeading(Border status, TextBlock name, TextBlock elapsed)
+    {
         Grid heading = new()
         {
             ColumnDefinitions =
@@ -244,6 +286,12 @@ internal sealed class BoardComposer
         heading.Children.Add(name);
         heading.Children.Add(elapsed);
 
+        return heading;
+    }
+
+    /// <summary>Builds the well a step's widget is drawn into, empty and collapsed until there is one.</summary>
+    private Border BuildWidgetWell()
+    {
         // Where the step shows what it did. Empty and collapsed on a board whose steps drew nothing,
         // so an ordinary run keeps the short card; on a board that asked for room, this is the part
         // of the card a reader actually looks at and the writing above it is the caption.
@@ -256,6 +304,12 @@ internal sealed class BoardComposer
             Visibility = Visibility.Collapsed
         };
 
+        return widget;
+    }
+
+    /// <summary>Stacks a card's writing and its widget well, placed by how tall the card was laid out.</summary>
+    private static StackPanel BuildCardBody(LayoutNode node, Grid heading, TextBlock note, Border widget, TextBlock outputs)
+    {
         StackPanel body = new()
         {
             Margin = new Thickness(BoardMetrics.CardPadding, 6, BoardMetrics.CardPadding, 6),
@@ -269,19 +323,12 @@ internal sealed class BoardComposer
             Children = { heading, note, widget, outputs }
         };
 
-        Border box = new()
-        {
-            CornerRadius = new CornerRadius(4),
-            Background = (Brush)resources.FindResource(ThemeKeys.SurfaceCard),
-            BorderThickness = new Thickness(2),
-            BorderBrush = Brushes.Transparent,
-            Cursor = Cursors.Hand,
-            Child = Plated(board, node, body)
-        };
+        return body;
+    }
 
-        string stageName = node.StageName;
-        int stepId = node.StepId ?? 0;
-
+    /// <summary>Makes a click on a card select its step, and a right-click toggle its breakpoint.</summary>
+    private void WireCardClicks(Border box, string stageName, int stepId)
+    {
         box.MouseLeftButtonUp += (_, e) =>
         {
             e.Handled = true;
@@ -295,19 +342,6 @@ internal sealed class BoardComposer
             e.Handled = true;
             breakpoints()?.Toggle(stageName, stepId);
         };
-
-        Border breakpoint = BuildBreakpointMarker(stageName, stepId);
-
-        // The marker sits beside the card rather than inside it, because a card that has not run yet is
-        // dimmed to four-tenths — and a breakpoint set on a step that has not run is precisely the case
-        // worth being able to see. Dimming is applied to the box; the marker is not in it.
-        Grid host = new() { Width = node.Width, Height = node.Height };
-
-        host.Children.Add(box);
-        host.Children.Add(breakpoint);
-
-        visuals.Steps[node.Id] = new StepVisual(box, status, name, note, outputs, elapsed, breakpoint, widget);
-        return host;
     }
 
     /// <summary>

@@ -163,18 +163,7 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
 
         ImmutableList<RunSummary> shown = Filtered(out bool filtering);
 
-        tbFilterHint.Visibility = tbFilter.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        btClearFilter.Visibility = tbFilter.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-
-        tbCount.Text = filtering
-            ? $"{shown.Count.ToString(CultureInfo.CurrentCulture)} of {runs.Count.ToString(CultureInfo.CurrentCulture)}"
-            : string.Empty;
-
-        tbEmpty.Visibility = shown.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-
-        tbEmpty.Text = runs.Count == 0
-            ? recording.EmptyRuns
-            : "No run matches that name.";
+        ShowFilterState(shown.Count, filtering);
 
         if (shown.Count == 0)
             return;
@@ -198,73 +187,102 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
         bool showProjects = projects.Count > 1;
 
         foreach (ProjectGroup project in projects)
+            AddProject(project, showProjects);
+    }
+
+    /// <summary>Says whether a filter is on, how much it left, and what an empty tree means.</summary>
+    private void ShowFilterState(int shownCount, bool filtering)
+    {
+        tbFilterHint.Visibility = tbFilter.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        btClearFilter.Visibility = tbFilter.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+
+        tbCount.Text = filtering
+            ? $"{shownCount.ToString(CultureInfo.CurrentCulture)} of {runs.Count.ToString(CultureInfo.CurrentCulture)}"
+            : string.Empty;
+
+        tbEmpty.Visibility = shownCount == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        tbEmpty.Text = runs.Count == 0
+            ? recording.EmptyRuns
+            : "No run matches that name.";
+    }
+
+    /// <summary>Draws one project's branch, and its classes beneath it when it is open.</summary>
+    private void AddProject(ProjectGroup project, bool showProjects)
+    {
+        double classIndent = showProjects ? Step : 0;
+
+        if (showProjects)
         {
-            double classIndent = showProjects ? Step : 0;
+            string projectKey = ProjectKey(project.Project);
 
-            if (showProjects)
-            {
-                string projectKey = ProjectKey(project.Project);
+            spTree.Children.Add(GroupRow(
+                project.Project,
+                project.Runs.Count,
+                project.Health,
+                indent: 0,
+                bold: true,
+                chevron: expanded.Contains(projectKey),
+                tip: project.Project,
+                act: () => Toggle(projectKey)));
 
-                spTree.Children.Add(GroupRow(
-                    project.Project,
-                    project.Runs.Count,
-                    project.Health,
-                    indent: 0,
-                    bold: true,
-                    chevron: expanded.Contains(projectKey),
-                    tip: project.Project,
-                    act: () => Toggle(projectKey)));
-
-                if (!expanded.Contains(projectKey))
-                    continue;
-            }
-
-            foreach (ClassGroup type in project.Classes)
-            {
-                string classKey = ClassKey(type.Class);
-
-                spTree.Children.Add(GroupRow(
-                    type.DisplayName,
-                    type.Runs.Count,
-                    type.Health,
-                    indent: classIndent,
-                    bold: false,
-                    chevron: expanded.Contains(classKey),
-                    tip: type.Class,
-                    act: () => Toggle(classKey)));
-
-                if (!expanded.Contains(classKey))
-                    continue;
-
-                foreach (TestGroup test in type.Tests)
-                {
-                    string testKey = TestKey(test.Test);
-
-                    // A test with one run has nothing to expand into: its own row would be followed by a
-                    // single child saying the same thing. Clicking it opens that run directly.
-                    bool single = test.Runs.Count == 1;
-
-                    spTree.Children.Add(GroupRow(
-                        test.DisplayName,
-                        test.Runs.Count,
-                        test.Health,
-                        indent: classIndent + Step,
-                        bold: false,
-                        chevron: single ? null : expanded.Contains(testKey),
-                        tip: test.Test,
-                        act: single
-                            ? () => commands.SelectRun(test.Runs[0].SessionId)
-                            : () => Toggle(testKey),
-                        selected: single && IsSelected(test.Runs[0])));
-
-                    if (single || !expanded.Contains(testKey))
-                        continue;
-
-                    foreach (RunSummary run in test.Runs)
-                        spTree.Children.Add(RunRow(run, classIndent + (Step * 2)));
-                }
-            }
+            if (!expanded.Contains(projectKey))
+                return;
         }
+
+        foreach (ClassGroup type in project.Classes)
+            AddClass(type, classIndent);
+    }
+
+    /// <summary>Draws one class's branch, and its tests beneath it when it is open.</summary>
+    private void AddClass(ClassGroup type, double classIndent)
+    {
+        string classKey = ClassKey(type.Class);
+
+        spTree.Children.Add(GroupRow(
+            type.DisplayName,
+            type.Runs.Count,
+            type.Health,
+            indent: classIndent,
+            bold: false,
+            chevron: expanded.Contains(classKey),
+            tip: type.Class,
+            act: () => Toggle(classKey)));
+
+        if (!expanded.Contains(classKey))
+            return;
+
+        foreach (TestGroup test in type.Tests)
+            AddTest(test, classIndent);
+    }
+
+    /// <summary>Draws one test's row, and its runs beneath it when it has several and is open.</summary>
+    private void AddTest(TestGroup test, double classIndent)
+    {
+        string testKey = TestKey(test.Test);
+
+        // A test with one run has nothing to expand into: its own row would be followed by a
+        // single child saying the same thing. Clicking it opens that run directly.
+        bool single = test.Runs.Count == 1;
+
+        spTree.Children.Add(GroupRow(
+            test.DisplayName,
+            test.Runs.Count,
+            test.Health,
+            indent: classIndent + Step,
+            bold: false,
+            chevron: single ? null : expanded.Contains(testKey),
+            tip: test.Test,
+            act: single
+                ? () => commands.SelectRun(test.Runs[0].SessionId)
+                : () => Toggle(testKey),
+            selected: single && IsSelected(test.Runs[0])));
+
+        if (single || !expanded.Contains(testKey))
+            return;
+
+        foreach (RunSummary run in test.Runs)
+            spTree.Children.Add(RunRow(run, classIndent + (Step * 2)));
     }
 
     /// <summary>

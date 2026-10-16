@@ -44,6 +44,30 @@ public sealed class RunBundlePathContainmentTests : IDisposable
     }
 
     [Fact]
+    public void AnArtifactPathThatClimbsOutWithForwardSlashesIsRefused()
+    {
+        // The separator a zip entry and the writer both use, so the spelling a hand-built bundle is most
+        // likely to carry.
+        string escaped = Path.Combine(root, "recipient", "escaped.txt");
+        string bundle = WriteBundle(journal: "run.jsonl", metadata: "run.meta.json", artifact: "../../escaped.txt");
+
+        Assert.Throws<RunBundleReader.UnreadableException>(() => RunBundleReader.Read(bundle, Runs));
+
+        Assert.False(File.Exists(escaped), "The bundle wrote a file outside the runs folder.");
+    }
+
+    [Fact]
+    public void ARootedArtifactPathIsRefused()
+    {
+        string escaped = Path.Combine(root, "rooted.txt");
+        string bundle = WriteBundle(journal: "run.jsonl", metadata: "run.meta.json", artifact: escaped);
+
+        Assert.Throws<RunBundleReader.UnreadableException>(() => RunBundleReader.Read(bundle, Runs));
+
+        Assert.False(File.Exists(escaped), "The bundle wrote a file outside the runs folder.");
+    }
+
+    [Fact]
     public void AJournalNameThatClimbsOutOfTheRunsFolderIsRefused()
     {
         string escaped = Path.Combine(root, "recipient", "escaped.jsonl");

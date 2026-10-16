@@ -19,8 +19,9 @@ public class RerunCommandTests
         Assert.True(RerunCommand.TryFor(Run(), out RerunCommand? command, out _));
 
         Assert.Equal("dotnet", command!.FileName);
-        Assert.Contains("test \"C:\\src\\Acme.Billing.Tests\\Acme.Billing.Tests.csproj\"", command.Arguments, StringComparison.Ordinal);
-        Assert.Contains("--filter \"FullyQualifiedName=Acme.Billing.Tests.OrderTests.Accepts\"", command.Arguments, StringComparison.Ordinal);
+        Assert.Equal(
+            ["test", @"C:\src\Acme.Billing.Tests\Acme.Billing.Tests.csproj", "--filter", "FullyQualifiedName=Acme.Billing.Tests.OrderTests.Accepts"],
+            command.Arguments);
     }
 
     [Fact]
@@ -32,16 +33,28 @@ public class RerunCommandTests
     }
 
     [Fact]
-    public void APathWithASpaceInItIsQuoted()
+    public void APathWithASpaceInItIsOneArgument()
     {
-        // Ordinary on Windows, and an unquoted path silently becomes two arguments and an error that
-        // names neither.
+        // Ordinary on Windows; split, it becomes two arguments and an error that names neither.
         RerunCommand.TryFor(
             Run() with { ProjectFilePath = @"C:\my source\Acme.Tests\Acme.Tests.csproj" },
             out RerunCommand? command,
             out _);
 
-        Assert.Contains("\"C:\\my source\\Acme.Tests\\Acme.Tests.csproj\"", command!.Arguments, StringComparison.Ordinal);
+        Assert.Equal(@"C:\my source\Acme.Tests\Acme.Tests.csproj", command!.Arguments[1]);
+        Assert.Contains("\"C:\\my source\\Acme.Tests\\Acme.Tests.csproj\"", command.Display, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ATestNameWithAQuoteInIt_StaysOneArgument()
+    {
+        // The name comes from a sidecar or an imported bundle; spliced into a command line, a quote in it would
+        // end the filter and start arguments of its own.
+        const string name = "Acme.Tests.Evil\" --results-directory C:\\elsewhere \"x";
+        RerunCommand.TryFor(Run() with { FullyQualifiedName = name }, out RerunCommand? command, out _);
+
+        Assert.Equal(4, command!.Arguments.Length);
+        Assert.Equal("FullyQualifiedName=" + name, command.Arguments[3]);
     }
 
     [Fact]

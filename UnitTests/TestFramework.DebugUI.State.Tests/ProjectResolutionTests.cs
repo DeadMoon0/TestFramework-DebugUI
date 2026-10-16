@@ -180,8 +180,8 @@ public class ProjectResolutionTests
         RunSummary located = imported with { ProjectFilePath = resolved["imported"] };
 
         Assert.True(RerunCommand.TryFor(located, out RerunCommand? command, out string reason), reason);
-        Assert.Contains(mine, command!.Arguments, StringComparison.Ordinal);
-        Assert.Contains("Alpha.Tests.LoginTests.Works", command.Arguments, StringComparison.Ordinal);
+        Assert.Contains(mine, command!.Arguments);
+        Assert.Contains("FullyQualifiedName=Alpha.Tests.LoginTests.Works", command.Arguments);
     }
 
     private static RunSummary Run(string sessionId, string? projectFilePath) => new()

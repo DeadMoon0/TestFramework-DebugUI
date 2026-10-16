@@ -71,7 +71,7 @@ public sealed class TestRerunner(Action<FeedEntry> report)
 
         try
         {
-            using Process? process = Process.Start(new ProcessStartInfo(command.FileName, command.Arguments)
+            ProcessStartInfo start = new(command.FileName)
             {
                 WorkingDirectory = command.WorkingDirectory,
 
@@ -79,7 +79,13 @@ public sealed class TestRerunner(Action<FeedEntry> report)
                 // two pipes to repeat what the board already shows would only add a way to deadlock.
                 UseShellExecute = false,
                 CreateNoWindow = true
-            });
+            };
+
+            // One argument each: what is passed comes from a run's recorded identity, and must stay a value.
+            foreach (string argument in command.Arguments)
+                start.ArgumentList.Add(argument);
+
+            using Process? process = Process.Start(start);
 
             if (process is null)
             {

@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Immutable;
 using System.IO;
+using System.Linq;
 
 namespace TestFramework.DebugUI.State.Runs;
 
@@ -24,14 +26,24 @@ public sealed record RerunCommand
     /// <summary>Gets the program to start.</summary>
     public required string FileName { get; init; }
 
-    /// <summary>Gets its arguments.</summary>
-    public required string Arguments { get; init; }
+    /// <summary>Gets its arguments, each passed to the program as one argument.</summary>
+    /// <remarks>
+    /// A list rather than one command line: the project path and the test name come from a run's sidecar or
+    /// an imported bundle, and spliced into a string a quote in either would end the argument and start new
+    /// ones of its own choosing.
+    /// </remarks>
+    public required ImmutableArray<string> Arguments { get; init; }
 
     /// <summary>Gets the directory to start it in.</summary>
     public required string WorkingDirectory { get; init; }
 
     /// <summary>Gets the command as a person would type it, for the feed and for a tooltip.</summary>
-    public string Display => $"{FileName} {Arguments}";
+    public string Display => string.Join(" ", new[] { FileName }.Concat(Arguments).Select(Quoted));
+
+    private static string Quoted(string part)
+        => part.Length > 0 && !part.Any(character => char.IsWhiteSpace(character) || character == '"')
+            ? part
+            : "\"" + part.Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
 
     /// <summary>
     /// Builds the command for a run, or says why it cannot be built.
@@ -70,9 +82,7 @@ public sealed record RerunCommand
         {
             FileName = "dotnet",
 
-            // Quoted, because a project path with a space in it is ordinary and an unquoted one
-            // silently becomes two arguments and a confusing error.
-            Arguments = $"test \"{run.ProjectFilePath}\" --filter \"FullyQualifiedName={run.FullyQualifiedName}\"",
+            Arguments = ["test", run.ProjectFilePath, "--filter", $"FullyQualifiedName={run.FullyQualifiedName}"],
             WorkingDirectory = Path.GetDirectoryName(run.ProjectFilePath) ?? string.Empty
         };
 

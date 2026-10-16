@@ -77,7 +77,6 @@ public partial class UC_ValueInspector : UserControl, IDisposable
 
     }
 
-
     /// <summary>Shows a value, following it for as long as the inspector stays open.</summary>
     /// <param name="key">The value's identifier.</param>
     /// <param name="isArtifact">Whether the value is an artifact rather than a variable.</param>
@@ -298,7 +297,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
             PageWidth = 4000
         };
 
-        foreach (DiffLine line in DiffOf(change))
+        foreach (DiffLine line in ValueChangeText.Of(change, CultureInfo.CurrentCulture))
         {
             if (line.Kind == DiffLineKind.Note)
                 document.Blocks.AddRange(Note(line));
@@ -356,7 +355,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
         {
             Text = change.Change switch
             {
-                ValueChangeKind.Changed => "The two differ: " + Difference(change) + ".",
+                ValueChangeKind.Changed => "The two differ: " + ValueChangeText.Difference(change, CultureInfo.CurrentCulture) + ".",
                 ValueChangeKind.Added => "This run produced it; the last passing run did not.",
                 ValueChangeKind.Removed => "The last passing run produced it; this run did not.",
                 ValueChangeKind.Indeterminate => change.Reason ?? "The two cannot be compared.",
@@ -495,81 +494,6 @@ public partial class UC_ValueInspector : UserControl, IDisposable
 
             yield return paragraph;
         }
-    }
-
-    /// <summary>
-    /// The lines to show for a change, reconciled with what the comparison concluded.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// A value's preview is not always where its content is. A short string fits in its summary and
-    /// carries no separate preview at all, so diffing previews alone compared nothing against nothing
-    /// and announced that the two were identical — directly contradicting the badge that had just
-    /// called it changed.
-    /// </para>
-    /// <para>
-    /// And even with previews on both sides they can legitimately match while the values differ: a
-    /// collection that grew past the point the preview was cut has the same visible beginning. The
-    /// comparison knows better, because it also weighed sizes and hashes. Where the two disagree the
-    /// comparison wins and the panel says why it cannot show the difference, rather than quietly
-    /// implying there is none.
-    /// </para>
-    /// </remarks>
-    private static ImmutableList<DiffLine> DiffOf(ValueChange change)
-    {
-        ImmutableList<DiffLine> lines = TextDiff.Unified(DiffTextFor(change.Baseline), DiffTextFor(change.Current));
-
-        bool saysIdentical = lines.Count == 1 && lines[0].Kind == DiffLineKind.Note;
-
-        if (!saysIdentical || change.Change == ValueChangeKind.Unchanged)
-            return lines;
-
-        return
-        [
-            new DiffLine
-            {
-                Kind = DiffLineKind.Note,
-                Text = "The part that was sent is the same in both runs, but the values differ - "
-                     + Difference(change)
-                     + ". Open both files to see where."
-            }
-        ];
-    }
-
-    /// <summary>Whatever of a value's content is available to compare, richest first.</summary>
-    private static string DiffTextFor(ValueDescription? described)
-    {
-        if (described is null)
-            return string.Empty;
-
-        string preview = ValueInspection.PreviewText(described.Preview);
-
-        if (!string.IsNullOrEmpty(preview))
-            return preview;
-
-        // A short value's content is its summary; there was never a preview to cut.
-        if (!string.IsNullOrWhiteSpace(described.Summary))
-            return described.Summary;
-
-        return string.Join(Environment.NewLine, described.Facts.Select(fact => $"{fact.Name}: {fact.Value}"));
-    }
-
-    /// <summary>States what is known to differ when the visible text does not.</summary>
-    private static string Difference(ValueChange change)
-    {
-        long? before = change.Baseline?.Body?.SizeInBytes ?? change.Baseline?.Preview?.SizeInBytes;
-        long? after = change.Current?.Body?.SizeInBytes ?? change.Current?.Preview?.SizeInBytes;
-
-        if (before is { } from && after is { } to && from != to)
-            return $"{ValueInspection.Size(from, CultureInfo.CurrentCulture)} before, {ValueInspection.Size(to, CultureInfo.CurrentCulture)} now";
-
-        string baselineHash = change.Baseline?.Body?.ContentHash ?? string.Empty;
-        string currentHash = change.Current?.Body?.ContentHash ?? string.Empty;
-
-        if (baselineHash.Length > 0 && currentHash.Length > 0)
-            return "their content hashes do not match";
-
-        return "their recorded facts do not match";
     }
 
     private void ShowVariable(ValueNode? value)
@@ -736,7 +660,6 @@ public partial class UC_ValueInspector : UserControl, IDisposable
 
     /// <summary>The file this value was written to, wherever it is now.</summary>
     private string? BodyFile() => RunFiles.Resolve(body);
-
 
     /// <summary>
     /// Lets go of the store.

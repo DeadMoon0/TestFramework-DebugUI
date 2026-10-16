@@ -193,7 +193,7 @@ public sealed class PipeRunEventSourceTests
 
         Timeline timeline = Timeline.Create()
             .Trigger(new WaitForCancellationStep(waiting))
-            .Name("cancelled")
+            .Label("cancelled")
             .Build();
 
         Task run = timeline.SetupRun().RunAsync();
@@ -419,7 +419,7 @@ public sealed class PipeRunEventSourceTests
     {
         Timeline timeline = Timeline.Create()
             .Trigger(new NoopStep())
-            .Name(label)
+            .Label(label)
             .Build();
 
         return timeline.SetupRun().RunAsync();
@@ -436,7 +436,7 @@ public sealed class PipeRunEventSourceTests
     {
         Timeline timeline = Timeline.Create()
             .Trigger(new NoopStep())
-            .Name(label)
+            .Label(label)
             .Build();
 
         return timeline.SetupRun(new CaptureServices(source ?? new PictureCapture())).RunAsync();

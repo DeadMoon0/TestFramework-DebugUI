@@ -29,7 +29,7 @@ public class StepPolicyTests
             DoesReturn = true,
             Parallelization = StepParallelizationMode.DoNotParallelize,
             MaxRetries = 2,
-            TimeOut = TimeSpan.FromMinutes(10),
+            Timeout = TimeSpan.FromMinutes(10),
             IgnoredExceptions = ["HttpRequestException"]
         }));
 

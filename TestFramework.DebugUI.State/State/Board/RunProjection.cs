@@ -120,8 +120,8 @@ public static partial class RunProjection
             {
                 MaxRetries = step.MaxRetries,
                 MaxRetriesVariable = step.MaxRetriesVariable,
-                TimeOut = step.TimeOut,
-                TimeOutVariable = step.TimeOutVariable,
+                TimeOut = step.Timeout,
+                TimeOutVariable = step.TimeoutVariable,
                 IgnoredExceptions = [.. step.IgnoredExceptions],
                 RunsAlone = step.Parallelization == StepParallelizationMode.DoNotParallelize
             }

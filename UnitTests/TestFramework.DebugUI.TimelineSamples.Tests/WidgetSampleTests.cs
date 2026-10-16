@@ -36,12 +36,12 @@ public class WidgetSampleTests(ITestOutputHelper outputHelper)
     public async Task AStepThatWalksAJourney_ShowsWhatItSaw()
     {
         Timeline timeline = Timeline.Create()
-            .Trigger(new PageStep("catalogue", "The product list, nothing in the cart yet")).Name("browse the catalogue")
-            .Trigger(new PageStep("checkout", "The order form, filled in")).Name("fill the basket")
-            .Trigger(new PageStep("confirmation", "The order, placed")).Name("check out")
+            .Trigger(new PageStep("catalogue", "The product list, nothing in the cart yet")).Label("browse the catalogue")
+            .Trigger(new PageStep("checkout", "The order form, filled in")).Label("fill the basket")
+            .Trigger(new PageStep("confirmation", "The order, placed")).Label("check out")
             .Build();
 
-        TimelineRun run = await timeline.SetupRun(outputHelper).RunAsync();
+        TimelineRun run = await timeline.SetupRun(outputHelper.WriteLine).RunAsync();
 
         run.EnsureRanToCompletion();
     }
@@ -52,10 +52,10 @@ public class WidgetSampleTests(ITestOutputHelper outputHelper)
         // The case a filmstrip earns its place on: three pictures of the same step, and the one that
         // explains the failure is the first.
         Timeline timeline = Timeline.Create()
-            .Trigger(new FlakyPageStep()).WithRetry(2, CalcDelays.None).Name("place the order")
+            .Trigger(new FlakyPageStep()).WithRetry(2, CalcDelays.None).Label("place the order")
             .Build();
 
-        TimelineRun run = await timeline.SetupRun(outputHelper).RunAsync();
+        TimelineRun run = await timeline.SetupRun(outputHelper.WriteLine).RunAsync();
 
         run.EnsureRanToCompletion();
     }
@@ -66,10 +66,10 @@ public class WidgetSampleTests(ITestOutputHelper outputHelper)
         // A page is not only what it looked like. The markup behind it and what the console said are
         // the other two things a reader asks for, and they travel the same way.
         Timeline timeline = Timeline.Create()
-            .Trigger(new EvidenceStep()).Name("inspect the page")
+            .Trigger(new EvidenceStep()).Label("inspect the page")
             .Build();
 
-        TimelineRun run = await timeline.SetupRun(outputHelper).RunAsync();
+        TimelineRun run = await timeline.SetupRun(outputHelper.WriteLine).RunAsync();
 
         run.EnsureRanToCompletion();
     }

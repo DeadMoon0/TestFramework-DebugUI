@@ -59,7 +59,7 @@ public sealed class TimelineSamplesTests(ITestOutputHelper outputHelper)
         Timeline timeline = Timeline.Create()
             .Build();
 
-        TimelineRun run = await timeline.SetupRun(outputHelper).RunAsync();
+        TimelineRun run = await timeline.SetupRun(outputHelper.WriteLine).RunAsync();
 
         run.EnsureRanToCompletion();
     }
@@ -69,11 +69,11 @@ public sealed class TimelineSamplesTests(ITestOutputHelper outputHelper)
     {
         Timeline timeline = Timeline.Create()
             .SetVariable("name", Var.Const("Ada"))
-            .Transform("greeting", Var.Ref<string>("name"), name => $"Hello {name}")
+            .Transform(Var.Ref<string>("name"), "greeting", name => $"Hello {name}")
             .AssertVariable(Var.Ref<string>("greeting"), greeting => greeting == "Hello Ada")
             .Build();
 
-        TimelineRun run = await timeline.SetupRun(outputHelper).RunAsync();
+        TimelineRun run = await timeline.SetupRun(outputHelper.WriteLine).RunAsync();
 
         run.EnsureRanToCompletion();
         Assert.Equal("Hello Ada", run.VariableStore.GetVariable<string>("greeting"));
@@ -95,7 +95,7 @@ public sealed class TimelineSamplesTests(ITestOutputHelper outputHelper)
             .AssertVariable(Var.Ref<string>("name"), name => name == "Ada")
             .Build();
 
-        TimelineRun run = await timeline.SetupRun(outputHelper).RunAsync();
+        TimelineRun run = await timeline.SetupRun(outputHelper.WriteLine).RunAsync();
 
         Assert.Throws<TimelineRunFailedException>(run.EnsureRanToCompletion);
     }
@@ -113,7 +113,7 @@ public sealed class TimelineSamplesTests(ITestOutputHelper outputHelper)
     {
         Timeline timeline = Timeline.Create()
             .SetVariable("orderIds", Var.Const(Enumerable.Range(1, 4000).ToArray()))
-            .Transform("report", Var.Ref<int[]>("orderIds"), ids => string.Join(Environment.NewLine, (ids ?? []).Select(id => $"order {id} accepted")))
+            .Transform(Var.Ref<int[]>("orderIds"), "report", ids => string.Join(Environment.NewLine, (ids ?? []).Select(id => $"order {id} accepted")))
             .SetVariable("shortNote", Var.Const("small enough to send"))
 
             // Bytes as well as text, so the binary path is exercised too: the preview arrives as hex
@@ -121,7 +121,7 @@ public sealed class TimelineSamplesTests(ITestOutputHelper outputHelper)
             .SetVariable("screenshot", Var.Const(SampleBytes(9000)))
             .Build();
 
-        TimelineRun run = await timeline.SetupRun(outputHelper).RunAsync();
+        TimelineRun run = await timeline.SetupRun(outputHelper.WriteLine).RunAsync();
 
         run.EnsureRanToCompletion();
         Assert.Equal(4000, run.VariableStore.GetVariable<int[]>("orderIds")!.Length);
@@ -166,14 +166,14 @@ public sealed class TimelineSamplesTests(ITestOutputHelper outputHelper)
             .SetVariable("pause", Var.Const(TimelineSampleShell.Pause(2)))
             .SetVariable("cwd", Var.Const(TimelineSamplePaths.BuildOutput))
             .Trigger(LocalIOExt.Trigger.Cmd(Var.Ref<string>("pause"), Var.Ref<string>("cwd")))
-            .Transform("firstDone", Var.Ref<string>("started"), started => $"{started}-first")
+            .Transform(Var.Ref<string>("started"), "firstDone", started => $"{started}-first")
             .Trigger(LocalIOExt.Trigger.Cmd(Var.Ref<string>("pause"), Var.Ref<string>("cwd")))
-            .Transform("secondDone", Var.Ref<string>("firstDone"), first => $"{first}-second")
+            .Transform(Var.Ref<string>("firstDone"), "secondDone", first => $"{first}-second")
             .Trigger(LocalIOExt.Trigger.Cmd(Var.Ref<string>("pause"), Var.Ref<string>("cwd")))
             .AssertVariable(Var.Ref<string>("secondDone"), value => value == "yes-first-second")
             .Build();
 
-        TimelineRun run = await timeline.SetupRun(outputHelper).RunAsync();
+        TimelineRun run = await timeline.SetupRun(outputHelper.WriteLine).RunAsync();
 
         run.EnsureRanToCompletion();
         Assert.Equal("yes-first-second", run.VariableStore.GetVariable<string>("secondDone"));
@@ -190,7 +190,7 @@ public sealed class TimelineSamplesTests(ITestOutputHelper outputHelper)
                 .SetupArtifact("seed-file")
                 .Build();
 
-            TimelineRun run = await timeline.SetupRun(outputHelper)
+            TimelineRun run = await timeline.SetupRun(outputHelper.WriteLine)
                 .AddFileArtifact("seed-file", artifactPath, "seed-data")
                 .RunAsync();
 
@@ -217,11 +217,11 @@ public sealed class TimelineSamplesTests(ITestOutputHelper outputHelper)
             Timeline timeline = Timeline.Create()
                 .Trigger(LocalIOExt.Trigger.Cmd(Var.Ref<string>("cmdCreate"), Var.Ref<string>("cwd")))
                 .WaitForEvent(LocalIOExt.Events.FileExists(Var.Ref<string>("artifactPath")))
-                .WithTimeOut(TimeSpan.FromSeconds(10))
+                .WithTimeout(TimeSpan.FromSeconds(10))
                 .RegisterArtifact("event-file", LocalIOExt.Artifacts.FileRef(Var.Ref<string>("artifactPath")))
                 .Build();
 
-            TimelineRun run = await timeline.SetupRun(outputHelper)
+            TimelineRun run = await timeline.SetupRun(outputHelper.WriteLine)
                 .AddVariable("cmdCreate", TimelineSampleShell.DelayedWriteText(artifactFileName, "event-ready"))
                 .AddVariable("cwd", TimelineSamplePaths.BuildOutput)
                 .AddVariable("artifactPath", artifactPath)
@@ -253,11 +253,11 @@ public sealed class TimelineSamplesTests(ITestOutputHelper outputHelper)
                     throw new InvalidOperationException("Planned sample failure.");
                 }
             }))
-            .Name("flaky")
+            .Label("flaky")
             .WithRetry(2, CalcDelays.None)
             .Build();
 
-        TimelineRun run = await timeline.SetupRun(outputHelper).RunAsync();
+        TimelineRun run = await timeline.SetupRun(outputHelper.WriteLine).RunAsync();
 
         run.EnsureRanToCompletion();
         Assert.Equal(3, attempts);
@@ -280,7 +280,7 @@ public sealed class TimelineSamplesTests(ITestOutputHelper outputHelper)
             })
             .Build();
 
-        TimelineRun run = await timeline.SetupRun(outputHelper).RunAsync();
+        TimelineRun run = await timeline.SetupRun(outputHelper.WriteLine).RunAsync();
 
         run.EnsureRanToCompletion();
         Assert.Equal(3, seen.Count);
@@ -304,7 +304,7 @@ public sealed class TimelineSamplesTests(ITestOutputHelper outputHelper)
                 .CaptureArtifactVersion("log-file", "after-second-write")
                 .Build();
 
-            TimelineRun run = await timeline.SetupRun(outputHelper)
+            TimelineRun run = await timeline.SetupRun(outputHelper.WriteLine)
                 .AddVariable("cmdAppendFirst", TimelineSampleShell.AppendText(artifactFileName, "line-one"))
                 .AddVariable("cmdAppendSecond", TimelineSampleShell.AppendText(artifactFileName, "line-two"))
                 .AddVariable("cwd", TimelineSamplePaths.BuildOutput)

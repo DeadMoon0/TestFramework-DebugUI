@@ -379,7 +379,7 @@ public sealed class ShellControllerTests(JournalFixture fixture)
     {
         Timeline timeline = Timeline.Create()
             .Trigger(new NoopStep())
-            .Name(label)
+            .Label(label)
             .Build();
 
         await timeline.SetupRun().RunAsync();
@@ -392,7 +392,7 @@ public sealed class ShellControllerTests(JournalFixture fixture)
     {
         Timeline timeline = Timeline.Create()
             .Trigger(new ThrowingStep())
-            .Name(label)
+            .Label(label)
             .Build();
 
         try

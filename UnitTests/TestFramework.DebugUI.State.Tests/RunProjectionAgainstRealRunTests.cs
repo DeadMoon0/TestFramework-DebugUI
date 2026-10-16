@@ -40,6 +40,7 @@ public sealed class JournalFixture : IDisposable
     public JournalFixture()
     {
         Directory.CreateDirectory(Root);
+        File.WriteAllText(Path.Combine(Root, DebugJournal.RecordingMarkerName), string.Empty);
         Environment.SetEnvironmentVariable("TESTFRAMEWORK_DEBUG_JOURNAL_DIR", Root);
     }
 
@@ -84,9 +85,9 @@ public class RunProjectionAgainstRealRunTests(JournalFixture fixture)
     {
         Timeline timeline = Timeline.Create()
             .Trigger(new SetVariableStep("orderId", 42))
-            .Name("produce")
+            .Label("produce")
             .Trigger(new SetVariableStep("total", 99))
-            .Name("consume")
+            .Label("consume")
             .Build();
 
         await timeline.SetupRun().RunAsync();
@@ -127,7 +128,7 @@ public class RunProjectionAgainstRealRunTests(JournalFixture fixture)
         // window draws from depends on this chain, and every link of it is a different assembly.
         Timeline timeline = Timeline.Create()
             .Trigger(new CapturingStep())
-            .Name("photographs")
+            .Label("photographs")
             .Build();
 
         await timeline.SetupRun().RunAsync();
@@ -161,7 +162,7 @@ public class RunProjectionAgainstRealRunTests(JournalFixture fixture)
         // survive Core, the envelope, the journal and the projection to reach the step panel.
         Timeline timeline = Timeline.Create()
             .Trigger(new ThrowingStep("kaboom"))
-            .Name("explodes")
+            .Label("explodes")
             .Build();
 
         await timeline.SetupRun().RunAsync();
@@ -187,7 +188,7 @@ public class RunProjectionAgainstRealRunTests(JournalFixture fixture)
         // or a reconnect actually exercises.
         Timeline timeline = Timeline.Create()
             .Trigger(new SetVariableStep("orderId", 7))
-            .Name("produce")
+            .Label("produce")
             .Build();
 
         await timeline.SetupRun().RunAsync();
@@ -275,7 +276,7 @@ public class RunProjectionAgainstRealRunTests(JournalFixture fixture)
         }
 
         public override Step<EmptyStepResultContext> Clone() => new SetVariableStep(key, value).WithClonedOptions(this);
-        public override void DeclareIO(StepIOContract contract) => contract.Outputs.Add(new StepIOEntry(key, StepIOKind.Variable));
+        public override void DeclareIO(StepIOContract contract) => contract.Output(key);
         public override StepInstance<Step<EmptyStepResultContext>, EmptyStepResultContext> GetInstance() => new(this);
     }
 

@@ -147,7 +147,7 @@ public class JournalRunEventSourceTests(JournalFixture fixture)
     {
         Timeline timeline = Timeline.Create()
             .Trigger(new NoopStep())
-            .Name(label)
+            .Label(label)
             .Build();
 
         await timeline.SetupRun().RunAsync();

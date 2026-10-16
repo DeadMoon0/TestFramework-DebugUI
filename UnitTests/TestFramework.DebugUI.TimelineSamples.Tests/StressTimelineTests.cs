@@ -74,8 +74,8 @@ public sealed class StressTimelineTests(ITestOutputHelper outputHelper)
             // A value that is one long line rather than a lot of them, which wraps and trims differently.
             .SetVariable("oneLongLine", Var.Const(new string('x', 12_000)))
 
-            .Transform("label", Var.Ref<string>("suite"), suite => $"{suite} under load")
-            .Name("name the run")
+            .Transform(Var.Ref<string>("suite"), "label", suite => $"{suite} under load")
+            .Label("name the run")
 
             // ---------------------------------------------------------------- a wide layer that all logs at once
             .ForEach(Enumerable.Range(1, FanOut).Select(index => $"shard-{index:00}").ToArray(), "shard", loop =>
@@ -127,7 +127,7 @@ public sealed class StressTimelineTests(ITestOutputHelper outputHelper)
 
                 logger.LogInformation("Replay finished");
             }, []))
-            .Name("replay the log")
+            .Label("replay the log")
 
             // ---------------------------------------------------------------- a step that will not share
             .Trigger(SimpleExt.Trigger.Action((_, logger, _, _) =>
@@ -136,7 +136,7 @@ public sealed class StressTimelineTests(ITestOutputHelper outputHelper)
                 Thread.Sleep(1500);
                 logger.LogInformation("Releasing it");
             }, []))
-            .Name("migrate the schema")
+            .Label("migrate the schema")
             .DoNotParallelize()
 
             // ---------------------------------------------------------------- retries
@@ -152,7 +152,7 @@ public sealed class StressTimelineTests(ITestOutputHelper outputHelper)
 
                 logger.LogInformation("Gateway answered on attempt {0}", flakyAttempts);
             }, []))
-            .Name("call the flaky gateway")
+            .Label("call the flaky gateway")
             .WithRetry(Var.Ref<int>("budget"), CalcDelays.None)
 
             // ---------------------------------------------------------------- a failure that is absorbed
@@ -161,7 +161,7 @@ public sealed class StressTimelineTests(ITestOutputHelper outputHelper)
                 logger.LogWarning("The optional cache is not reachable; carrying on without it");
                 throw new InvalidOperationException("Optional cache unavailable.");
             }, []))
-            .Name("warm the optional cache")
+            .Label("warm the optional cache")
             .ExpectExceptions(typeof(InvalidOperationException))
 
             // ---------------------------------------------------------------- a step that runs out of time
@@ -171,8 +171,8 @@ public sealed class StressTimelineTests(ITestOutputHelper outputHelper)
                 Thread.Sleep(5000);
                 logger.LogInformation("This line is never reached");
             }, []))
-            .Name("drain the dead queue")
-            .WithTimeOut(Var.Ref<TimeSpan>("patience"))
+            .Label("drain the dead queue")
+            .WithTimeout(Var.Ref<TimeSpan>("patience"))
             .ExpectExceptions(typeof(TaskCanceledException), typeof(OperationCanceledException), typeof(TimeoutException))
 
             // ---------------------------------------------------------------- checks that hold
@@ -206,11 +206,11 @@ public sealed class StressTimelineTests(ITestOutputHelper outputHelper)
                         new FormatException("Entry 17: total '1.234,56' is not a decimal in this culture."),
                         new OverflowException("Entry 22: 9223372036854775808 does not fit in an Int64.")));
             }, []))
-            .Name("post the batch")
+            .Label("post the batch")
 
             .Build();
 
-        TimelineRun run = await timeline.SetupRun(outputHelper).RunAsync();
+        TimelineRun run = await timeline.SetupRun(outputHelper.WriteLine).RunAsync();
 
         // The only claims worth making: the load was applied, and the run got where it was going. Anything more
         // would be a statement about the framework that a smaller sample already makes more clearly.

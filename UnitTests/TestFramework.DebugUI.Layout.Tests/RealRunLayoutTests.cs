@@ -31,9 +31,9 @@ public sealed class RealRunLayoutTests
 
         Timeline timeline = Timeline.Create()
             .Trigger(new ProducingStep())
-            .Name("produce")
+            .Label("produce")
             .Trigger(new ConsumingStep())
-            .Name("consume")
+            .Label("consume")
             .Build();
 
         await timeline.SetupRun(new DebuggerServiceProvider(debugger)).RunAsync();
@@ -68,7 +68,7 @@ public sealed class RealRunLayoutTests
 
         Timeline timeline = Timeline.Create()
             .Trigger(new ProducingStep())
-            .Name("produce")
+            .Label("produce")
             .Build();
 
         await timeline.SetupRun(new DebuggerServiceProvider(debugger)).RunAsync();
@@ -112,16 +112,16 @@ public sealed class RealRunLayoutTests
 
         public TimelineRunStructure? Structure { get; private set; }
 
-        public Task SignalInitTimelineRunAsync(string sessionId, string name, string projectPath, TimelineRunStructure runStructure, TestIdentity? identity = null)
+        public Task SignalInitTimelineRunAsync(string sessionId, DebugRunStart start)
         {
-            Structure = runStructure;
+            Structure = start.RunStructure;
             return Task.CompletedTask;
         }
 
-        public Task SignalEntityTransitionAsync(string sessionId, DebugEntityKind entityKind, string? stage, int? stepId, DebugLifecycleState state, DebugLifecycleState? previousState = null, DebugLifecycleState? outcomeState = null, DebugFailureDetail? failure = null)
+        public Task SignalEntityTransitionAsync(string sessionId, DebugEntityTransition transition)
             => Task.CompletedTask;
 
-        public Task SignalValueUpdateAsync(string sessionId, string name, DebugValueKind valueKind, string? stage, int? stepId, DebugValueEnvelope value)
+        public Task SignalValueUpdateAsync(string sessionId, DebugValueUpdate update)
             => Task.CompletedTask;
 
         public Task SignalLogEntryAsync(string sessionId, DebugLogEntry entry) => Task.CompletedTask;
@@ -148,7 +148,7 @@ public sealed class RealRunLayoutTests
         public override Step<EmptyStepResultContext> Clone() => new ProducingStep().WithClonedOptions(this);
 
         public override void DeclareIO(StepIOContract contract)
-            => contract.Outputs.Add(new StepIOEntry("answer", StepIOKind.Variable));
+            => contract.Output("answer");
 
         public override StepInstance<Step<EmptyStepResultContext>, EmptyStepResultContext> GetInstance() => new(this);
     }
@@ -165,7 +165,7 @@ public sealed class RealRunLayoutTests
         public override Step<EmptyStepResultContext> Clone() => new ConsumingStep().WithClonedOptions(this);
 
         public override void DeclareIO(StepIOContract contract)
-            => contract.Inputs.Add(new StepIOEntry("answer", StepIOKind.Variable));
+            => contract.Input("answer");
 
         public override StepInstance<Step<EmptyStepResultContext>, EmptyStepResultContext> GetInstance() => new(this);
     }

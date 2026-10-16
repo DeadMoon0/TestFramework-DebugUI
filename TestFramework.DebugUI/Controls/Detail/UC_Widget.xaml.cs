@@ -5,9 +5,12 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Axiom.State;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.Copying;
+using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
+using TestFramework.DebugUI.State.Transport;
 using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Detail;
@@ -40,11 +43,18 @@ public partial class UC_Widget : UserControl
 
     private const int ContentHeight = 170;
 
+    /// <summary>The store whose selected run the widget belongs to, which says where its file is now.</summary>
+    private readonly StateStore<MainState> store;
+
     private WidgetNode? shown;
 
     /// <summary>Creates an empty frame.</summary>
-    public UC_Widget()
+    /// <param name="shell">The store whose run the widget belongs to, and what it may ask the shell to do.</param>
+    public UC_Widget(ShellContext shell)
     {
+        ArgumentNullException.ThrowIfNull(shell);
+        store = shell.Store;
+
         InitializeComponent();
 
         Width = FrameWidth;
@@ -74,7 +84,7 @@ public partial class UC_Widget : UserControl
         bContent.Height = ContentHeight;
         bContent.Child = Middle(widget);
 
-        bool openable = RunFiles.Resolve(widget.Description.Body) is not null;
+        bool openable = RunFiles.Resolve(widget.Description.Body, store) is not null;
 
         btOpen.IsEnabled = openable;
         btCopy.IsEnabled = widget.Description.Body is not null;
@@ -94,7 +104,7 @@ public partial class UC_Widget : UserControl
         // decisions around it are shared with the board, which draws the same widget at card width.
         if (WidgetFaces.IsPicture(widget))
         {
-            return WidgetFaces.PictureOf(widget, FrameWidth * 2) is { } picture
+            return WidgetFaces.PictureOf(widget, FrameWidth * 2, store) is { } picture
                 ? WidgetFaces.Draw(picture)
                 : Missing("the picture is not on this machine");
         }
@@ -145,14 +155,14 @@ public partial class UC_Widget : UserControl
 
     private void btOpen_Click(object sender, RoutedEventArgs e)
     {
-        if (shown is not null && RunFiles.Resolve(shown.Description.Body) is { } path)
+        if (shown is not null && RunFiles.Resolve(shown.Description.Body, store) is { } path)
             Process.Start(new ProcessStartInfo(path) { UseShellExecute = true })?.Dispose();
     }
 
     private void btCopy_Click(object sender, RoutedEventArgs e)
     {
         if (shown?.Description.Body is { } body)
-            Clipboards.Set(RunFiles.Resolve(body) ?? body.RelativePath);
+            Clipboards.Set(RunFiles.Resolve(body, store) ?? body.RelativePath);
     }
 
     private void btExpand_Click(object sender, RoutedEventArgs e) => Expand();

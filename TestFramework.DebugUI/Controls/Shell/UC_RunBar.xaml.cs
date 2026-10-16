@@ -14,6 +14,7 @@ using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Diagnostics;
 using TestFramework.DebugUI.State.Runs;
 using TestFramework.DebugUI.State.Shell.Feed;
+using TestFramework.DebugUI.State.Transport;
 
 namespace TestFramework.DebugUI.Controls.Shell;
 
@@ -36,18 +37,29 @@ public partial class UC_RunBar : UserControl
 {
     private readonly CompositeDisposable subscriptions = [];
 
+    /// <summary>The store whose selected run this bar is about.</summary>
+    private readonly StateStore<MainState> store;
+
+    /// <summary>What this bar can ask the shell to do, which here is only to say what went wrong.</summary>
+    private readonly IShellCommands commands;
+
     private ExternalEditor? code;
     private ExternalEditor? visualStudio;
     private SourceLocation? source;
 
     /// <summary>Creates the bar and binds it.</summary>
-    public UC_RunBar()
+    /// <param name="shell">The store whose selected run this bar is about, and what it may ask the shell to do.</param>
+    public UC_RunBar(ShellContext shell)
     {
+        ArgumentNullException.ThrowIfNull(shell);
+        store = shell.Store;
+        commands = shell.Commands;
+
         InitializeComponent();
 
         // Left in the casing the test author wrote: a test name is PascalCase and nothing else, so
         // upper-casing it removes the only thing separating its words.
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(RunsSelectors.SelectSelectedRun)
             .Select(run => run?.Name ?? string.Empty)
             .BindToDependencyProperty(tbRunName, TextBlock.TextProperty));
@@ -56,18 +68,18 @@ public partial class UC_RunBar : UserControl
         // the tooltip for when the trimmed one is not enough. No copy button on it: this is the title bar,
         // and a button that appears under the pointer in the strip you grab the window by is a button in
         // the way. The same name is copyable from the step panel, where reading it is the point.
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(RunsSelectors.SelectSelectedTest)
             .Subscribe(test => tbRunName.ToolTip = string.IsNullOrWhiteSpace(test) ? null : test));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(RunsSelectors.SelectHasSelection)
             .Select(selected => selected ? Visibility.Visible : Visibility.Collapsed)
             .BindToDependencyProperty(this, VisibilityProperty));
 
         // Shown only when there is something to release. A button that is always there and almost always
         // does nothing teaches people not to look at it.
-        IObservable<Visibility> held = StateStore<MainState>.Default
+        IObservable<Visibility> held = store
             .Bind(BoardSelectors.SelectIsWaitingAtBreakpoint)
             .Select(waiting => waiting ? Visibility.Visible : Visibility.Collapsed);
 
@@ -75,25 +87,25 @@ public partial class UC_RunBar : UserControl
         subscriptions.Add(held.BindToDependencyProperty(btStep, VisibilityProperty));
         subscriptions.Add(held.BindToDependencyProperty(btLook, VisibilityProperty));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(BoardSelectors.SelectIsRunning)
             .BindToDependencyProperty(btStop, IsEnabledProperty));
 
         // Offered only where it can actually be done. A button that explains itself only after being
         // pressed is a button that wastes the press.
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(RunsSelectors.SelectCanRerunSelected)
             .BindToDependencyProperty(btRerun, IsEnabledProperty));
 
         // Dead unless there is a failure to jump to.
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(BoardSelectors.SelectHasFailure)
             .BindToDependencyProperty(btFirstFailure, IsEnabledProperty));
 
         // The tooltip names the file and line the button will land on, because "open in VS Code" and "open
         // OrderTests.cs at line 42" are different offers and only the second one is worth crossing the
         // window for. Re-read on selection because the answer belongs to the run, not to the editor.
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(RunsSelectors.SelectSelectedRun)
             .Select(run => run?.Source)
             .Subscribe(location =>
@@ -273,7 +285,7 @@ public partial class UC_RunBar : UserControl
         if (editor is null)
             return;
 
-        RunSummary? run = StateStore<MainState>.Default.GetValue(RunsSelectors.SelectedRunOf);
+        RunSummary? run = store.GetValue(RunsSelectors.SelectedRunOf);
 
         System.Collections.Immutable.ImmutableList<string> arguments = EditorPaths.ArgumentsFor(
             run?.ProjectFilePath,
@@ -283,7 +295,7 @@ public partial class UC_RunBar : UserControl
 
         if (arguments.Count == 0)
         {
-            StateStore<MainState>.Default.Dispatch(FeedActions.AppendEntry, new FeedEntry
+            commands.Report(new FeedEntry
             {
                 AtUtc = DateTimeOffset.UtcNow,
                 Severity = FeedSeverity.Warning,
@@ -297,7 +309,7 @@ public partial class UC_RunBar : UserControl
 
         if (!ExternalEditors.TryOpen(editor, arguments))
         {
-            StateStore<MainState>.Default.Dispatch(FeedActions.AppendEntry, new FeedEntry
+            commands.Report(new FeedEntry
             {
                 AtUtc = DateTimeOffset.UtcNow,
                 Severity = FeedSeverity.Warning,

@@ -11,6 +11,7 @@ using Axiom.Wpf.Extensions;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Board.Comparison;
+using TestFramework.DebugUI.State.Transport;
 using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Detail;
@@ -33,27 +34,34 @@ public partial class UC_ValueRail : UserControl, IDisposable
 {
     private readonly CompositeDisposable subscriptions = [];
 
+    /// <summary>The store whose run's values this rail lists, handed on to every item it builds.</summary>
+    private readonly ShellContext shell;
+
     /// <summary>Creates the rail and binds it.</summary>
-    public UC_ValueRail()
+    /// <param name="shell">The store whose run's values this rail lists, and what it may ask the shell to do.</param>
+    public UC_ValueRail(ShellContext shell)
     {
+        ArgumentNullException.ThrowIfNull(shell);
+        this.shell = shell;
+
         InitializeComponent();
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(shell.Store
             .Bind(BoardSelectors.SelectActiveRun)
             .Select(Rows)
             .BindToCollection(spValues.Children, row => row.Id, row => Build(row)));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(shell.Store
             .Bind(BoardSelectors.SelectActiveRun)
             .Select(run => run.Artifacts.Count + run.Variables.Count == 0 ? Visibility.Visible : Visibility.Collapsed)
             .BindToDependencyProperty(tbEmpty, VisibilityProperty));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(shell.Store
             .Bind(BoardSelectors.SelectActiveRun)
             .Select(Counts)
             .BindToDependencyProperty(tbCounts, TextBlock.TextProperty));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(shell.Store
             .Bind(ComparisonSelectors.SelectValues)
             .Subscribe(ShowBaseline));
 
@@ -64,7 +72,7 @@ public partial class UC_ValueRail : UserControl, IDisposable
 
     private UC_ValueItem Build(ValueRow row)
     {
-        UC_ValueItem item = new(row.Key, row.IsArtifact);
+        UC_ValueItem item = new(row.Key, row.IsArtifact, shell);
 
         item.Opened += (key, isArtifact) => ValueOpened?.Invoke(key, isArtifact);
 

@@ -34,9 +34,12 @@ public sealed class WatchNotifier : IDisposable
     private bool primed;
 
     /// <summary>Starts watching.</summary>
-    public WatchNotifier()
+    /// <param name="store">The store whose run list is watched.</param>
+    public WatchNotifier(StateStore<MainState> store)
     {
-        subscriptions.Add(StateStore<MainState>.Default
+        ArgumentNullException.ThrowIfNull(store);
+
+        subscriptions.Add(store
             .Bind(RunsSelectors.SelectAll)
             .Subscribe(OnRuns));
     }

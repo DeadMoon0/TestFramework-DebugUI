@@ -65,9 +65,14 @@ public partial class UC_DockHost : UserControl
     /// <summary>The edges of the wells, and how much of the window each side has.</summary>
     private readonly DockSplitters splitters;
 
-    /// <summary>Creates the host and draws the current arrangement.</summary>
-    public UC_DockHost()
+    /// <summary>Creates the host, builds every panel and draws the current arrangement.</summary>
+    /// <param name="shell">
+    /// The store the panels show and what they may ask the shell to do, handed to each of them as it is built.
+    /// </param>
+    public UC_DockHost(ShellContext shell)
     {
+        ArgumentNullException.ThrowIfNull(shell);
+
         InitializeComponent();
 
         // Handed what it cannot know and nothing else: where a drag is measured, what is drawn, and how
@@ -94,6 +99,14 @@ public partial class UC_DockHost : UserControl
 
 
         Unloaded += (_, _) => Arrangement.Changed -= Show;
+
+        // Built here rather than handed in later. The panels cannot be built without what they show, and
+        // neither can this host: there is no moment at which it exists without its panels, so nothing has to
+        // remember to fill it in before something else reaches for one.
+        foreach (PanelDescriptor descriptor in PanelRegistry.All)
+            panels[descriptor.Id] = descriptor.Create(shell);
+
+        Show();
     }
 
     /// <summary>Raised with what fraction of the window the pinned wells have taken, for the canvas to keep out of.</summary>
@@ -104,33 +117,11 @@ public partial class UC_DockHost : UserControl
     /// </remarks>
     public event Action<DockInsets>? InsetsChanged;
 
-    /// <summary>
-    /// Builds the panels, giving each of them what it can ask the shell to do.
-    /// </summary>
-    /// <remarks>
-    /// Not the constructor, because this host is declared in the window's markup and WPF builds those with
-    /// no arguments. So the window hands the panels their collaborator the moment it has one, and this is
-    /// the one place in the tool where something has to happen before something else — the panels
-    /// themselves take it in their constructors and cannot be built without it.
-    /// </remarks>
-    public void UseCommands(IShellCommands commands)
-    {
-        ArgumentNullException.ThrowIfNull(commands);
-
-        if (panels.Count > 0)
-            return;
-
-        foreach (PanelDescriptor descriptor in PanelRegistry.All)
-            panels[descriptor.Id] = descriptor.Create(commands);
-
-        Show();
-    }
-
     /// <summary>One panel, for the window to wire its events to.</summary>
     public T Get<T>(PanelId panel) where T : UserControl
         => panels.TryGetValue(panel, out UserControl? found)
             ? (T)found
-            : throw new InvalidOperationException($"The panels have not been built yet; {nameof(UseCommands)} comes first.");
+            : throw new InvalidOperationException($"No panel is registered for {panel}.");
 
     /// <summary>Draws the arrangement, rebuilding only what has actually changed shape.</summary>
     private void Show()

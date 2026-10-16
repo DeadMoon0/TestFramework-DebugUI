@@ -26,7 +26,10 @@ namespace TestFramework.DebugUI.Controls.Home;
 /// </remarks>
 public partial class UC_HomeCard : UserControl
 {
-    /// <summary>What this row can ask the shell to do.</summary>
+    /// <summary>The store whose run this card shows.</summary>
+    private readonly StateStore<MainState> store;
+
+    /// <summary>What this card can ask the shell to do.</summary>
     private readonly IShellCommands commands;
 
     private readonly CompositeDisposable subscriptions = [];
@@ -34,22 +37,24 @@ public partial class UC_HomeCard : UserControl
     private bool hovered;
 
     /// <summary>Creates a card for one session.</summary>
-    public UC_HomeCard(string sessionId, IShellCommands commands)
+    /// <param name="sessionId">The session this card shows.</param>
+    /// <param name="shell">The store the session is read from, and what this card may ask the shell to do.</param>
+    public UC_HomeCard(string sessionId, ShellContext shell)
     {
         SessionId = sessionId;
 
-        ArgumentNullException.ThrowIfNull(commands);
+        ArgumentNullException.ThrowIfNull(shell);
 
-        this.commands = commands;
-
+        store = shell.Store;
+        commands = shell.Commands;
 
         InitializeComponent();
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(RunsSelectors.SelectBySession(SessionId))
             .Subscribe(Show));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(RunsSelectors.SelectIsSelected(SessionId))
             .Subscribe(selected => { IsSelected = selected; Paint(); }));
 

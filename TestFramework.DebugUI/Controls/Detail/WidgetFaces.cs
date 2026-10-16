@@ -2,7 +2,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Axiom.State;
 using TestFramework.Core.Debugger;
+using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
 
 namespace TestFramework.DebugUI.Controls.Detail;
@@ -38,8 +40,11 @@ internal static class WidgetFaces
     /// output has been cleaned up, has the description without the file. Each caller says so in its
     /// own words, because there is more room to say it in a panel than on a card.
     /// </remarks>
-    public static BitmapSource? PictureOf(WidgetNode widget, int width)
-        => WidgetImages.Read(RunFiles.Resolve(widget.Description.Body), widget.Description.Body?.ContentHash, width);
+    /// <param name="widget">The widget to draw.</param>
+    /// <param name="width">About how wide it will be drawn.</param>
+    /// <param name="store">The store whose selected run produced it, which says where its file is now.</param>
+    public static BitmapSource? PictureOf(WidgetNode widget, int width, StateStore<MainState> store)
+        => WidgetImages.Read(RunFiles.Resolve(widget.Description.Body, store), widget.Description.Body?.ContentHash, width);
 
     /// <summary>
     /// A picture drawn from its top-left corner, filling the space it is given.

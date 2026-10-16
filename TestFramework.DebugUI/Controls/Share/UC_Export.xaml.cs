@@ -7,10 +7,7 @@ using System.Windows.Controls;
 using Microsoft.Win32;
 using TestFramework.DebugUI.State.Bundles;
 using TestFramework.DebugUI.State.Shell.Feed;
-
-using Axiom.State;
-
-using TestFramework.DebugUI.State;
+using TestFramework.DebugUI.State.Transport;
 
 namespace TestFramework.DebugUI.Controls.Share;
 
@@ -23,12 +20,19 @@ namespace TestFramework.DebugUI.Controls.Share;
 /// </remarks>
 public partial class UC_Export : UserControl
 {
+    /// <summary>What this panel can ask the shell to do, which here is only to say what went wrong.</summary>
+    private readonly IShellCommands commands;
+
     private ImmutableList<string> journals = [];
     private string? suggestedName;
 
     /// <summary>Creates the panel.</summary>
-    public UC_Export()
+    /// <param name="shell">What this panel may ask the shell to do, and the store it belongs to.</param>
+    public UC_Export(ShellContext shell)
     {
+        ArgumentNullException.ThrowIfNull(shell);
+        commands = shell.Commands;
+
         InitializeComponent();
 
         tgArtifacts.Label = "Include artifacts";
@@ -133,7 +137,7 @@ public partial class UC_Export : UserControl
         }
         catch (Exception exception) when (exception is System.IO.IOException or UnauthorizedAccessException)
         {
-            StateStore<MainState>.Default.Dispatch(FeedActions.AppendEntry, new FeedEntry
+            commands.Report(new FeedEntry
             {
                 AtUtc = DateTimeOffset.UtcNow,
                 Severity = FeedSeverity.Error,

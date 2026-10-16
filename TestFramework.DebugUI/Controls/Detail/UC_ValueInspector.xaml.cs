@@ -17,6 +17,7 @@ using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Board.Comparison;
 using TestFramework.DebugUI.State.Bundles;
+using TestFramework.DebugUI.State.Transport;
 
 using System.Windows.Media.Imaging;
 using TestFramework.DebugUI.Theme;
@@ -46,6 +47,10 @@ public partial class UC_ValueInspector : UserControl, IDisposable
     private const int PreviewImageWidth = 1200;
 
     private CompositeDisposable subscriptions = [];
+
+    /// <summary>The store the open value is followed through.</summary>
+    private readonly StateStore<MainState> store;
+
     private ValueBody? body;
 
     /// <summary>What is on screen, so the diff can be rebuilt when the comparison arrives.</summary>
@@ -66,8 +71,12 @@ public partial class UC_ValueInspector : UserControl, IDisposable
     private bool showingDiff;
 
     /// <summary>Creates the inspector, closed and bound to nothing.</summary>
-    public UC_ValueInspector()
+    /// <param name="shell">The store the open value is followed through, and what it may ask the shell to do.</param>
+    public UC_ValueInspector(ShellContext shell)
     {
+        ArgumentNullException.ThrowIfNull(shell);
+        store = shell.Store;
+
         InitializeComponent();
 
         // The file the rest of the value is in, and nothing else. Its path is long, exact, and wanted
@@ -99,14 +108,14 @@ public partial class UC_ValueInspector : UserControl, IDisposable
         tbPreview.Visibility = Visibility.Visible;
 
         subscriptions.Add(isArtifact
-            ? StateStore<MainState>.Default
+            ? store
                 .Bind(BoardSelectors.SelectArtifact(key))
                 .Subscribe(ShowArtifact)
-            : StateStore<MainState>.Default
+            : store
                 .Bind(BoardSelectors.SelectVariable(key))
                 .Subscribe(ShowVariable));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(isArtifact
                 ? ComparisonSelectors.SelectArtifactChange(key)
                 : ComparisonSelectors.SelectVariableChange(key))
@@ -145,11 +154,11 @@ public partial class UC_ValueInspector : UserControl, IDisposable
         // Followed through the graph rather than through a value selector, because a widget is in
         // neither store. A live run can publish a newer one under the same name - a second look at a
         // page - and the panel showing the older one would be showing the past without saying so.
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(BoardSelectors.SelectActiveRun)
             .Subscribe(_ => ShowNewestWidget()));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(ComparisonSelectors.SelectWidgetChange(widget.Name))
             .Subscribe(ShowComparison));
 
@@ -159,7 +168,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
     /// <summary>Draws the newest widget of the open name, which is the current state of that thing.</summary>
     private void ShowNewestWidget()
     {
-        if (shownWidget is null || WidgetOf(StateStore<MainState>.Default.GetValue(state => state.Board.ActiveRun)) is not { } widget)
+        if (shownWidget is null || WidgetOf(store.GetValue(state => state.Board.ActiveRun)) is not { } widget)
             return;
 
         Render(widget.Name, widget.Kind, widget.Description, []);
@@ -230,7 +239,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
     /// <summary>Re-renders the open value from current state, without rebinding.</summary>
     private void Reshow()
     {
-        MainState state = StateStore<MainState>.Default.GetValue(current => current);
+        MainState state = store.GetValue(current => current);
 
         if (shownWidget is not null)
         {
@@ -385,7 +394,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
         });
 
         BitmapSource? picture = IsPicture(described)
-            ? WidgetImages.Read(RunFiles.Resolve(described!.Body), described.Body?.ContentHash, ComparedImageWidth)
+            ? WidgetImages.Read(RunFiles.Resolve(described!.Body, store), described.Body?.ContentHash, ComparedImageWidth)
             : null;
 
         if (picture is not null)
@@ -617,7 +626,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
         // A picture is drawn; everything else is read. The two share the well, so exactly one of them
         // is up at a time — and the diff, which is the third, has already returned above.
         BitmapSource? picture = described.Preview?.Form == DebugPreviewForm.Image
-            ? WidgetImages.Read(RunFiles.Resolve(described.Body), described.Body?.ContentHash, PreviewImageWidth)
+            ? WidgetImages.Read(RunFiles.Resolve(described.Body, store), described.Body?.ContentHash, PreviewImageWidth)
             : null;
 
         imgPreview.Source = picture;
@@ -659,7 +668,7 @@ public partial class UC_ValueInspector : UserControl, IDisposable
     }
 
     /// <summary>The file this value was written to, wherever it is now.</summary>
-    private string? BodyFile() => RunFiles.Resolve(body);
+    private string? BodyFile() => RunFiles.Resolve(body, store);
 
     /// <summary>
     /// Lets go of the store.

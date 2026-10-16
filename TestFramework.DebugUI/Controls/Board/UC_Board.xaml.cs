@@ -21,6 +21,7 @@ using TestFramework.DebugUI.State.Annotations;
 using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Board.Comparison;
 using TestFramework.DebugUI.State.Runs;
+using TestFramework.DebugUI.State.Transport;
 
 namespace TestFramework.DebugUI.Controls.Board;
 
@@ -41,6 +42,10 @@ namespace TestFramework.DebugUI.Controls.Board;
 public partial class UC_Board : UserControl
 {
     private readonly CompositeDisposable subscriptions = [];
+
+    /// <summary>The store this board draws.</summary>
+    private readonly StateStore<MainState> store;
+
     /// <summary>Turns the geometry of a run into the things on screen.</summary>
     private readonly BoardComposer composer;
 
@@ -74,16 +79,20 @@ public partial class UC_Board : UserControl
     private BreakpointService? breakpoints;
 
     /// <summary>Creates the board and binds it.</summary>
-    public UC_Board()
+    /// <param name="shell">The store this board draws, and what it may ask the shell to do.</param>
+    public UC_Board(ShellContext shell)
     {
+        ArgumentNullException.ThrowIfNull(shell);
+        store = shell.Store;
+
         InitializeComponent();
 
-        annotations = new BoardAnnotations(cAnnotations, this);
+        annotations = new BoardAnnotations(cAnnotations, this, store);
         viewport = new BoardViewport(bSurface, stZoom, ttPan);
 
         // Handed the two things a drawn card has to be able to do, because both belong to whoever is
         // watching the board rather than to the drawing of it.
-        painter = new BoardPainter(this);
+        painter = new BoardPainter(this, store);
 
         composer = new BoardComposer(
             this,
@@ -92,15 +101,15 @@ public partial class UC_Board : UserControl
             (stage, stepId) => StepSelected?.Invoke(stage, stepId),
             () => SummaryRequested?.Invoke());
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(BoardSelectors.SelectActiveRun)
             .Subscribe(Render));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(BoardSelectors.SelectSelectedStep)
             .Subscribe(_ => painter.Refresh()));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(ComparisonSelectors.SelectTiming)
             .Subscribe(compared =>
             {
@@ -108,7 +117,7 @@ public partial class UC_Board : UserControl
                 painter.Refresh();
             }));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(BoardSelectors.SelectIsEmpty)
             .Select(empty => empty ? Visibility.Visible : Visibility.Collapsed)
             .BindToDependencyProperty(tbEmpty, VisibilityProperty));
@@ -119,7 +128,7 @@ public partial class UC_Board : UserControl
 
         // Marks belong to a run, so they are loaded when the run changes rather than when the board redraws -
         // which happens on every event a live run produces.
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(RunsSelectors.SelectSelectedSessionId)
             .Subscribe(_ => annotations.Load()));
 
@@ -254,7 +263,7 @@ public partial class UC_Board : UserControl
     /// <summary>Selects the first failed step and pans to it.</summary>
     public void GoToFirstFailure()
     {
-        RunGraph graph = StateStore<MainState>.Default.GetValue(state => state.Board.ActiveRun);
+        RunGraph graph = store.GetValue(state => state.Board.ActiveRun);
 
         foreach (StageNode stage in graph.Stages)
         {

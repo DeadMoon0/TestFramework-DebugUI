@@ -47,15 +47,19 @@ public partial class UC_RunSummary : UserControl, IDisposable
     private RunTally tally = RunTally.Empty;
     private long? recorded;
 
-    /// <summary>Creates the page and binds it.</summary>
-        /// <summary>What this page can ask the shell to do.</summary>
+    /// <summary>The store whose selected run this page sums up.</summary>
+    private readonly StateStore<MainState> store;
+
+    /// <summary>What this page can ask the shell to do.</summary>
     private readonly IShellCommands commands;
 
-    /// <param name="commands">What this page can ask the shell to do.</param>
-    public UC_RunSummary(IShellCommands commands)
+    /// <summary>Creates the page and binds it.</summary>
+    /// <param name="shell">The store whose selected run this page sums up, and what it may ask the shell to do.</param>
+    public UC_RunSummary(ShellContext shell)
     {
-        ArgumentNullException.ThrowIfNull(commands);
-        this.commands = commands;
+        ArgumentNullException.ThrowIfNull(shell);
+        store = shell.Store;
+        commands = shell.Commands;
 
         InitializeComponent();
 
@@ -63,27 +67,27 @@ public partial class UC_RunSummary : UserControl, IDisposable
         // read out than to reach for a button, and a button beside each of them was clutter over the one
         // page in the tool that exists to be read at a glance.
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(BoardSelectors.SelectActiveRun)
             .Select(RunTally.Of)
             .Subscribe(Show));
 
         // Bound separately from the tally: the tally counts checks, and this page also has room to name the
         // ones that did not hold.
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(BoardSelectors.SelectActiveRun)
             .Select(run => run.Assertions)
             .Subscribe(ShowChecks));
 
         // Arrives after the board, because a baseline means reading an earlier run's journal. Bound on its
         // own so the page fills in when it lands rather than waiting for it.
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(ComparisonSelectors.SelectTiming)
             .Subscribe(ShowTiming));
 
         // How big the recording is, which the tally cannot know: it counts what the graph holds, and this is
         // what the producer wrote. Counted into the sidecar as the run went, so reading it costs nothing.
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(RunsSelectors.SelectSelectedRun)
             .Select(run => run?.EventCount)
             .Subscribe(count =>

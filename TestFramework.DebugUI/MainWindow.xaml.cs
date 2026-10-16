@@ -14,8 +14,12 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using Axiom.State;
 using TestFramework.Core.Debugger;
+using TestFramework.DebugUI.Controls.Board;
 using TestFramework.DebugUI.Controls.Dock;
+using TestFramework.DebugUI.Controls.Feed;
+using TestFramework.DebugUI.Controls.Search;
 using TestFramework.DebugUI.Controls.Settings;
+using TestFramework.DebugUI.Controls.Share;
 using TestFramework.DebugUI.Docking;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
@@ -35,13 +39,44 @@ namespace TestFramework.DebugUI;
 /// The application window.
 /// </summary>
 /// <remarks>
-/// The store is built here, before anything is loaded, and reached everywhere else as
-/// <c>StateStore&lt;MainState&gt;.Default</c>. Views bind to it in their own constructors; there is
-/// no DataContext and no view model, which is the convention the rest of these applications follow.
+/// <para>
+/// The store is built here, before any view, and it is this window's own: nothing publishes it as a
+/// process-wide default. Every view is handed it through its constructor, together with what it may
+/// ask the shell to do, as one <see cref="ShellContext"/> - so a view cannot exist without the store it
+/// shows, and a test builds the same view against a store of its own. Views bind to it in their own
+/// constructors; there is no DataContext and no view model, which is the convention the rest of these
+/// applications follow.
+/// </para>
+/// <para>
+/// That is also why the views that show the store are built in code rather than declared in the
+/// markup. WPF builds a declared control with no arguments, so the markup holds a named slot for each
+/// of them, carrying its place in the layout, and the constructor puts the view in it.
+/// </para>
 /// </remarks>
 public partial class MainWindow : Window
 {
+    /// <summary>The state behind everything on screen, built by this window and handed to every view.</summary>
+    private readonly StateStore<MainState> store;
+
     private readonly ShellController shell;
+
+    /// <summary>The run drawn as a board, in <c>bBoardSlot</c>.</summary>
+    private readonly UC_Board ucBoard;
+
+    /// <summary>Every arrangeable panel, in <c>bDockSlot</c>.</summary>
+    private readonly UC_DockHost ucDock;
+
+    /// <summary>The run and what acts on it, in the title bar's <c>bRunBarSlot</c>.</summary>
+    private readonly Controls.Shell.UC_RunBar ucRunBar;
+
+    /// <summary>What the runs off screen have reported, in <c>bFeedSlot</c>.</summary>
+    private readonly UC_Feed ucFeed;
+
+    /// <summary>The find bar over the run, in <c>bSearchSlot</c>.</summary>
+    private readonly UC_Search ucSearch;
+
+    /// <summary>What travels with a shared run, in <c>bExportSlot</c>.</summary>
+    private readonly UC_Export ucExport;
 
     private readonly SettingsStore settings = new();
 
@@ -83,7 +118,7 @@ public partial class MainWindow : Window
     private Unread unread;
     private UiSettings saved = UiSettings.Defaults;
     /// <summary>The notification-area icon and the notices, which outlive the window while watching.</summary>
-    private readonly WatchModeController watch = new();
+    private readonly WatchModeController watch;
     private IDisposable? halts;
 
     /// <summary>Brings the step panel out whenever a step is picked, wherever it was picked from.</summary>
@@ -130,20 +165,25 @@ public partial class MainWindow : Window
         // The effects are given their collaborators rather than reaching for them: the comparison
         // needs to read earlier runs off disk, and the re-run needs to build and start a test host.
         // Both are constructed before the store because the store is what they report into.
+        //
+        // The re-run reports into the store it is built before, so it reads the field when it reports - which is
+        // only ever after a re-run has been asked for, long after this constructor has finished. The compiler
+        // cannot see that from here, hence the null check it will never need.
         string? runsDirectory = ShellController.DefaultRunsDirectory();
-        TestRerunner rerunner = new(entry => StateStore<MainState>.Default.Dispatch(FeedActions.AppendEntry, entry));
+        TestRerunner rerunner = new(entry => store?.Dispatch(FeedActions.AppendEntry, entry));
 
         // This context is the whole of the window's thread marshalling. Runs arrive on the pipe reader
         // and the ingest timer; the store reduces each dispatch on whichever thread made it, then posts
         // every binding's notification here, so the controls - Axiom.Wpf's Bind* helpers included,
         // which set properties directly - only ever see the UI thread. RunIngestServiceTests pins it.
-        MainStore.Create(new BaselineResolver(runsDirectory), rerunner)
+        store = MainStore.Create(new BaselineResolver(runsDirectory), rerunner)
             .UseSynchronizationContext(SynchronizationContext.Current!)
-            .BuildAndMakeDefault();
+            .Build();
 
-        breakpoints = new BreakpointService(StateStore<MainState>.Default);
+        breakpoints = new BreakpointService(store);
+        watch = new WatchModeController(store);
 
-        shell = new ShellController(StateStore<MainState>.Default)
+        shell = new ShellController(store)
         {
             // Every step asks before it runs, so this is consulted constantly. It answers from the
             // breakpoints the user has set, and with none set nothing is ever held.
@@ -167,9 +207,31 @@ public partial class MainWindow : Window
 
         InitializeComponent();
 
-        // Before anything reaches for a panel: the dock host builds them, and each of them is built with
-        // what it may ask of the shell.
-        ucDock.UseCommands(shell);
+        // One context for every view, so they all show the same store and ask the same shell. Each view is
+        // built with it and put into the slot the markup keeps for it; the dock host builds its panels with
+        // it in its own constructor, so there is no moment at which a panel can be reached for and not exist.
+        ShellContext context = new(store, shell);
+
+        ucRunBar = new Controls.Shell.UC_RunBar(context);
+        bRunBarSlot.Child = ucRunBar;
+
+        bTransportSlot.Child = new Controls.Shell.UC_TransportStatus(context);
+
+        ucBoard = new UC_Board(context);
+        bBoardSlot.Child = ucBoard;
+
+        ucDock = new UC_DockHost(context);
+        bDockSlot.Child = ucDock;
+
+        // Built closed, as the markup used to declare them: each of these is brought out on request.
+        ucFeed = new UC_Feed(context) { Visibility = Visibility.Collapsed };
+        bFeedSlot.Child = ucFeed;
+
+        ucSearch = new UC_Search(context) { Visibility = Visibility.Collapsed };
+        bSearchSlot.Child = ucSearch;
+
+        ucExport = new UC_Export(context) { Visibility = Visibility.Collapsed };
+        bExportSlot.Child = ucExport;
 
         // The summary is a foreground question, so whoever asks for it - the verdict on the board, the
         // title bar, a shortcut - asks, and the window decides where it goes. Neither of them has any
@@ -226,7 +288,7 @@ public partial class MainWindow : Window
         // that answer it are in the title bar, and a run held up is waiting on the reader rather than
         // merely informing them — so this gets out of the way rather than leaving the mark behind a page.
         // Only on the transition into waiting, so closing the page and reopening it does not fight this.
-        halts = StateStore<MainState>.Default
+        halts = store
             .Bind(BoardSelectors.SelectIsWaitingAtBreakpoint)
             .DistinctUntilChanged()
             .Subscribe(waiting =>
@@ -241,7 +303,7 @@ public partial class MainWindow : Window
         // failure in the summary, an entry in the feed. A rule kept at four call sites is a rule that
         // holds at three of them the day a fifth is added, and until now it held at none: picking a
         // step with the panel closed changed nothing a reader could see.
-        picks = StateStore<MainState>.Default
+        picks = store
             .Bind(BoardSelectors.SelectSelectedStep)
             .DistinctUntilChanged()
             .Subscribe(step =>
@@ -305,7 +367,7 @@ public partial class MainWindow : Window
 
         // The panel flips the marker; the state is what every other surface reads, so they change together.
         ucSettings.UseRecording(recording);
-        ucSettings.RecordingChanged += now => StateStore<MainState>.Default.Dispatch(ShellActions.SetRecording, now);
+        ucSettings.RecordingChanged += now => store.Dispatch(ShellActions.SetRecording, now);
         PublishRecording();
 
         // A value found by searching opens where a value opened from the rail does. The bar stays up, so a
@@ -328,7 +390,7 @@ public partial class MainWindow : Window
                 Shell.SelectStep(entry.Stage, entry.StepId.Value);
         };
 
-        notifications = StateStore<MainState>.Default
+        notifications = store
             .Bind(FeedSelectors.SelectFeed)
             .Select(feed => new Unread(
                 feed.UnreadCount,
@@ -443,7 +505,7 @@ public partial class MainWindow : Window
     /// change the marker without this window being involved.
     /// </remarks>
     private void PublishRecording()
-        => StateStore<MainState>.Default.Dispatch(ShellActions.SetRecording, recording?.Read() ?? RecordingState.Unknown);
+        => store.Dispatch(ShellActions.SetRecording, recording?.Read() ?? RecordingState.Unknown);
 
     /// <summary>
     /// Shows the themes folder, having first put something in it.
@@ -509,7 +571,7 @@ public partial class MainWindow : Window
     /// </remarks>
     private Task<bool> StepSelectedRunAsync()
     {
-        string? sessionId = StateStore<MainState>.Default.GetValue(state => state.Runs.SelectedSessionId);
+        string? sessionId = store.GetValue(state => state.Runs.SelectedSessionId);
 
         return sessionId is null
             ? Task.FromResult(false)
@@ -837,7 +899,7 @@ public partial class MainWindow : Window
     /// <summary>Offers to share the run being watched.</summary>
     private void ShareSelectedRun()
     {
-        RunSummary? run = StateStore<MainState>.Default.GetValue(RunsSelectors.SelectedRunOf);
+        RunSummary? run = store.GetValue(RunsSelectors.SelectedRunOf);
 
         // A live run has nothing on disk yet. Sharing it would send a journal that is still being written.
         if (run?.JournalPath is not { Length: > 0 } journal)
@@ -1016,7 +1078,7 @@ public partial class MainWindow : Window
         shell.Dispose();
         breakpoints.Dispose();
 
-        StateStore<MainState>.Default?.Dispose();
+        store.Dispose();
 
         // Hiding rather than closing leaves the process alive with no window, so the shutdown has to
         // be explicit once the last window really does go.

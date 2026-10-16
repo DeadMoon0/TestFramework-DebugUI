@@ -15,6 +15,7 @@ using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Board.Comparison;
 using TestFramework.DebugUI.State.Bundles;
+using TestFramework.DebugUI.State.Transport;
 using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Detail;
@@ -30,15 +31,23 @@ namespace TestFramework.DebugUI.Controls.Detail;
 public partial class UC_ValueItem : UserControl
 {
     private readonly CompositeDisposable subscriptions = [];
+
+    /// <summary>The store the value is read from.</summary>
+    private readonly StateStore<MainState> store;
+
     private ValueBody? body;
 
     /// <summary>Creates a row for one value.</summary>
     /// <param name="key">The value's identifier.</param>
     /// <param name="isArtifact">Whether the value is an artifact rather than a variable.</param>
-    public UC_ValueItem(string key, bool isArtifact)
+    /// <param name="shell">The store the value is read from, and what this row may ask the shell to do.</param>
+    public UC_ValueItem(string key, bool isArtifact, ShellContext shell)
     {
+        ArgumentNullException.ThrowIfNull(shell);
+
         Key = key;
         IsArtifact = isArtifact;
+        store = shell.Store;
 
         InitializeComponent();
 
@@ -49,16 +58,16 @@ public partial class UC_ValueItem : UserControl
         bdEdge.Background = (Brush)FindResource(isArtifact ? ThemeKeys.FlowArtifact : ThemeKeys.FlowVariable);
 
         subscriptions.Add(isArtifact
-            ? StateStore<MainState>.Default
+            ? store
                 .Bind(BoardSelectors.SelectArtifact(Key))
                 .Subscribe(ShowArtifact)
-            : StateStore<MainState>.Default
+            : store
                 .Bind(BoardSelectors.SelectVariable(Key))
                 .Subscribe(ShowVariable));
 
         // Bound separately from the value itself: the comparison arrives after the board does,
         // because it has to read an earlier run off disk.
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(isArtifact ? ComparisonSelectors.SelectArtifactChangeKind(Key) : ComparisonSelectors.SelectVariableChangeKind(Key))
             .Subscribe(ShowChange));
 
@@ -264,5 +273,5 @@ public partial class UC_ValueItem : UserControl
     /// Asked of <see cref="ValueFiles"/> rather than tested with <c>File.Exists</c> on the recorded path, so a
     /// run that arrived from another machine finds its files beside its journal instead of looking empty.
     /// </remarks>
-    private string? BodyFile() => RunFiles.Resolve(body);
+    private string? BodyFile() => RunFiles.Resolve(body, store);
 }

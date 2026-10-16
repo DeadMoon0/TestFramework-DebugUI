@@ -4,16 +4,8 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:shell="clr-namespace:TestFramework.DebugUI.Controls.Shell"
-        xmlns:board="clr-namespace:TestFramework.DebugUI.Controls.Board"
-        xmlns:runs="clr-namespace:TestFramework.DebugUI.Controls.Runs"
-        xmlns:detail="clr-namespace:TestFramework.DebugUI.Controls.Detail"
-        xmlns:home="clr-namespace:TestFramework.DebugUI.Controls.Home"
         xmlns:settings="clr-namespace:TestFramework.DebugUI.Controls.Settings"
-        xmlns:share="clr-namespace:TestFramework.DebugUI.Controls.Share"
         xmlns:annotate="clr-namespace:TestFramework.DebugUI.Controls.Annotate"
-        xmlns:feed="clr-namespace:TestFramework.DebugUI.Controls.Feed"
-        xmlns:dock="clr-namespace:TestFramework.DebugUI.Controls.Dock"
-        xmlns:search="clr-namespace:TestFramework.DebugUI.Controls.Search"
         mc:Ignorable="d"
         Title="TestFrameworkDebugger" Height="800" Width="1400" WindowStyle="None" Background="#01000000"
         MinHeight="650" MinWidth="1100" AllowsTransparency="True"
@@ -24,6 +16,11 @@
         window takes no mouse input at all, so it needs the one unit of alpha that makes it hit-testable
         and nothing more. What the reader actually sees behind everything is the acrylic tint Windows
         draws, and then whatever UC_Background paints in front of it.
+
+        The views that show the store are not declared here. WPF builds what markup declares with no
+        arguments, and a view cannot be built without the store it shows - so each of them has a named
+        slot below that carries its place in the layout, and the window builds the view and puts it in.
+        Whatever is declared here directly shows nothing of the store.
     -->
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="40" UseAeroCaptionButtons="True"/>
@@ -74,7 +71,8 @@
                 <TextBlock Grid.Column="1" Foreground="{StaticResource TextSecondary}" VerticalAlignment="Center"
                            FontWeight="Bold" FontSize="13" Text="Test Framework Debugger"/>
 
-                <shell:UC_RunBar x:Name="ucRunBar" Grid.Column="2"/>
+                <!-- The run bar, built by the window. -->
+                <Border x:Name="bRunBarSlot" Grid.Column="2"/>
 
                 <!-- Column 3 is empty on purpose: it is what is left to grab the window by. -->
 
@@ -159,7 +157,8 @@
                         </Grid>
                     </Button>
 
-                    <shell:UC_TransportStatus VerticalAlignment="Center" Margin="6 0 10 0"/>
+                    <!-- The transport indicator, built by the window. -->
+                    <Border x:Name="bTransportSlot" VerticalAlignment="Center" Margin="6 0 10 0"/>
                 </StackPanel>
 
                 <!--
@@ -228,14 +227,15 @@
                 screen — the one thing here that genuinely wants the space.
             -->
             <Grid Grid.Row="1">
-                <board:UC_Board x:Name="ucBoard"/>
+                <!-- The board, built by the window. -->
+                <Border x:Name="bBoardSlot"/>
 
                 <!--
                     Every arrangeable panel, drawn from the arrangement rather than placed here. The board
                     stays a sibling underneath and keeps out of whatever the pinned wells reserve, which is
                     the one thing the host has to tell it.
                 -->
-                <dock:UC_DockHost x:Name="ucDock" Panel.ZIndex="1"/>
+                <Border x:Name="bDockSlot" Panel.ZIndex="1"/>
 
                 <!-- Along the bottom of the canvas, the way a drawing tool puts its instruments. Above the
                      board it draws on, below the pages that cover the board entirely. -->
@@ -243,16 +243,14 @@
 
                 <!-- Dropped from the bell in the title bar, and above everything: the bell is always
                      reachable, so what it opens has to be able to cover whatever page is up. -->
-                <feed:UC_Feed x:Name="ucFeed" HorizontalAlignment="Right" VerticalAlignment="Top"
-                              Panel.ZIndex="5" Visibility="Collapsed"/>
+                <Border x:Name="bFeedSlot" HorizontalAlignment="Right" VerticalAlignment="Top" Panel.ZIndex="5"/>
 
                 <!--
                     Dropped from the top of the canvas, the way a find bar does everywhere. Above the pages
                     as well as the board: searching is asked for while looking at something, and the answer
                     has to be readable without first putting away whatever was being looked at.
                 -->
-                <search:UC_Search x:Name="ucSearch" HorizontalAlignment="Center" VerticalAlignment="Top"
-                                  Panel.ZIndex="5" Visibility="Collapsed"/>
+                <Border x:Name="bSearchSlot" HorizontalAlignment="Center" VerticalAlignment="Top" Panel.ZIndex="5"/>
 
                 <!-- Where the window opens. Which run to look at is the question you have before you
                      have any question about a run, so it is answered first and covers everything. -->
@@ -260,7 +258,7 @@
 
                 <!-- Above the runs page, because sharing is asked for from it and the answer belongs in front
                      of the question. Below settings, which is above everything. -->
-                <share:UC_Export x:Name="ucExport" Panel.ZIndex="4" Visibility="Collapsed"/>
+                <Border x:Name="bExportSlot" Panel.ZIndex="4"/>
             </Grid>
         </Grid>
     </Grid>

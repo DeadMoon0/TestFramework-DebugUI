@@ -1,6 +1,8 @@
 using System;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using Axiom.State;
+using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Diagnostics;
 using TestFramework.DebugUI.State.Runs;
 using TestFramework.DebugUI.State.Settings;
@@ -24,6 +26,9 @@ namespace TestFramework.DebugUI;
 /// </remarks>
 internal sealed class WatchModeController
 {
+    /// <summary>The store whose runs are watched while the mode is armed.</summary>
+    private readonly StateStore<MainState> store;
+
     private TrayIcon? tray;
     private WatchNotifier? notifier;
 
@@ -35,6 +40,14 @@ internal sealed class WatchModeController
     /// whatever happened to be selected before the window was hidden.
     /// </remarks>
     private string? pendingRun;
+
+    /// <summary>Creates the mode, disarmed.</summary>
+    /// <param name="store">The store whose runs are watched while the mode is armed.</param>
+    public WatchModeController(StateStore<MainState> store)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        this.store = store;
+    }
 
     /// <summary>Raised when the icon is asked to bring the window back.</summary>
     public event Action? ShowRequested;
@@ -83,7 +96,7 @@ internal sealed class WatchModeController
             return false;
         }
 
-        notifier = new WatchNotifier { Settings = settings };
+        notifier = new WatchNotifier(store) { Settings = settings };
         notifier.Finished += OnRunFinished;
 
         problem = null;

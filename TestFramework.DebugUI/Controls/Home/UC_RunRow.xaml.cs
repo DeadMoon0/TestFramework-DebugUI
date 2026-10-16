@@ -25,6 +25,9 @@ namespace TestFramework.DebugUI.Controls.Home;
 /// </remarks>
 public partial class UC_RunRow : UserControl
 {
+    /// <summary>The store whose run this row shows.</summary>
+    private readonly StateStore<MainState> store;
+
     /// <summary>What this row can ask the shell to do.</summary>
     private readonly IShellCommands commands;
 
@@ -33,22 +36,24 @@ public partial class UC_RunRow : UserControl
     private bool hovered;
 
     /// <summary>Creates a row for one session.</summary>
-    public UC_RunRow(string sessionId, IShellCommands commands)
+    /// <param name="sessionId">The session this row shows.</param>
+    /// <param name="shell">The store the session is read from, and what this row may ask the shell to do.</param>
+    public UC_RunRow(string sessionId, ShellContext shell)
     {
         SessionId = sessionId;
 
-        ArgumentNullException.ThrowIfNull(commands);
+        ArgumentNullException.ThrowIfNull(shell);
 
-        this.commands = commands;
-
+        store = shell.Store;
+        commands = shell.Commands;
 
         InitializeComponent();
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(RunsSelectors.SelectBySession(SessionId))
             .Subscribe(Show));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(RunsSelectors.SelectIsSelected(SessionId))
             .Subscribe(selected => { IsSelected = selected; Paint(); }));
 

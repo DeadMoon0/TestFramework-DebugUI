@@ -38,6 +38,8 @@ internal sealed class BoardPainter
 {
     private readonly FrameworkElement resources;
 
+    private readonly StateStore<MainState> store;
+
     private BoardVisuals visuals = BoardVisuals.Empty;
 
     /// <summary>The arrangement the visuals were built from, which is what the pipes are walked from.</summary>
@@ -45,9 +47,11 @@ internal sealed class BoardPainter
 
     /// <summary>Repaints one board.</summary>
     /// <param name="resources">Where brushes are found; the board itself.</param>
-    public BoardPainter(FrameworkElement resources)
+    /// <param name="store">The store the board shows, which is read whenever a card is repainted.</param>
+    public BoardPainter(FrameworkElement resources, StateStore<MainState> store)
     {
         this.resources = resources;
+        this.store = store;
     }
 
     /// <summary>How this run's steps timed against the last run of the test that passed.</summary>
@@ -101,8 +105,8 @@ internal sealed class BoardPainter
         if (visuals.Steps.Count == 0)
             return;
 
-        RunGraph graph = StateStore<MainState>.Default.GetValue(state => state.Board.ActiveRun);
-        StepSelection? selected = StateStore<MainState>.Default.GetValue(state => state.Board.SelectedStep);
+        RunGraph graph = store.GetValue(state => state.Board.ActiveRun);
+        StepSelection? selected = store.GetValue(state => state.Board.SelectedStep);
 
         foreach (StageNode stage in graph.Stages)
         {
@@ -341,7 +345,7 @@ internal sealed class BoardPainter
         // A card face at a card's width. What counts as a picture, and what a widget's readable
         // content is, are WidgetFaces' answers rather than this control's - the panel asks the same
         // two questions of the same widget.
-        if (WidgetFaces.IsPicture(widget) && WidgetFaces.PictureOf(widget, (int)LayoutOptions.Default.StepWidth) is { } picture)
+        if (WidgetFaces.IsPicture(widget) && WidgetFaces.PictureOf(widget, (int)LayoutOptions.Default.StepWidth, store) is { } picture)
             return WidgetFaces.Draw(picture);
 
         // The summary is the fallback for both a form with nothing to read and a picture whose file

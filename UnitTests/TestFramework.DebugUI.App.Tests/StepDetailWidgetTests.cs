@@ -28,12 +28,12 @@ public sealed class StepDetailWidgetTests
 
         Wpf.Run(() =>
         {
-            StateStore<MainState> store = StateStore<MainState>.Default;
+            using StateStore<MainState> store = MainStore.Create().Build();
 
             store.Dispatch(MainActions.SelectRun, sessionId);
             store.Dispatch(MainActions.IngestBatch, [Init(sessionId), Widget(sessionId, stepId: 0)]);
 
-            using UC_StepDetail detail = new();
+            using UC_StepDetail detail = new(Shells.For(store));
 
             store.Dispatch(BoardActions.SelectStep, new StepSelection { StageName = "Main", StepId = 0 });
             Assert.Equal(Visibility.Visible, detail.spWidgets.Visibility);

@@ -38,25 +38,32 @@ public partial class UC_TransportStatus : UserControl
 
     private readonly CompositeDisposable subscriptions = [];
 
+    /// <summary>The store whose transport this reports.</summary>
+    private readonly StateStore<MainState> store;
+
     /// <summary>Kept only while the popup is open, so a closed popup costs nothing to keep current.</summary>
     private IDisposable? liveDetails;
 
     /// <summary>Creates the indicator and binds it.</summary>
-    public UC_TransportStatus()
+    /// <param name="shell">The store whose transport this reports, and what it may ask the shell to do.</param>
+    public UC_TransportStatus(ShellContext shell)
     {
+        ArgumentNullException.ThrowIfNull(shell);
+        store = shell.Store;
+
         InitializeComponent();
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(ShellSelectors.SelectTransport)
             .Select(status => Labels[status])
             .BindToDependencyProperty(tbStatus, TextBlock.TextProperty));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(ShellSelectors.SelectTransport)
             .Select(BrushFor)
             .BindToDependencyProperty(bIndicator, Border.BackgroundProperty));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(ShellSelectors.SelectRecording)
             .Select(recording => recording.Summary)
             .BindToDependencyProperty(tbRecording, TextBlock.TextProperty));
@@ -94,7 +101,7 @@ public partial class UC_TransportStatus : UserControl
     /// </remarks>
     private void popDetails_Opened(object sender, EventArgs e)
     {
-        liveDetails = StateStore<MainState>.Default
+        liveDetails = store
             .Bind(RunsSelectors.SelectAll)
             .Subscribe(Describe);
     }
@@ -107,7 +114,7 @@ public partial class UC_TransportStatus : UserControl
 
     private void Describe(ImmutableList<RunSummary> runs)
     {
-        TransportDetails details = StateStore<MainState>.Default.GetValue(state => state.Shell.Details);
+        TransportDetails details = store.GetValue(state => state.Shell.Details);
 
         // Never composed with the status word. Pairing them produced "Attached - nothing attached",
         // which was true of a sticky status and nonsense to read.

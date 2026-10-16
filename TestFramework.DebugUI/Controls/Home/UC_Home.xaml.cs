@@ -76,35 +76,39 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
     /// </remarks>
     private string shape = string.Empty;
 
+    /// <summary>The store whose runs this page lists, handed on to every card and row it builds.</summary>
+    private readonly ShellContext shell;
+
     /// <summary>What this page can ask the shell to do.</summary>
     private readonly IShellCommands commands;
 
     /// <summary>Creates the page and binds it.</summary>
-    /// <param name="commands">What this page can ask the shell to do.</param>
-    public UC_Home(IShellCommands commands)
+    /// <param name="shell">The store whose runs this page lists, and what it may ask the shell to do.</param>
+    public UC_Home(ShellContext shell)
     {
-        ArgumentNullException.ThrowIfNull(commands);
-        this.commands = commands;
+        ArgumentNullException.ThrowIfNull(shell);
+        this.shell = shell;
+        commands = shell.Commands;
 
         InitializeComponent();
 
-        IObservable<ImmutableList<RunSummary>> runs = StateStore<MainState>.Default.Bind(RunsSelectors.SelectAll);
+        IObservable<ImmutableList<RunSummary>> runs = shell.Store.Bind(RunsSelectors.SelectAll);
 
         subscriptions.Add(runs
             .CombineLatest(scope, (all, narrowed) => (all, narrowed))
             .Subscribe(pair => Refresh(pair.all, pair.narrowed)));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(shell.Store
             .Bind(RunsSelectors.SelectAll)
             .Select(Overview)
             .BindToDependencyProperty(tbOverview, TextBlock.TextProperty));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(shell.Store
             .Bind(RunsSelectors.SelectAll)
             .Select(runs => runs.Count == 0 ? Visibility.Visible : Visibility.Collapsed)
             .BindToDependencyProperty(tbEmpty, VisibilityProperty));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(shell.Store
             .Bind(ShellSelectors.SelectRecording)
             .Select(recording => recording.EmptyRuns)
             .BindToDependencyProperty(tbEmpty, TextBlock.TextProperty));
@@ -432,7 +436,7 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
 
     private UC_HomeCard Card(string sessionId)
     {
-        UC_HomeCard card = new(sessionId, commands);
+        UC_HomeCard card = new(sessionId, shell);
 
         // Opening a run means going to look at it, so the page gets out of the way rather than
         // leaving the reader to close what they just navigated away from.
@@ -443,7 +447,7 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
 
     private UC_RunRow RowFor(string sessionId)
     {
-        UC_RunRow row = new(sessionId, commands);
+        UC_RunRow row = new(sessionId, shell);
 
         row.Opened += () => Closed?.Invoke();
 
@@ -464,14 +468,14 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
 
         ImmutableList<RunSummary> runs =
         [
-            .. StateStore<MainState>.Default
+            .. shell.Store
                 .GetValue(state => state.Runs.All)
                 .Where(run => narrowed.Covers(run) && !string.IsNullOrWhiteSpace(run.JournalPath))
         ];
 
         if (runs.Count == 0)
         {
-            StateStore<MainState>.Default.Dispatch(FeedActions.AppendEntry, new FeedEntry
+            commands.Report(new FeedEntry
             {
                 AtUtc = DateTimeOffset.UtcNow,
                 Severity = FeedSeverity.Warning,

@@ -10,6 +10,7 @@ using Axiom.State;
 using Axiom.Wpf.Extensions;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Shell.Feed;
+using TestFramework.DebugUI.State.Transport;
 
 namespace TestFramework.DebugUI.Controls.Feed;
 
@@ -31,18 +32,25 @@ public partial class UC_Feed : UserControl
 {
     private readonly CompositeDisposable subscriptions = [];
 
+    /// <summary>The store whose feed this lists.</summary>
+    private readonly StateStore<MainState> store;
+
     /// <summary>Creates the feed and binds it.</summary>
-    public UC_Feed()
+    /// <param name="shell">The store whose feed this lists, and what it may ask the shell to do.</param>
+    public UC_Feed(ShellContext shell)
     {
+        ArgumentNullException.ThrowIfNull(shell);
+        store = shell.Store;
+
         InitializeComponent();
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(FeedSelectors.SelectEntries)
             .Select(entries => (IEnumerable<FeedEntry>)[.. entries.Reverse()])
             .BindToCollection(spEntries.Children, entry => entry, entry => new UC_FeedItem(entry, Pick)));
 
         // An empty panel with a heading and nothing under it reads as a panel that failed to load.
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(FeedSelectors.SelectEntries)
             .Select(entries => entries.Count)
             .Subscribe(ShowCount));
@@ -79,7 +87,7 @@ public partial class UC_Feed : UserControl
     public void Open()
     {
         Visibility = Visibility.Visible;
-        StateStore<MainState>.Default.Dispatch(FeedActions.ClearUnread);
+        store.Dispatch(FeedActions.ClearUnread);
     }
 
     /// <summary>Puts the panel away.</summary>

@@ -2,8 +2,10 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Windows.Controls;
+using Axiom.State;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.Controls.Detail;
+using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
 
 namespace TestFramework.DebugUI.App.Tests;
@@ -34,7 +36,8 @@ public sealed class WidgetFaceTests : IDisposable
 
         Wpf.Run(() =>
         {
-            UC_Widget frame = new();
+            using StateStore<MainState> store = MainStore.Create().Build();
+            UC_Widget frame = new(Shells.For(store));
             frame.Show(Picture(path, "drawn-hash"));
 
             // Nothing in WPF exists in the visual tree until it has been laid out; a control that
@@ -54,7 +57,8 @@ public sealed class WidgetFaceTests : IDisposable
         // console log in a panel wants to take a line out of it.
         Wpf.Run(() =>
         {
-            UC_Widget frame = new();
+            using StateStore<MainState> store = MainStore.Create().Build();
+            UC_Widget frame = new(Shells.For(store));
             frame.Show(Readable("listening on :8080"));
 
             // Nothing in WPF exists in the visual tree until it has been laid out; a control that
@@ -76,7 +80,8 @@ public sealed class WidgetFaceTests : IDisposable
         // which is the one thing it does not mean.
         Wpf.Run(() =>
         {
-            UC_Widget frame = new();
+            using StateStore<MainState> store = MainStore.Create().Build();
+            UC_Widget frame = new(Shells.For(store));
             frame.Show(Picture(Path.Combine(directory, "gone.png"), "missing-hash"));
 
             // Nothing in WPF exists in the visual tree until it has been laid out; a control that

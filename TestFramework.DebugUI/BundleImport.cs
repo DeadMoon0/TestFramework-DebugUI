@@ -3,11 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using TestFramework.DebugUI.State.Bundles;
 using TestFramework.DebugUI.State.Shell.Feed;
-
-using Axiom.State;
-
-using TestFramework.DebugUI.State;
-
 using TestFramework.DebugUI.State.Transport;
 
 namespace TestFramework.DebugUI;
@@ -25,7 +20,7 @@ internal static class BundleImport
     /// Opens a bundle, reports what happened, and selects a run from it.
     /// </summary>
     /// <param name="bundlePath">The bundle to open.</param>
-    /// <param name="commands">What to ask the shell to do once the runs are in place.</param>
+    /// <param name="commands">What to ask the shell to do once the runs are in place, and where to say how it went.</param>
     /// <returns>Whether anything new was taken in, which is what tells a caller to get out of the way.</returns>
     internal static bool Open(string bundlePath, IShellCommands commands)
     {
@@ -34,7 +29,7 @@ internal static class BundleImport
 
         if (commands.RunsDirectory is not { } runsDirectory)
         {
-            Report(FeedSeverity.Warning, "There is nowhere to put an imported run.", "No journal folder could be found on this machine.");
+            Report(commands, FeedSeverity.Warning, "There is nowhere to put an imported run.", "No journal folder could be found on this machine.");
             return false;
         }
 
@@ -47,17 +42,17 @@ internal static class BundleImport
             if (result.FirstSessionId is { } sessionId)
                 commands.SelectRun(sessionId);
 
-            Report(Severity(result), Describe(result), Concerns(result));
+            Report(commands, Severity(result), Describe(result), Concerns(result));
 
             return result.Imported.Count > 0;
         }
         catch (RunBundleReader.UnreadableException unreadable)
         {
-            Report(FeedSeverity.Error, "That file could not be opened as a shared run.", unreadable.Message);
+            Report(commands, FeedSeverity.Error, "That file could not be opened as a shared run.", unreadable.Message);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            Report(FeedSeverity.Error, "That file could not be read.", exception.Message);
+            Report(commands, FeedSeverity.Error, "That file could not be read.", exception.Message);
         }
 
         return false;
@@ -105,8 +100,8 @@ internal static class BundleImport
         return parts.Count == 0 ? null : string.Join(" ", parts);
     }
 
-    private static void Report(FeedSeverity severity, string title, string? detail)
-        => StateStore<MainState>.Default.Dispatch(FeedActions.AppendEntry, new FeedEntry
+    private static void Report(IShellCommands commands, FeedSeverity severity, string title, string? detail)
+        => commands.Report(new FeedEntry
         {
             AtUtc = DateTimeOffset.UtcNow,
             Severity = severity,

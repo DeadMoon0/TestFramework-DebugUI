@@ -30,14 +30,19 @@ internal sealed class BoardAnnotations
     private readonly AnnotationLayer layer;
     private readonly FrameworkElement surface;
 
+    /// <summary>Where the selected run is read from, which is what decides whose marks are shown.</summary>
+    private readonly StateStore<MainState> runs;
+
     private string? journal;
 
     /// <summary>Draws on one board.</summary>
     /// <param name="canvas">Where the marks are drawn, locked to the board's own transform.</param>
     /// <param name="surface">What the pointer changes shape on while a tool is chosen.</param>
-    public BoardAnnotations(Canvas canvas, FrameworkElement surface)
+    /// <param name="runs">The store the board shows.</param>
+    public BoardAnnotations(Canvas canvas, FrameworkElement surface, StateStore<MainState> runs)
     {
         this.surface = surface;
+        this.runs = runs;
 
         layer = new AnnotationLayer(canvas, surface) { Author = System.Environment.UserName };
         layer.Changed += Save;
@@ -98,7 +103,7 @@ internal sealed class BoardAnnotations
     /// </remarks>
     public void Load()
     {
-        RunSummary? run = StateStore<MainState>.Default.GetValue(RunsSelectors.SelectedRunOf);
+        RunSummary? run = runs.GetValue(RunsSelectors.SelectedRunOf);
 
         journal = run?.JournalPath;
 

@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -35,6 +36,14 @@ public class ConventionTests
         (typeof(LayoutOptions).Assembly, "TestFramework.DebugUI.Layout.Tests"),
     ];
 
+    /// <summary>
+    /// The projects whose views and services are handed the store rather than reaching for one.
+    /// </summary>
+    private static readonly string[] HandedTheStore = ["TestFramework.DebugUI", "TestFramework.DebugUI.State"];
+
+    /// <summary>What reaching for, or publishing, a store for the whole process looks like in source.</summary>
+    private static readonly string[] ProcessWideStore = ["StateStore<MainState>.Default", ".MakeDefault(", "BuildAndMakeDefault"];
+
     [Fact]
     public void NothingHereSerialisesWithSystemTextJson()
     {
@@ -68,5 +77,58 @@ public class ConventionTests
         ];
 
         Assert.Empty(strays);
+    }
+
+    [Fact]
+    public void NoViewReachesForAProcessWideStore()
+    {
+        // A view is handed the store it shows. One that reached for a process-wide default instead would
+        // work only once something had published one, and a test could only build it by publishing one for
+        // every test at once. Read from the source rather than the assemblies, because a static property
+        // read leaves nothing in the metadata a reflection check could find.
+        string root = RepositoryRoot();
+
+        string[] sources =
+        [
+            .. HandedTheStore
+                .SelectMany(project => Directory.EnumerateFiles(Path.Combine(root, project), "*.cs", SearchOption.AllDirectories))
+                .Where(path => !IsBuildOutput(root, path))
+        ];
+
+        // Guarded, because a scan that found nothing to read would pass for the wrong reason.
+        Assert.NotEmpty(sources);
+
+        string[] offenders =
+        [
+            .. sources
+                .Where(path => ProcessWideStore.Any(pattern => File.ReadAllText(path).Contains(pattern, StringComparison.Ordinal)))
+                .Select(path => Path.GetRelativePath(root, path))
+        ];
+
+        Assert.Empty(offenders);
+    }
+
+    /// <summary>Whether a source file is something the build wrote rather than something somebody did.</summary>
+    private static bool IsBuildOutput(string root, string path)
+        => Path.GetRelativePath(root, path)
+            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Any(segment => segment is "obj" or "bin");
+
+    /// <summary>
+    /// The repository this suite was compiled from, found from this file's own path.
+    /// </summary>
+    /// <remarks>
+    /// The compiler writes the path in, so it is the checkout that was built rather than wherever the test
+    /// happens to run from.
+    /// </remarks>
+    private static string RepositoryRoot([CallerFilePath] string here = "")
+    {
+        for (DirectoryInfo? directory = new FileInfo(here).Directory; directory is not null; directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "TestFramework.DebugUI.slnx")))
+                return directory.FullName;
+        }
+
+        throw new InvalidOperationException($"No TestFramework.DebugUI.slnx above {here}.");
     }
 }

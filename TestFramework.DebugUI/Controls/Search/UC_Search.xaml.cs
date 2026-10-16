@@ -13,6 +13,7 @@ using Axiom.State;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Board.Comparison;
+using TestFramework.DebugUI.State.Transport;
 using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Search;
@@ -35,28 +36,35 @@ public partial class UC_Search : UserControl
 {
     private readonly CompositeDisposable subscriptions = [];
 
+    /// <summary>The store whose run this searches.</summary>
+    private readonly StateStore<MainState> store;
+
     private ImmutableList<SearchHit> hits = ImmutableList<SearchHit>.Empty;
     private readonly List<Border> rows = [];
     private int highlighted = -1;
 
     /// <summary>Creates the bar and binds it.</summary>
-    public UC_Search()
+    /// <param name="shell">The store whose run this searches, and what it may ask the shell to do.</param>
+    public UC_Search(ShellContext shell)
     {
+        ArgumentNullException.ThrowIfNull(shell);
+        store = shell.Store;
+
         InitializeComponent();
 
         ShowHints();
 
         // Re-run when the run changes as well as when the query does: a live run gains steps and log lines
         // while the bar is open, and a result list that goes stale as the run proceeds is worse than none.
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(BoardSelectors.SelectActiveRun)
             .Subscribe(_ => Run()));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(ComparisonSelectors.SelectTiming)
             .Subscribe(_ => Run()));
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(ComparisonSelectors.SelectValues)
             .Subscribe(_ => Run()));
 
@@ -109,7 +117,7 @@ public partial class UC_Search : UserControl
 
         SearchQuery query = SearchQuery.Parse(tbQuery.Text);
 
-        MainState state = StateStore<MainState>.Default.GetValue(current => current);
+        MainState state = store.GetValue(current => current);
         SearchResults results = RunSearch.Find(query, state.Board.ActiveRun, state.Board.Comparison.Values, state.Board.Comparison.Timing);
 
         hits = results.Hits;

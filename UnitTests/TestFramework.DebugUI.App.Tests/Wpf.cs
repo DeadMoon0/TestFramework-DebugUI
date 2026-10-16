@@ -4,8 +4,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
-using Axiom.State;
-using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.App.Tests;
@@ -35,8 +33,9 @@ namespace TestFramework.DebugUI.App.Tests;
 /// instance and opens a window, and none of that belongs in a test run.
 /// </para>
 /// <para>
-/// A default state store is made here too, because a control is bound to one from the moment it is
-/// constructed — the panel that resolves a widget's file asks the store which run it is showing.
+/// No state store is made here. A control is handed the store it shows when it is built, so each test
+/// builds its own and hands it over with <see cref="Shells.For"/>; one store for the whole process would
+/// let every test see what every other test had dispatched.
 /// </para>
 /// </remarks>
 internal static class Wpf
@@ -170,10 +169,6 @@ internal static class Wpf
                 // the XAML compiler freezes the brushes in a compiled dictionary, and a control that
                 // resolved a frozen one never follows a theme change again.
                 palette = ThemeApplier.Prepare(application.Resources);
-
-                // Bound to before it is read: a control subscribes to the store as it is built, so
-                // there has to be one by the time any test constructs anything.
-                MainStore.Create().BuildAndMakeDefault();
 
                 started = Dispatcher.CurrentDispatcher;
                 ready.Set();

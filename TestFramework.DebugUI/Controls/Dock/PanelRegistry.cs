@@ -45,13 +45,13 @@ internal sealed record PanelDescriptor
     public required DockSide DefaultSide { get; init; }
 
     /// <summary>
-    /// Gets how to build it, given what a panel can ask the shell to do.
+    /// Gets how to build it, given the store it shows and what it can ask the shell to do.
     /// </summary>
     /// <remarks>
-    /// Handed in rather than reached for. A panel that fetched the shell itself would only work once a
-    /// window had been built, which is a rule nothing checks and no test can satisfy.
+    /// Handed in rather than reached for. A panel that fetched the store or the shell itself would only work
+    /// once a window had built and published them, which is a rule nothing checks and no test can satisfy.
     /// </remarks>
-    public required Func<IShellCommands, UserControl> Create { get; init; }
+    public required Func<ShellContext, UserControl> Create { get; init; }
 }
 
 /// <summary>
@@ -77,7 +77,7 @@ internal static class PanelRegistry
             Title = "RUNS",
             IconKey = ThemeKeys.IconPanelRuns,
             DefaultSide = DockSide.Left,
-            Create = commands => new UC_Runs(commands)
+            Create = shell => new UC_Runs(shell)
         },
         new PanelDescriptor
         {
@@ -88,7 +88,7 @@ internal static class PanelRegistry
             // Under the tree in the same rail, which is where it has always been: what a run produced is read
             // beside which run you are reading.
             DefaultSide = DockSide.Left,
-            Create = _ => new UC_ValueRail()
+            Create = shell => new UC_ValueRail(shell)
         },
         new PanelDescriptor
         {
@@ -96,7 +96,7 @@ internal static class PanelRegistry
             Title = "STEP",
             IconKey = ThemeKeys.IconPanelStep,
             DefaultSide = DockSide.Right,
-            Create = _ => new UC_StepDetail()
+            Create = shell => new UC_StepDetail(shell)
         },
         new PanelDescriptor
         {
@@ -104,7 +104,7 @@ internal static class PanelRegistry
             Title = "SUMMARY",
             IconKey = ThemeKeys.IconSummary,
             DefaultSide = DockSide.Right,
-            Create = commands => new UC_RunSummary(commands)
+            Create = shell => new UC_RunSummary(shell)
         },
         new PanelDescriptor
         {
@@ -112,7 +112,7 @@ internal static class PanelRegistry
             Title = "VALUE",
             IconKey = ThemeKeys.IconPanelInspector,
             DefaultSide = DockSide.Right,
-            Create = _ => new UC_ValueInspector()
+            Create = shell => new UC_ValueInspector(shell)
         },
         new PanelDescriptor
         {
@@ -122,7 +122,7 @@ internal static class PanelRegistry
             Title = "RUNS PAGE",
             IconKey = ThemeKeys.IconHome,
             DefaultSide = DockSide.Center,
-            Create = commands => new UC_Home(commands)
+            Create = shell => new UC_Home(shell)
         }
     ];
 

@@ -15,6 +15,7 @@ using TestFramework.DebugUI.Copying;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Board.Comparison;
+using TestFramework.DebugUI.State.Transport;
 using TestFramework.DebugUI.Theme;
 
 namespace TestFramework.DebugUI.Controls.Detail;
@@ -30,6 +31,9 @@ namespace TestFramework.DebugUI.Controls.Detail;
 public partial class UC_StepDetail : UserControl, IDisposable
 {
     private readonly CompositeDisposable subscriptions = [];
+
+    /// <summary>The store whose selected step this panel shows, handed on to every widget it frames.</summary>
+    private readonly ShellContext shell;
 
     /// <summary>
     /// The wash behind every other row, which is what separates one long entry from two.
@@ -62,8 +66,12 @@ public partial class UC_StepDetail : UserControl, IDisposable
     public event Action<WidgetNode>? WidgetOpened;
 
     /// <summary>Creates the panel and binds it.</summary>
-    public UC_StepDetail()
+    /// <param name="shell">The store whose selected step this panel shows, and what it may ask the shell to do.</param>
+    public UC_StepDetail(ShellContext shell)
     {
+        ArgumentNullException.ThrowIfNull(shell);
+        this.shell = shell;
+
         InitializeComponent();
 
         // Three fields, each of them something a reader ends up wanting somewhere else: an identity to
@@ -72,13 +80,13 @@ public partial class UC_StepDetail : UserControl, IDisposable
         // button under the pointer on all twelve of them made the panel feel like a form.
         Copyable.Enable(tbName, tbFailureMessage, tbStack);
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(shell.Store
             .Bind(Resolve)
             .Subscribe(Show));
 
         // Arrives later than the step does, because a baseline means reading an earlier run's journal. Kept
         // so the line can be filled in when it lands rather than only on the next selection.
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(shell.Store
             .Bind(ComparisonSelectors.SelectTiming)
             .Subscribe(compared =>
             {
@@ -88,7 +96,7 @@ public partial class UC_StepDetail : UserControl, IDisposable
 
         // Its own subscription because a widget arrives without the step changing: a picture taken
         // during a step that is still running would otherwise not appear until something else moved.
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(shell.Store
             .Bind(BoardSelectors.SelectActiveRun)
             .Subscribe(ShowWidgets));
     }
@@ -142,7 +150,7 @@ public partial class UC_StepDetail : UserControl, IDisposable
 
         ShowTiming();
         ShowPolicy();
-        ShowWidgets(StateStore<MainState>.Default.GetValue(state => state.Board.ActiveRun));
+        ShowWidgets(shell.Store.GetValue(state => state.Board.ActiveRun));
         ShowAttempts();
         ShowLog();
         ShowFailure();
@@ -295,7 +303,7 @@ public partial class UC_StepDetail : UserControl, IDisposable
     /// </remarks>
     private UIElement Frame(WidgetNode widget)
     {
-        UC_Widget frame = new();
+        UC_Widget frame = new(shell);
 
         // The panel says what was asked for and the window does it, the way every other surface here
         // works. Until this was wired the expand button raised an event nobody had subscribed, so

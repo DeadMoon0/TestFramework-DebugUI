@@ -64,19 +64,23 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
     private string? selected;
     private RecordingState recording = RecordingState.Unknown;
 
-    /// <summary>Creates the tree and binds it.</summary>
-        /// <summary>What this tree can ask the shell to do.</summary>
+    /// <summary>The store whose runs this tree lists.</summary>
+    private readonly StateStore<MainState> store;
+
+    /// <summary>What this tree can ask the shell to do.</summary>
     private readonly IShellCommands commands;
 
-    /// <param name="commands">What this tree can ask the shell to do.</param>
-    public UC_Runs(IShellCommands commands)
+    /// <summary>Creates the tree and binds it.</summary>
+    /// <param name="shell">The store whose runs this tree lists, and what it may ask the shell to do.</param>
+    public UC_Runs(ShellContext shell)
     {
-        ArgumentNullException.ThrowIfNull(commands);
-        this.commands = commands;
+        ArgumentNullException.ThrowIfNull(shell);
+        store = shell.Store;
+        commands = shell.Commands;
 
         InitializeComponent();
 
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(RunsSelectors.SelectAll)
             .Subscribe(all =>
             {
@@ -87,7 +91,7 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
         // Rebuilt on selection too, so the highlight moves and the branch holding the selected run is
         // opened. A live run selects itself the moment it announces, and a rail that left it collapsed
         // would be hiding the one run the reader is about to be shown.
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(RunsSelectors.SelectSelectedSessionId)
             .Subscribe(sessionId =>
             {
@@ -98,7 +102,7 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
 
         // Only the empty state reads it, but that sentence makes a promise about the next run, and the
         // promise changes the moment the switch does.
-        subscriptions.Add(StateStore<MainState>.Default
+        subscriptions.Add(store
             .Bind(ShellSelectors.SelectRecording)
             .Subscribe(now =>
             {

@@ -62,6 +62,17 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
     /// </remarks>
     private static readonly TimeSpan DefaultCaptureWait = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// How long a connection may stay silent before its first frame.
+    /// </summary>
+    /// <remarks>
+    /// A run sends its start the moment it connects, so ten seconds of nothing is not a slow run but a client
+    /// that will never speak - a test host hung between connecting and its first write. Without a limit such a
+    /// connection holds one of the run slots for as long as this window is open, and with every slot held
+    /// the next real run loses its debugger without a word.
+    /// </remarks>
+    internal TimeSpan FirstFrameDeadline { get; init; } = TimeSpan.FromSeconds(10);
+
     private readonly string pipeName;
     private readonly SemaphoreSlim slots;
     private readonly CancellationTokenSource shutdown = new();
@@ -388,12 +399,13 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
 
         try
         {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                DebugEnvelope? envelope = await framing.ReadAsync(cancellationToken);
-                if (envelope is null)
-                    break;
+            DebugEnvelope? first = await ReadFirstFrameAsync(framing, cancellationToken);
+            if (first is null)
+                return;
 
+            for (DebugEnvelope? envelope = first; envelope is not null && !cancellationToken.IsCancellationRequested;
+                 envelope = await framing.ReadAsync(cancellationToken))
+            {
                 session ??= Attach(envelope.SessionId, server, framing);
 
                 if (!await HandleAsync(session, envelope, cancellationToken))
@@ -422,6 +434,30 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
 
             slots.Release();
         }
+    }
+
+    /// <summary>
+    /// Reads a connection's first frame within <see cref="FirstFrameDeadline"/>; null when the connection closed,
+    /// or said nothing in time and was let go.
+    /// </summary>
+    private async Task<DebugEnvelope?> ReadFirstFrameAsync(PipeFrameStream framing, CancellationToken cancellationToken)
+    {
+        using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(FirstFrameDeadline);
+
+        // The frame reader turns a cancelled read into the end of the connection, so whose cancellation it was
+        // is read from the tokens afterwards.
+        DebugEnvelope? first = await framing.ReadAsync(deadline.Token);
+
+        if (first is null && deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            Report(
+                FeedSeverity.Warning,
+                "A connection on the debug pipe sent nothing and was closed.",
+                $"It said nothing for {FirstFrameDeadline.TotalSeconds:0} s after connecting. A test host that hangs right after connecting is the usual cause.");
+        }
+
+        return first;
     }
 
     /// <summary>

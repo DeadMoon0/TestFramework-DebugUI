@@ -53,6 +53,30 @@ public sealed class PipeRunEventSourceTests
     }
 
     [Fact]
+    public async Task AConnectionThatNeverSpeaks_IsClosed_AndItsSlotFreed()
+    {
+        // With every slot held by a silent client, the next real run would lose its debugger without a word.
+        using PipeScope scope = new();
+        using PipeRunEventSource source = new(scope.PipeName, maxConcurrentRuns: 1) { FirstFrameDeadline = TimeSpan.FromMilliseconds(200) };
+        List<FeedEntry> notices = [];
+        source.Notice += notice =>
+        {
+            lock (notices) notices.Add(notice);
+        };
+        source.Start();
+
+        using NamedPipeClientStream silent = new(".", scope.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await silent.ConnectAsync((int)Patience.TotalMilliseconds);
+
+        // The one slot comes back once the silent client is let go, so a second client can be accepted.
+        using NamedPipeClientStream next = new(".", scope.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await next.ConnectAsync((int)Patience.TotalMilliseconds);
+
+        lock (notices)
+            Assert.Contains(notices, notice => notice.Severity == FeedSeverity.Warning && notice.Title.Contains("sent nothing", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task RunsInParallelAllAttach()
     {
         // The single-instance server this replaces accepted one connection: a second concurrent run

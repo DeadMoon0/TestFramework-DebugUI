@@ -82,22 +82,34 @@ internal sealed class PipeFrameStream(PipeStream stream)
     /// A failed send is returned rather than thrown: the callers are releasing a breakpoint and
     /// cancelling a run, and neither has anything useful to do with an exception beyond telling the
     /// user the run is no longer reachable.
+    /// <para>
+    /// Bounded by <see cref="SendTimeout"/>. A producer that stops reading - a test host frozen in a debugger,
+    /// say - fills the pipe's buffer, and an unbounded write would then hold the send lock for good, so every
+    /// later control for that run, and the window waiting on one, would wait with it.
+    /// </para>
     /// </remarks>
     internal async Task<bool> SendAsync(IPipeSignal signal, CancellationToken cancellationToken)
     {
         bool lockAcquired = false;
+        using CancellationTokenSource bounded = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        bounded.CancelAfter(SendTimeout);
 
         try
         {
-            await sendLock.WaitAsync(cancellationToken);
+            await sendLock.WaitAsync(bounded.Token);
             lockAcquired = true;
 
             byte[] frame = DebugEnvelopeCodec.EncodeFrame(
                 DebugEnvelopeCodec.Wrap(signal, Interlocked.Increment(ref sequence)));
 
-            await stream.WriteAsync(frame, 0, frame.Length, cancellationToken);
-            await stream.FlushAsync(cancellationToken);
+            await stream.WriteAsync(frame, 0, frame.Length, bounded.Token);
+            await stream.FlushAsync(bounded.Token);
             return true;
+        }
+        catch (OperationCanceledException) when (bounded.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            End("The run stopped reading.", failure: true);
+            return false;
         }
         catch (Exception e)
         {
@@ -111,6 +123,9 @@ internal sealed class PipeFrameStream(PipeStream stream)
                 sendLock.Release();
         }
     }
+
+    /// <summary>How long one control message may take to send before the run is treated as unreachable.</summary>
+    internal TimeSpan SendTimeout { get; init; } = TimeSpan.FromSeconds(5);
 
     private void End(string reason, bool failure)
     {

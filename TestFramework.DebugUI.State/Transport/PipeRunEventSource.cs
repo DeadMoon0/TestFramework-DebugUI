@@ -407,6 +407,8 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
                  envelope = await framing.ReadAsync(cancellationToken))
             {
                 session ??= Attach(envelope.SessionId, server, framing);
+                if (session is null)
+                    return;
 
                 if (!await HandleAsync(session, envelope, cancellationToken))
                     continue;
@@ -564,12 +566,38 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
         }
     }
 
-    private PipeSession Attach(string sessionId, NamedPipeServerStream server, PipeFrameStream framing)
+    /// <summary>
+    /// Registers a connection as the run it says it is; null when that run is already attached and still
+    /// connected.
+    /// </summary>
+    /// <remarks>
+    /// A run that lost its connection reconnects under the same session id, sometimes before the old
+    /// connection's loop has noticed it ended - so a repeated id whose connection is gone is taken over. A
+    /// repeated id whose connection is still live is a second client claiming somebody else's run: accepted,
+    /// every control meant for that run - a breakpoint release, a capture request - would go to the newcomer.
+    /// </remarks>
+    private PipeSession? Attach(string sessionId, NamedPipeServerStream server, PipeFrameStream framing)
     {
         PipeSession session = new(sessionId, server, framing);
 
-        // A session id repeating means the previous connection for it is gone; the newcomer owns it.
-        sessions[sessionId] = session;
+        while (!sessions.TryAdd(sessionId, session))
+        {
+            if (!sessions.TryGetValue(sessionId, out PipeSession? existing))
+                continue;
+
+            if (existing.IsConnected)
+            {
+                Report(
+                    FeedSeverity.Warning,
+                    "A second connection claimed a run that is still attached, and was closed.",
+                    "Controls for the run keep going to the connection that started it.",
+                    sessionId);
+                return null;
+            }
+
+            if (sessions.TryUpdate(sessionId, session, existing))
+                break;
+        }
 
         ConnectionsChanged?.Invoke();
 
@@ -667,6 +695,22 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
     private sealed class PipeSession(string sessionId, NamedPipeServerStream server, PipeFrameStream framing)
     {
         private readonly object gate = new();
+
+        /// <summary>Whether the connection carrying this run is still open.</summary>
+        internal bool IsConnected
+        {
+            get
+            {
+                try
+                {
+                    return server.IsConnected;
+                }
+                catch (ObjectDisposedException)
+                {
+                    return false;
+                }
+            }
+        }
         private PipeBreakpointHitRequestSignal? pendingBreakpoint;
 
         /// <summary>

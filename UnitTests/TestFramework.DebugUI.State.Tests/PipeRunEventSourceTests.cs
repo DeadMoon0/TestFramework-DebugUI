@@ -299,6 +299,33 @@ public sealed class PipeRunEventSourceTests
     }
 
     [Fact]
+    public async Task ASecondConnectionClaimingAnAttachedRun_IsClosed_AndTheRunKeepsItsConnection()
+    {
+        // Accepted, every control meant for the run - a breakpoint release, a capture request - would go to
+        // the newcomer instead.
+        using PipeScope scope = new();
+        using Watcher watcher = new(scope.PipeName);
+        byte[] frame = DebugEnvelopeCodec.EncodeFrame(DebugEnvelopeCodec.Wrap(Init("claimed"), 1));
+
+        using NamedPipeClientStream owner = new(".", scope.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await owner.ConnectAsync((int)Patience.TotalMilliseconds);
+        await owner.WriteAsync(frame, 0, frame.Length);
+        await owner.FlushAsync();
+        await WaitForAsync(() => watcher.Source.AttachedRunCount == 1, "The run never attached.");
+
+        using NamedPipeClientStream intruder = new(".", scope.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        await intruder.ConnectAsync((int)Patience.TotalMilliseconds);
+        await intruder.WriteAsync(frame, 0, frame.Length);
+        await intruder.FlushAsync();
+
+        await WaitForAsync(
+            () => watcher.Notices.Any(entry => entry.SessionId == "claimed" && entry.Title.Contains("claimed a run that is still attached", StringComparison.Ordinal)),
+            "The second claim was not refused.");
+        Assert.Equal(1, watcher.Source.AttachedRunCount);
+        Assert.True(owner.IsConnected);
+    }
+
+    [Fact]
     public async Task ARunThatDisappearsIsReportedRatherThanLeftHanging()
     {
         // What a killed test host looks like from here. The run is on screen and simply stops, which

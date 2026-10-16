@@ -60,7 +60,7 @@ Recovery:
 
 - confirm the active step is marked as waiting at a breakpoint
 - use the explicit continue action from the UI
-- with two steps of one run waiting at once, the UI can still release each of them, but a widget captured while both wait cannot be filed against either - so reduce to one breakpoint when the evidence matters
+- only one step of a run can be held at a time, on both ends of the pipe: when two steps of one run reach a breakpoint together, one is held and the other is not held at all - it runs on
 
 ### Symptom: Continue does nothing useful
 

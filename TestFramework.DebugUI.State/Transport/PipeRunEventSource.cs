@@ -488,7 +488,15 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
         {
             // Recorded before the envelope is raised, so a UI that reacts by releasing it
             // immediately cannot find nothing to release.
-            session.SetPendingBreakpoint(request);
+            if (session.SetPendingBreakpoint(request))
+            {
+                Report(
+                    FeedSeverity.Warning,
+                    "A second step of one run asked to be held while another was.",
+                    "Only one step of a run can be held at a time. The earlier one is no longer releasable from here.",
+                    session.SessionId);
+            }
+
             return true;
         }
 
@@ -678,10 +686,19 @@ public sealed class PipeRunEventSource : IRunEventSource, IDisposable
         /// <summary>Whether the run reported finishing, as opposed to just going away.</summary>
         internal bool SawFinish { get; set; }
 
-        internal void SetPendingBreakpoint(PipeBreakpointHitRequestSignal request)
+        /// <summary>Holds this run's breakpoint; true when it replaced one that was still held.</summary>
+        /// <remarks>
+        /// One per run, on both ends of the pipe: the run waits for one answer per kind at a time, so a second
+        /// held step is not something this side could release separately even if it remembered both.
+        /// </remarks>
+        internal bool SetPendingBreakpoint(PipeBreakpointHitRequestSignal request)
         {
             lock (gate)
+            {
+                bool replaced = pendingBreakpoint is not null;
                 pendingBreakpoint = request;
+                return replaced;
+            }
         }
 
         /// <summary>Takes the held breakpoint, so only one caller can release it.</summary>

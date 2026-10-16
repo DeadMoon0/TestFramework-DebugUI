@@ -82,7 +82,7 @@ The separate-broker redesign once planned was retired: the journal provides the 
 ## Troubleshooting
 
 - If no run appears, verify the UI started before or during the test run and confirm both sides use the same `TESTFRAMEWORK_DEBUG_PIPE_NAME` value.
-- If a breakpoint never resumes, confirm the active step is actually marked as waiting; with two steps of one run waiting at once, each can still be released, but a widget captured while both wait is filed against neither.
+- If a breakpoint never resumes, confirm the active step is actually marked as waiting. Only one step of a run can be held at a time: when two steps of one run reach a breakpoint together, one is held and the other is not held at all - it runs on.
 - If a run tree appears incomplete, check the DebugUI error guide before assuming the timeline itself is at fault.
 - If you are diagnosing transport behaviour rather than a usage error, read [Documentation/TransportAndProjection.md](./Documentation/TransportAndProjection.md).
 

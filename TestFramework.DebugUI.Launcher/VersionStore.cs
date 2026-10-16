@@ -91,13 +91,18 @@ public sealed class VersionStore(LauncherPaths paths)
     /// no folder that <see cref="Installed"/> would report as a working version. The move is the
     /// commit.
     /// </remarks>
-    public Task InstallAsync(ReleaseInfo release, HttpClient client, IProgress<double>? progress, CancellationToken cancellationToken)
+    /// <returns>Whether the download was checked against a digest the release named.</returns>
+    public Task<bool> InstallAsync(ReleaseInfo release, HttpClient client, IProgress<double>? progress, CancellationToken cancellationToken)
         => InstallAsync(release, client, progress, StallTimeout, cancellationToken);
 
     /// <summary>Downloads a release and puts it in place, giving up on a download silent for <paramref name="stallTimeout"/>.</summary>
-    internal async Task InstallAsync(ReleaseInfo release, HttpClient client, IProgress<double>? progress, TimeSpan stallTimeout, CancellationToken cancellationToken)
+    internal async Task<bool> InstallAsync(ReleaseInfo release, HttpClient client, IProgress<double>? progress, TimeSpan stallTimeout, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(release);
+
+        // What is downloaded here is then started. Over anything but https, whoever sits on the path chooses it.
+        if (!string.Equals(release.DownloadUrl.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException($"The release {release.Version} is offered from '{release.DownloadUrl}', which is not https, so it was not downloaded.");
         ArgumentNullException.ThrowIfNull(client);
 
         string staging = Path.Combine(paths.StagingFolder, release.Version.ToString());
@@ -109,7 +114,7 @@ public sealed class VersionStore(LauncherPaths paths)
 
         await DownloadAsync(release.DownloadUrl, archive, client, progress, stallTimeout, cancellationToken).ConfigureAwait(false);
 
-        Verify(archive, release.Digest);
+        bool digestChecked = Verify(archive, release.Digest);
 
         string unpacked = Path.Combine(staging, "app");
         ZipFile.ExtractToDirectory(archive, unpacked, overwriteFiles: true);
@@ -129,6 +134,8 @@ public sealed class VersionStore(LauncherPaths paths)
         Directory.Move(root, destination);
 
         Clear(staging);
+
+        return digestChecked;
     }
 
     /// <summary>
@@ -141,17 +148,18 @@ public sealed class VersionStore(LauncherPaths paths)
     /// would refusing to start, so it fails the update rather than the launcher.
     /// </remarks>
     /// <exception cref="InvalidDataException">The package is not the one the release describes.</exception>
-    internal static void Verify(string archive, string? digest)
+    /// <returns>True when the archive was checked; false when the release named nothing this can check.</returns>
+    internal static bool Verify(string archive, string? digest)
     {
         // No digest is not a failure. Releases predating the feed reporting one have nothing to check
-        // against, and rejecting those would strand anyone on an old build.
+        // against, and rejecting those would strand anyone on an old build - but it is said, not silent.
         if (string.IsNullOrWhiteSpace(digest))
-            return;
+            return false;
 
         const string prefix = "sha256:";
 
         if (!digest.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            return;
+            return false;
 
         string expected = digest[prefix.Length..].Trim();
 
@@ -160,6 +168,8 @@ public sealed class VersionStore(LauncherPaths paths)
 
         if (!string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException($"The download does not match the digest the release named. Expected {expected}, got {actual}.");
+
+        return true;
     }
 
     /// <summary>

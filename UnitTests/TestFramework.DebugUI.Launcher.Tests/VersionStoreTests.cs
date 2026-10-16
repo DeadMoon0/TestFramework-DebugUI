@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using TestFramework.DebugUI.Launcher;
 
 namespace TestFramework.DebugUI.Launcher.Tests;
@@ -120,7 +123,7 @@ public sealed class VersionStoreTests : IDisposable
     {
         string archive = Payload("the real package");
 
-        VersionStore.Verify(archive, "sha256:" + Sha256Of("the real package"));
+        Assert.True(VersionStore.Verify(archive, "sha256:" + Sha256Of("the real package")));
     }
 
     [Fact]
@@ -141,8 +144,9 @@ public sealed class VersionStoreTests : IDisposable
         // hardening step into a way of stranding people on old builds.
         string archive = Payload("anything");
 
-        VersionStore.Verify(archive, null);
-        VersionStore.Verify(archive, "   ");
+        // Accepted, and said: false means nothing was checked, so the launcher tells the person.
+        Assert.False(VersionStore.Verify(archive, null));
+        Assert.False(VersionStore.Verify(archive, "   "));
     }
 
     [Fact]
@@ -152,7 +156,21 @@ public sealed class VersionStoreTests : IDisposable
         // treating it as such would break every existing launcher the day the feed changed format.
         string archive = Payload("anything");
 
-        VersionStore.Verify(archive, "sha512:whatever");
+        Assert.False(VersionStore.Verify(archive, "sha512:whatever"));
+    }
+
+    [Fact]
+    public async Task AReleaseOfferedOverPlainHttpIsNotDownloaded()
+    {
+        // What the launcher downloads it then starts; over plain http, whoever sits on the path chooses it.
+        ReleaseInfo release = new() { Version = new Version(9, 9, 9), DownloadUrl = new Uri("http://example.invalid/TestFramework.DebugUI.zip") };
+        using HttpClient client = new();
+
+        InvalidDataException refusal = await Assert.ThrowsAsync<InvalidDataException>(
+            () => Store().InstallAsync(release, client, progress: null, CancellationToken.None));
+
+        Assert.Contains("not https", refusal.Message, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(Paths().FolderFor(release.Version)));
     }
 
     private string Payload(string content)

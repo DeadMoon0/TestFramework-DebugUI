@@ -222,7 +222,11 @@ public partial class MainWindow : Window
 
             pbProgress.IsIndeterminate = false;
 
-            await store.InstallAsync(release, client, progress, CancellationToken.None).ConfigureAwait(true);
+            bool digestChecked = await store.InstallAsync(release, client, progress, CancellationToken.None).ConfigureAwait(true);
+
+            // Installed either way - a release that names no digest is still the release - but not silently.
+            if (!digestChecked)
+                Say($"Installed {release.Version}. The release named no checksum, so the download could not be verified.");
 
             return true;
         }

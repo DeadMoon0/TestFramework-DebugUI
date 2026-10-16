@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Threading;
@@ -8,6 +9,7 @@ using TestFramework.Core.Artifacts;
 using TestFramework.Core.Debugger;
 using TestFramework.Core.Steps.Options;
 using TestFramework.Core.Variables;
+using TestFramework.DebugUI.State.Board;
 
 namespace TestFramework.DebugUI.State.Tests;
 
@@ -210,6 +212,137 @@ public class RunIngestServiceTests : IDisposable
 
         Assert.True(accepted.IsCompleted, "a subscriber flushing deadlocked the ingest path");
         Assert.Single(store.GetValue(state => state.Runs.All));
+    }
+
+    [Fact]
+    public async Task ASwitchToARunIsNotOvertakenByWhatTheRunSendsMeanwhile()
+    {
+        // Selecting a run clears the board and replays its history onto it, while the run carries on
+        // sending. An event flushed between the two lands on the empty board first; the reducer then
+        // takes the history, older by sequence, for events already shown and drops it, and the board is
+        // left with no structure under it. The switch is made through FlushThen so nothing can.
+        StateStore<MainState> store = MainStore.Create().Build();
+        RunIngestService ingest = new(store, TimeSpan.FromSeconds(30));
+        disposables.Add(ingest);
+        disposables.Add(store);
+
+        DebugEnvelope init = Init("s2");
+        DebugEnvelope running = StepRunning("s2", at: 1);
+        ingest.Accept(Init("s1"));
+        ingest.Accept(init);
+        ingest.Accept(running);
+        ingest.Flush();
+
+        using ManualResetEventSlim accepted = new(false);
+        using ManualResetEventSlim flushed = new(false);
+        Task reader = Task.CompletedTask;
+
+        ingest.FlushThen(() =>
+        {
+            store.Dispatch(MainActions.SelectRun, "s2");
+
+            // The reader, with the next event and a flush of its own, as a breakpoint or the timer would.
+            reader = Task.Run(() =>
+            {
+                ingest.Accept(StepComplete("s2", at: 2));
+                accepted.Set();
+                ingest.Flush();
+                flushed.Set();
+            });
+
+            Assert.True(accepted.Wait(TimeSpan.FromSeconds(5)), "the reader never accepted its event");
+
+            // Every chance to overtake: it is waiting to flush while the history has not gone in yet.
+            Assert.False(flushed.Wait(TimeSpan.FromMilliseconds(200)), "the reader's flush overtook the switch");
+
+            store.Dispatch(MainActions.IngestBatch, ImmutableList.Create(init, running));
+        });
+
+        await reader;
+
+        StepNode step = Assert.Single(Assert.Single(store.GetValue(state => state.Board.ActiveRun).Stages).Steps);
+        Assert.Equal(DebugLifecycleState.Complete, step.Lifecycle);
+    }
+
+    [Fact]
+    public async Task ABatchFlushedOnAWorkerThreadIsReadableAtOnceAndNotifiedOnTheStoresContext()
+    {
+        // The window's thread-marshalling contract, which lives in the store package rather than here.
+        // Events arrive on the pipe reader and the ingest timer, never on the UI thread, and nothing in
+        // this tool marshals them: a dispatch is reduced on the thread that made it, so the state is
+        // readable the moment Flush returns; and every binding is delivered on the context the store was
+        // built with, which is the only reason a control may set its properties from a subscription.
+        PumpContext ui = new();
+        StateStore<MainState> store = MainStore.Create().UseSynchronizationContext(ui).Build();
+        RunIngestService ingest = new(store, TimeSpan.FromSeconds(30));
+        disposables.Add(ingest);
+        disposables.Add(store);
+        disposables.Add(ui);
+
+        ConcurrentQueue<int> notifiedOn = new();
+        TaskCompletionSource arrived = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        store.Bind(state => state.Runs.All.Count).Subscribe(count =>
+        {
+            notifiedOn.Enqueue(Environment.CurrentManagedThreadId);
+
+            if (count == 1)
+                arrived.TrySetResult();
+        });
+
+        (int worker, int runsSeenOnWorker) = await Task.Run(() =>
+        {
+            ingest.Accept(Init("s1"));
+            ingest.Flush();
+
+            return (Environment.CurrentManagedThreadId, store.GetValue(state => state.Runs.All.Count));
+        });
+
+        Assert.Equal(1, runsSeenOnWorker);
+
+        await arrived.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.NotEqual(ui.ThreadId, worker);
+        Assert.All(notifiedOn, thread => Assert.Equal(ui.ThreadId, thread));
+    }
+
+    /// <summary>A context that runs what is posted to it on one thread of its own, as a UI thread would.</summary>
+    private sealed class PumpContext : SynchronizationContext, IDisposable
+    {
+        private readonly BlockingCollection<(SendOrPostCallback Callback, object? State)> work = new();
+        private readonly Thread thread;
+
+        public PumpContext()
+        {
+            thread = new Thread(Pump) { IsBackground = true, Name = "Pump context" };
+            thread.Start();
+        }
+
+        public int ThreadId => thread.ManagedThreadId;
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            if (!work.IsAddingCompleted)
+                work.Add((d, state));
+        }
+
+        public override void Send(SendOrPostCallback d, object? state)
+            => throw new NotSupportedException("The store is expected to post, never to send.");
+
+        public void Dispose()
+        {
+            work.CompleteAdding();
+            thread.Join(TimeSpan.FromSeconds(5));
+            work.Dispose();
+        }
+
+        private void Pump()
+        {
+            SetSynchronizationContext(this);
+
+            foreach ((SendOrPostCallback callback, object? state) in work.GetConsumingEnumerable())
+                callback(state);
+        }
     }
 
     private sealed class Counter

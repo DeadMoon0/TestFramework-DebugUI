@@ -17,6 +17,11 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<!--
+			Axiom.Wpf's Bind* extensions set a control's property straight from the subscription and marshal
+			nothing. They are safe only because Axiom.State delivers every Bind on the context MainWindow
+			builds the store with, the UI thread's; see the note on the State project's reference.
+		-->
 		<PackageReference Include="Axiom.State" Version="0.5.0" />
 		<PackageReference Include="Axiom.Wpf" Version="0.0.1" />
 	</ItemGroup>

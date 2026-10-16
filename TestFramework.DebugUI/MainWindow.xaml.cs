@@ -133,6 +133,10 @@ public partial class MainWindow : Window
         string? runsDirectory = ShellController.DefaultRunsDirectory();
         TestRerunner rerunner = new(entry => StateStore<MainState>.Default.Dispatch(FeedActions.AppendEntry, entry));
 
+        // This context is the whole of the window's thread marshalling. Runs arrive on the pipe reader
+        // and the ingest timer; the store reduces each dispatch on whichever thread made it, then posts
+        // every binding's notification here, so the controls - Axiom.Wpf's Bind* helpers included,
+        // which set properties directly - only ever see the UI thread. RunIngestServiceTests pins it.
         MainStore.Create(new BaselineResolver(runsDirectory), rerunner)
             .UseSynchronizationContext(SynchronizationContext.Current!)
             .BuildAndMakeDefault();

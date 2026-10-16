@@ -116,6 +116,36 @@ public sealed class RunIngestService : IDisposable
     }
 
     /// <summary>
+    /// Dispatches everything buffered so far, then runs <paramref name="dispatch"/> before any batch
+    /// accepted after it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For a caller whose dispatches must not be overtaken by events still arriving — switching the
+    /// selected run is the one there is. That clears the board and replays the run's history onto it,
+    /// and an event the reader accepts in between would otherwise land on the empty board first: the
+    /// reducer then takes the history, older by sequence, for events already shown and drops it,
+    /// leaving a board with no structure under it.
+    /// </para>
+    /// <para>
+    /// Accepting is not held up, only flushing: whatever arrives meanwhile waits in the buffer and goes
+    /// in after <paramref name="dispatch"/>, where the board's own sequence drops what the replay
+    /// already carried.
+    /// </para>
+    /// </remarks>
+    /// <param name="dispatch">The dispatches to make with nothing accepted from now on ahead of them.</param>
+    public void FlushThen(Action dispatch)
+    {
+        ArgumentNullException.ThrowIfNull(dispatch);
+
+        lock (dispatchOrder)
+        {
+            Flush();
+            dispatch();
+        }
+    }
+
+    /// <summary>
     /// Flushes anything outstanding and stops the timer.
     /// </summary>
     public void Dispose()

@@ -142,6 +142,61 @@ public class MainReducerTests : IDisposable
     }
 
     [Fact]
+    public void ARunSelectedWhileItIsStillRunningKeepsShowingWhatItSendsNext()
+    {
+        // Selecting clears the board and the run's history is replayed onto it; the run does not stop
+        // for that, and what it sends afterwards has to land on the board it was just given.
+        StateStore<MainState> store = CreateStore();
+
+        DebugEnvelope init = Init("s2", "Second");
+        DebugEnvelope running = StepRunning("s2");
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s1", "First"), init, running));
+
+        store.Dispatch(MainActions.SelectRun, "s2");
+        store.Dispatch(MainActions.IngestBatch, Batch(init, running));
+        store.Dispatch(MainActions.IngestBatch, Batch(StepComplete("s2")));
+
+        Assert.Equal("s2", store.GetValue(state => state.Runs.SelectedSessionId));
+        Assert.Equal(DebugLifecycleState.Complete, store.GetValue(state => state.Board.ActiveRun).Stages[0].Steps[0].Lifecycle);
+    }
+
+    [Fact]
+    public void ARunThatStartsWhileAnotherIsBeingSelectedDoesNotTakeTheSelection()
+    {
+        // Only the very first run is selected on arrival. One starting in the middle of a switch would
+        // otherwise pull the board away from the run that was just picked.
+        StateStore<MainState> store = CreateStore();
+
+        DebugEnvelope init = Init("s2", "Second", step: "second's step");
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s1", "First"), init));
+
+        store.Dispatch(MainActions.SelectRun, "s2");
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s3", "Third", step: "third's step"), init));
+
+        Assert.Equal("s2", store.GetValue(state => state.Runs.SelectedSessionId));
+        Assert.Equal("second's step", store.GetValue(state => state.Board.ActiveRun).Stages[0].Steps[0].DisplayName);
+        Assert.Equal(3, store.GetValue(state => state.Runs.All.Count));
+    }
+
+    [Fact]
+    public void ThePreviouslySelectedRunStopsReachingTheBoardButIsStillCounted()
+    {
+        // Its events keep arriving after the switch. They belong in its summary, where the picker shows
+        // its progress, and nowhere near the board now showing a different run.
+        StateStore<MainState> store = CreateStore();
+
+        DebugEnvelope init = Init("s2", "Second", step: "second's step");
+        store.Dispatch(MainActions.IngestBatch, Batch(Init("s1", "First"), StepRunning("s1"), init));
+
+        store.Dispatch(MainActions.SelectRun, "s2");
+        store.Dispatch(MainActions.IngestBatch, Batch(init, StepComplete("s1")));
+
+        Assert.Equal("second's step", store.GetValue(state => state.Board.ActiveRun).Stages[0].Steps[0].DisplayName);
+        Assert.Equal(DebugLifecycleState.Initialized, store.GetValue(state => state.Board.ActiveRun).Stages[0].Steps[0].Lifecycle);
+        Assert.Equal(1, store.GetValue(state => state.Runs.All).Single(run => run.SessionId == "s1").Progress!.Complete);
+    }
+
+    [Fact]
     public void AMalformedEnvelopeDoesNotLoseTheRunOnScreen()
     {
         StateStore<MainState> store = CreateStore();
@@ -205,14 +260,14 @@ public class MainReducerTests : IDisposable
     // Numbered upward, as every producer numbers them: the reducer treats a number it has already seen as a repeat.
     private static DebugEnvelope Wrap(IPipeSignal signal) => DebugEnvelopeCodec.Wrap(signal, System.Threading.Interlocked.Increment(ref sequence));
 
-    private static DebugEnvelope Init(string sessionId, string name) => Wrap(new PipeInitTimelineRunSignal
+    private static DebugEnvelope Init(string sessionId, string name, string step = "A") => Wrap(new PipeInitTimelineRunSignal
     {
         SessionId = sessionId,
         Name = name,
         ProjectPath = "project.csproj",
         RunStructure = new TimelineRunStructure
         {
-            Stages = [new DebugStageState { Name = "Main", Description = "main", Steps = [Step("A")] }],
+            Stages = [new DebugStageState { Name = "Main", Description = "main", Steps = [Step(step)] }],
             Variables = new Dictionary<VariableIdentifier, DebugValue>(),
             Artifacts = new Dictionary<ArtifactIdentifier, DebugValue>()
         }
@@ -226,6 +281,18 @@ public class MainReducerTests : IDisposable
         StepId = 0,
         State = DebugLifecycleState.Running,
         OccurredAtUtc = DateTimeOffset.UnixEpoch.AddSeconds(1)
+    });
+
+    private static DebugEnvelope StepComplete(string sessionId) => Wrap(new PipeEntityTransitionSignal
+    {
+        SessionId = sessionId,
+        EntityKind = DebugEntityKind.Step,
+        Stage = "Main",
+        StepId = 0,
+        PreviousState = DebugLifecycleState.Running,
+        State = DebugLifecycleState.Complete,
+        OutcomeState = DebugLifecycleState.Complete,
+        OccurredAtUtc = DateTimeOffset.UnixEpoch.AddSeconds(2)
     });
 
     private static DebugEnvelope Breakpoint(string sessionId) => Wrap(new PipeBreakpointHitRequestSignal

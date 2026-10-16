@@ -5,6 +5,13 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<!--
+			The store, and with it the threading every caller here relies on, from a package with no
+			source or docs in reach: a dispatch is reduced synchronously on the calling thread under the
+			store's own lock, so dispatches from several threads are serialised and the state can be read
+			the moment one returns; and every Bind is delivered through the SynchronizationContext the
+			store was built with. RunIngestServiceTests pins both; re-run it before moving this version.
+		-->
 		<PackageReference Include="Axiom.State" Version="0.5.0" />
 		<PackageReference Include="TestFramework.Core" Version="0.7.0" />
 	</ItemGroup>

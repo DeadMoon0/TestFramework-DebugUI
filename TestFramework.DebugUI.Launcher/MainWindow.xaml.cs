@@ -68,6 +68,11 @@ public partial class MainWindow : Window
 
     private async Task RunAsync()
     {
+        // Read once, now, while the click that started the launcher is still the last thing the person did.
+        // Read later - after the update check, which can take seconds - a Shift released once the window
+        // appeared would start the newest build, the very one being avoided.
+        bool olderAsked = ShiftHeld();
+
         VersionStore store = new(paths);
         LaunchRecordStore records = new(paths);
 
@@ -88,7 +93,7 @@ public partial class MainWindow : Window
         Say("Checking for updates…");
         ReleaseInfo? latest = await releases.LatestAsync(CancellationToken.None).ConfigureAwait(true);
 
-        LaunchDecision decision = LaunchPlanner.Decide(store.Installed(), latest, record, Pinned());
+        LaunchDecision decision = LaunchPlanner.Decide(store.Installed(), latest, record, Pinned(olderAsked));
 
         Say(decision.Reason);
 
@@ -98,7 +103,7 @@ public partial class MainWindow : Window
             {
                 // The download failed, so fall back to whatever is already here. An update that did
                 // not arrive is a worse reason to stop than no update at all.
-                decision = LaunchPlanner.Decide(store.Installed(), latest: null, record, Pinned());
+                decision = LaunchPlanner.Decide(store.Installed(), latest: null, record, Pinned(olderAsked));
                 Say(decision.Reason);
             }
         }
@@ -112,7 +117,7 @@ public partial class MainWindow : Window
         if (decision.Version is not null)
             store.Prune(decision.Version);
 
-        if (await StartFirstSurvivingAsync(store, records, record).ConfigureAwait(true))
+        if (await StartFirstSurvivingAsync(store, records, record, olderAsked).ConfigureAwait(true))
             Close();
     }
 
@@ -125,9 +130,9 @@ public partial class MainWindow : Window
     /// the second candidate is tried before they have finished wondering, and the build that failed
     /// is remembered so the next start does not begin by repeating it.
     /// </remarks>
-    private async Task<bool> StartFirstSurvivingAsync(VersionStore store, LaunchRecordStore records, LaunchRecord record)
+    private async Task<bool> StartFirstSurvivingAsync(VersionStore store, LaunchRecordStore records, LaunchRecord record, bool olderAsked)
     {
-        foreach (Version version in LaunchPlanner.Candidates(store.Installed(), record, Pinned()))
+        foreach (Version version in LaunchPlanner.Candidates(store.Installed(), record, Pinned(olderAsked)))
         {
             Say($"Starting {version}…");
 
@@ -273,7 +278,8 @@ public partial class MainWindow : Window
     /// the newest version broke and someone wants the one before it. Shift while starting, or
     /// <c>--version 0.4.1</c> for anyone scripting it.
     /// </remarks>
-    private Version? Pinned()
+    /// <param name="olderAsked">Whether Shift was held when the launcher started.</param>
+    private Version? Pinned(bool olderAsked)
     {
         string[] arguments = Environment.GetCommandLineArgs();
 
@@ -282,13 +288,15 @@ public partial class MainWindow : Window
         if (flag >= 0 && flag + 1 < arguments.Length && Version.TryParse(arguments[flag + 1], out Version? asked))
             return asked;
 
-        if (!Keyboard.IsKeyDown(Key.LeftShift) && !Keyboard.IsKeyDown(Key.RightShift))
+        if (!olderAsked)
             return null;
 
         // Shift means "not the newest one". The one before it is what a person reaching for shift
         // almost always wants, and choosing it needs no interface.
         return new VersionStore(paths).Installed().Skip(1).FirstOrDefault();
     }
+
+    private static bool ShiftHeld() => Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift);
 
     private void Report(double fraction) => pbProgress.Value = Math.Clamp(fraction, 0, 1) * 100;
 

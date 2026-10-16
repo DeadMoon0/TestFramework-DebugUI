@@ -52,9 +52,12 @@ Two notes on those paths:
 - They are under the profile root rather than `AppData` deliberately - see the remarks on
   `LauncherPaths` for the argument. It costs journals and version caches being included in a classic
   roaming profile.
-- `%USERPROFILE%\.testframework\Debug` is **load-bearing**. Core decides whether to record a run by
-  whether that folder exists, so creating it is the launcher's first job, ahead of any update check.
-  Until something creates it, runs are not journalled and there is nothing to reopen later.
+- `%USERPROFILE%\.testframework\Debug\recording.on` is **load-bearing**. Core decides whether to
+  record a run by whether that file exists, so creating it is the launcher's first job, ahead of any
+  update check. Until something creates it, runs are not journalled and there is nothing to reopen
+  later. The launcher does this once per machine and notes it in
+  `%USERPROFILE%\.testframework\recording.armed`; after that the recording switch in Settings owns
+  the marker, and turning recording off there survives restarts and keeps the runs already recorded.
 
 ## Updating
 
@@ -78,7 +81,7 @@ nothing better remains, because the cause may have been the machine (a runtime m
 now) rather than the build, and surviving a start clears the mark. "Survived" means still running, not
 merely having pumped a message loop.
 
-The journal folder is created either way, because that has to happen on the starts where the update does
+Recording is switched on either way, because that has to happen on the starts where the update does
 not.
 
 ## For maintainers: cutting a release

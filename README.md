@@ -16,7 +16,7 @@ The DebugUI focuses on these consumer workflows:
 
 Download `TestFramework.DebugUI.Setup.exe` from the [latest release](https://github.com/DeadMoon0/TestFramework-DebugUI/releases) and run it. It installs per-user, needs no administrator rights, and offers the .NET 8 desktop runtime if it is missing. Windows will warn that the file is unsigned - **More info -> Run anyway**; there is no certificate behind this project.
 
-What it installs is a small launcher, which fetches and starts the application itself and keeps the last three versions around. Installing it is also what switches on run journalling: Core records a run only when `%USERPROFILE%\.testframework\Debug` exists, and creating that folder is the launcher's first job.
+What it installs is a small launcher, which fetches and starts the application itself and keeps the last three versions around. Installing it is also what switches on run journalling: Core records a run only when `%USERPROFILE%\.testframework\Debug\recording.on` exists, and the launcher creates it on its first start. Settings has a switch to turn recording off and on again; off keeps the runs already recorded.
 
 Full detail - assets, folder layout, updating, rolling back, cutting a release - is in [Documentation/INSTALLING.md](./Documentation/INSTALLING.md).
 
@@ -73,7 +73,7 @@ See [Documentation/THEMING.md](./Documentation/THEMING.md) for the format, the c
 DebugUI is stable both for watching a live run and for reopening a recorded one. What is genuinely limited:
 
 - **Attachment is decided once, at the run's start.** A UI started midway through a run does not join it; that run appears in the list when it finishes and is read from its journal. Every later run in the same suite is picked up, because the check is per run rather than once per process.
-- **Journalling is armed by a directory the launcher creates.** A machine where the tool has never been installed records nothing, and nothing says so at run time.
+- **Journalling is armed by a marker file the launcher creates.** A machine where the tool has never been installed records nothing, and nothing says so at run time.
 - **Widget files live beside the run, not inside the journal.** A journal moved without its output folder replays the run but cannot show its pictures.
 - Malformed or partial transport messages are diagnosable, but not every failure mode has a recovery path that stays entirely inside the UI.
 

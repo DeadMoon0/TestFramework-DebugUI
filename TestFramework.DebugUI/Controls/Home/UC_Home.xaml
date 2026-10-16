@@ -116,8 +116,7 @@
                 </ScrollViewer>
 
                 <TextBlock x:Name="tbEmpty" Grid.Row="2" Style="{StaticResource MutedText}" Margin="0 40 0 0"
-                           HorizontalAlignment="Center"
-                           Text="No runs yet. Start a test with the debugger attached, or record one and it will be listed here."/>
+                           HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460"/>
             </Grid>
     </Grid>
 </UserControl>

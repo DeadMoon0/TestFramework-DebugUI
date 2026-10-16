@@ -91,10 +91,11 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#LauncherExe}"; Tasks: deskt
 [Run]
 Filename: "{app}\{#LauncherExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
-; Note what is NOT here: the run-journal folder is not created by the installer. Core gates journalling
-; on that folder existing, and creating it is the launcher's first job on every start — including the
-; starts where the network is down and the update check is skipped. An installer that created it would
-; arm journalling on a machine whose launcher had never successfully run.
+; Note what is NOT here: the recording marker is not created by the installer. Core gates journalling
+; on a recording.on file inside the run-journal folder, and creating it is the launcher's first job on
+; the first start that gets that far — including a start where the network is down and the update check
+; is skipped — after which the UI's recording switch owns it. An installer that created it would arm
+; journalling on a machine whose launcher had never successfully run.
 
 [Code]
 const

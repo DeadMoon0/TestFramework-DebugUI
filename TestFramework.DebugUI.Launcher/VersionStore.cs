@@ -54,12 +54,34 @@ public sealed class VersionStore(LauncherPaths paths)
         return versions;
     }
 
-    /// <summary>Creates the folder that tells Core to record runs.</summary>
+    /// <summary>
+    /// Switches run recording on for this machine, unless the launcher has done so before.
+    /// </summary>
     /// <remarks>
+    /// <para>
     /// The launcher's first job, before any update check, because it has to happen on the starts
     /// where the network is down and the check is skipped.
+    /// </para>
+    /// <para>
+    /// Once and never again: after that the marker belongs to the UI's recording switch, and a
+    /// person who turned recording off must find it still off on the next start. A machine that
+    /// already has the journal folder but no flag — one armed by an older launcher, when the folder
+    /// was the switch — counts as never armed, so it gets the marker once and keeps recording as it
+    /// did. The marker is written before the flag, so a start that dies between the two arms again
+    /// next time rather than never.
+    /// </para>
     /// </remarks>
-    public void EnsureJournalFolder() => Directory.CreateDirectory(paths.JournalFolder);
+    public void ArmRecordingOnce()
+    {
+        if (File.Exists(paths.RecordingArmedFlag))
+            return;
+
+        Directory.CreateDirectory(paths.JournalFolder);
+        File.WriteAllText(paths.RecordingMarker, string.Empty);
+        File.WriteAllText(
+            paths.RecordingArmedFlag,
+            "The launcher switched run recording on for this machine once and will not do so again. Delete this file to have it do so on its next start.");
+    }
 
     /// <summary>
     /// Downloads a release and puts it in place.

@@ -14,10 +14,10 @@ namespace TestFramework.DebugUI.Launcher;
 /// The launcher: make the tool ready, then get out of the way.
 /// </summary>
 /// <remarks>
-/// The order of the steps is the design. The journal folder is created before anything can fail,
-/// because a run recorded is worth more than a version updated; the update check is bounded, because
-/// it sits between a person and their tool; and every failure after the folder exists still ends in
-/// the application starting, if there is one to start.
+/// The order of the steps is the design. Recording is switched on before anything can fail, because
+/// a run recorded is worth more than a version updated; the update check is bounded, because it sits
+/// between a person and their tool; and every failure after that still ends in the application
+/// starting, if there is one to start.
 /// </remarks>
 public partial class MainWindow : Window
 {
@@ -51,7 +51,7 @@ public partial class MainWindow : Window
     /// </summary>
     /// <remarks>
     /// An exception escaping an async event handler ends the process without a word: the window closes and the
-    /// person clicks the icon again. Creating the journal folder on a locked profile, reading a damaged launch
+    /// person clicks the icon again. Switching recording on in a locked profile, reading a damaged launch
     /// record - anything not already handled - ends here, on the window.
     /// </remarks>
     private async Task RunOrSayWhyNotAsync()
@@ -79,7 +79,7 @@ public partial class MainWindow : Window
         // First, and outside the try: if this is all the launcher ever manages to do, runs on this
         // machine still get recorded, and that is the half nobody can do for themselves.
         Say("Preparing…");
-        store.EnsureJournalFolder();
+        store.ArmRecordingOnce();
 
         // Settled() before anything is decided: an attempt still written from last time is a version
         // that was started and never seen to survive, and this is where that becomes a quarantine.

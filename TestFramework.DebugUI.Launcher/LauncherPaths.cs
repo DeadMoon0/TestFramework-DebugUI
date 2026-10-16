@@ -4,14 +4,14 @@ using System.IO;
 namespace TestFramework.DebugUI.Launcher;
 
 /// <summary>
-/// Where the launcher keeps the application, and the folder it must create for runs to be recorded.
+/// Where the launcher keeps the application, and the marker it must create for runs to be recorded.
 /// </summary>
 /// <remarks>
 /// <para>
 /// The profile root, deliberately not <c>AppData</c>, and this is the project the choice is really
-/// about, because this is the side that creates the journal folder below. Windows virtualizes a
+/// about, because this is the side that creates the recording marker below. Windows virtualizes a
 /// <em>packaged</em> application's writes under <c>AppData</c> into a per-package store that no
-/// unpackaged process can see: were the launcher ever packaged, it would create that folder into its
+/// unpackaged process can see: were the launcher ever packaged, it would create that marker into its
 /// own store, Core would go on finding nothing, and run recording would read as switched off on
 /// every machine in the world with nothing reporting a failure. Outside <c>AppData</c> there is one
 /// folder and both processes see it, whatever either of them is packaged as.
@@ -30,11 +30,17 @@ namespace TestFramework.DebugUI.Launcher;
 /// it bounded.
 /// </para>
 /// <para>
-/// The journal folder is the load-bearing one. Core decides whether to record a run by whether that
-/// folder exists — so until something creates it, every run in the world goes unrecorded and the
-/// UI's whole replay path, which is written and tested, can never fire. Creating it is the
-/// launcher's first job, ahead of any update check, because it must happen even on the runs where
-/// the network is down and the update is skipped.
+/// The recording marker is the load-bearing one. Core decides whether to record a run by whether
+/// that file exists inside the journal folder — so until something creates it, every run in the
+/// world goes unrecorded and the UI's whole replay path, which is written and tested, can never
+/// fire. Creating it is the launcher's first job, ahead of any update check, because it must happen
+/// even on the runs where the network is down and the update is skipped.
+/// </para>
+/// <para>
+/// But only once per machine, which is what <see cref="RecordingArmedFlag"/> remembers. The UI has a
+/// switch that deletes the marker, and a launcher that put it back on every start would make that
+/// switch last until the next start. The flag lives beside the launch record rather than in the
+/// journal folder, so it is the launcher's own memory and nothing Core or the UI reads.
 /// </para>
 /// </remarks>
 public sealed class LauncherPaths
@@ -47,6 +53,14 @@ public sealed class LauncherPaths
     private const string RootFolderName = ".testframework";
 
     private const string JournalFolderName = "Debug";
+
+    /// <remarks>
+    /// Must match <c>DebugJournal.RecordingMarkerName</c> in Core, for the same reason as the root
+    /// name, and held by the same test.
+    /// </remarks>
+    private const string RecordingMarkerName = "recording.on";
+
+    private const string RecordingArmedFlagName = "recording.armed";
     private const string VersionsFolderName = "versions";
     private const string StagingFolderName = "staging";
 
@@ -68,8 +82,14 @@ public sealed class LauncherPaths
     /// <summary>Everything the tool owns on this machine.</summary>
     public string Root { get; }
 
-    /// <summary>The folder whose existence tells Core to record runs.</summary>
+    /// <summary>The folder Core keeps recorded runs in, and the recording marker.</summary>
     public string JournalFolder => Path.Combine(Root, JournalFolderName);
+
+    /// <summary>The file whose existence tells Core to record runs.</summary>
+    public string RecordingMarker => Path.Combine(JournalFolder, RecordingMarkerName);
+
+    /// <summary>The launcher's note that it has switched recording on for this machine once already.</summary>
+    public string RecordingArmedFlag => Path.Combine(Root, RecordingArmedFlagName);
 
     /// <summary>Where each installed version of the application lives, one folder per version.</summary>
     public string VersionsFolder => Path.Combine(Root, VersionsFolderName);

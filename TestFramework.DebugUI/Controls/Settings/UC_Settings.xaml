@@ -87,6 +87,22 @@
 
                     <Border Height="1" Background="{StaticResource SurfaceDivider}" Margin="0 6 0 12"/>
 
+                    <TextBlock Style="{StaticResource PanelHeading}" Text="RECORDING" Margin="0 0 0 6"/>
+
+                    <!--
+                        Creates or deletes one marker file and nothing else, so turning this off keeps every run
+                        recorded so far. Core reads the marker once per test process, which is why the note says
+                        "from now on": a test host that is already running keeps what it read when it started.
+                    -->
+                    <shell:UC_Toggle x:Name="tgRecording" Margin="0 0 0 4"
+                                     Label="Record test runs on this machine"
+                                     Note="Applies to test runs started from now on. Turning it off keeps the runs recorded so far."/>
+
+                    <TextBlock x:Name="tbRecordingNote" Style="{StaticResource MutedText}" FontSize="10"
+                               Foreground="{StaticResource TextFaint}" Margin="0 0 0 12" Visibility="Collapsed"/>
+
+                    <Border Height="1" Background="{StaticResource SurfaceDivider}" Margin="0 6 0 12"/>
+
                     <TextBlock Style="{StaticResource PanelHeading}" Text="SHARED RUNS" Margin="0 0 0 6"/>
 
                     <shell:UC_Toggle x:Name="tgAssociate" Margin="0 0 0 4"

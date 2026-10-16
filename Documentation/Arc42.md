@@ -32,7 +32,7 @@ Relevant collaborators:
 - `TestFramework.DebugUI.Layout`: derives board geometry from that graph
 - `TestFramework.DebugUI.Docking`: works out where panels sit and what a drop would do
 - `TestFramework.DebugUI`: the WPF shell that renders the projected state and offers the actions - continuing a breakpoint, asking a paused run for a fresh look
-- `TestFramework.DebugUI.Launcher`: installs and updates the tool, and creates the directory whose existence arms journalling
+- `TestFramework.DebugUI.Launcher`: installs and updates the tool, and on its first start creates the marker file whose existence arms journalling
 - test authors: start the UI, run timelines, and inspect results
 
 The DebugUI sits on the consumer side of debugging. It is not the run engine, and it should not become the hidden owner of test behavior.
@@ -71,7 +71,7 @@ Typical runtime flow:
 4. The WPF UI queries and renders that state.
 5. If a step pauses at a breakpoint, the UI issues a continue signal back over the same connection - and may first ask the paused run to record fresh widgets, which arrive as ordinary signals rather than in the reply.
 
-Completed runs are journalled to disk and replayed from there, so they survive both the test host and the UI process exiting. Journalling is armed by its marker directory existing, which the launcher creates.
+Completed runs are journalled to disk and replayed from there, so they survive both the test host and the UI process exiting. Journalling is armed by a `recording.on` marker file inside the journal folder, which the launcher creates once per machine and the Settings recording switch creates or deletes after that. Turning it off keeps the runs already recorded.
 
 ## 7. Deployment View
 
@@ -85,7 +85,7 @@ The app runs locally on the developer machine and connects to test processes thr
 What is shipped is the launcher, per-user and unsigned, as an Inno Setup installer built in the release
 workflow; the application is a release asset the launcher fetches by name. Program and data are kept
 apart - the launcher under `%LOCALAPPDATA%\Programs`, everything belonging to the user under
-`%USERPROFILE%\.testframework`, which is outside `AppData` so the journal folder works as a handshake
+`%USERPROFILE%\.testframework`, which is outside `AppData` so the recording marker works as a handshake
 regardless of how either side is packaged. [INSTALLING.md](./INSTALLING.md) has the detail.
 
 ## 8. Cross-Cutting Concepts
@@ -191,7 +191,7 @@ nothing more.
 
 - The WPF surface is Windows-only, and the transport's cheap availability probe is a Windows path trick; elsewhere it falls back to a bounded connect.
 - A run that executes while no UI is listening is not shown live at all - it is picked up from its journal once it has finished. That is what late attach really means here, and it is easy to mistake for a lost run.
-- Journalling is armed by a directory the launcher creates, so a machine that has never installed the tool records nothing, and nothing says so at run time.
+- Journalling is armed by a marker file the launcher creates, so a machine that has never installed the tool records nothing, and nothing says so at run time. Where the tool is installed, the transport status popup and the empty run lists say whether recording is on.
 - Widget files live beside the run rather than inside the journal, so a journal copied to another machine without its output folder replays the run but cannot show its pictures.
 
 ## 12. Glossary

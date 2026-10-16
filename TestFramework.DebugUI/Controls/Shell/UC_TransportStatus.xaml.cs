@@ -56,6 +56,11 @@ public partial class UC_TransportStatus : UserControl
             .Select(BrushFor)
             .BindToDependencyProperty(bIndicator, Border.BackgroundProperty));
 
+        subscriptions.Add(StateStore<MainState>.Default
+            .Bind(ShellSelectors.SelectRecording)
+            .Select(recording => recording.Summary)
+            .BindToDependencyProperty(tbRecording, TextBlock.TextProperty));
+
         // Disposed rather than discarded. The reference app leaks every one of these; a window that
         // is opened and closed repeatedly would keep every dead control subscribed to the store.
         Unloaded += (_, _) =>

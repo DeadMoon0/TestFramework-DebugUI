@@ -9,6 +9,7 @@ using System.Windows.Media;
 using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.State.Settings;
 using TestFramework.DebugUI.State.Diagnostics;
+using TestFramework.DebugUI.State.Shell;
 using TestFramework.DebugUI.State.Theming;
 using TestFramework.DebugUI.Theme;
 
@@ -22,7 +23,9 @@ namespace TestFramework.DebugUI.Controls.Settings;
 /// Holds no settings of its own and writes no files. It is told what the current values are, and it
 /// reports what the user changed; the window owns the store. That keeps the one thing that touches disk
 /// in one place, and it means this panel can be opened and closed without any question of whether it
-/// saved.
+/// saved. The two machine switches are the exception, because neither is a setting of this tool: the
+/// file association lives in the registry and recording lives in Core's marker file, and each is read
+/// back from where it lives rather than remembered here.
 /// </para>
 /// <para>
 /// There is no OK or Cancel. Every change applies and is written as it is made, because there is
@@ -33,6 +36,8 @@ public partial class UC_Settings : UserControl
 {
     private BreakpointService? breakpoints;
 
+    private RecordingSwitch? recording;
+
     public UC_Settings()
     {
         InitializeComponent();
@@ -42,6 +47,8 @@ public partial class UC_Settings : UserControl
         tgFailuresOnly.Toggled += value => Raise(Current with { NotifyOnlyOnFailure = value });
 
         tgAssociate.Toggled += OnAssociateToggled;
+
+        tgRecording.Toggled += OnRecordingToggled;
 
         // Its own event rather than a member of the watch settings: this governs what a run does when it
         // breaks, which has nothing to do with where the window goes when it is put away.
@@ -70,8 +77,16 @@ public partial class UC_Settings : UserControl
         ShowBreakpointCount();
     }
 
+    /// <summary>
+    /// Gives the panel the switch it shows and flips, or null when this machine's journal root cannot be told.
+    /// </summary>
+    public void UseRecording(RecordingSwitch? value) => recording = value;
+
     /// <summary>Raised when the user changes something.</summary>
     public event Action<WatchSettings>? Changed;
+
+    /// <summary>Raised after the user has flipped the recording switch, with what it now says.</summary>
+    public event Action<RecordingState>? RecordingChanged;
 
     /// <summary>Raised when the panel should go away.</summary>
     public event Action? Closed;
@@ -125,9 +140,10 @@ public partial class UC_Settings : UserControl
         tgBreakOnFailure.SetQuietly(breakOnFailure);
 
         ShowAssociation();
+        ShowRecording();
 
         tbSettingsPath.Text = settingsPath;
-        tbRunsPath.Text = SafeRunsDirectory() ?? "Not available on this machine yet — it appears once the launcher has run.";
+        ShowRunsFolder();
 
         ShowBreakpointCount();
 
@@ -169,6 +185,83 @@ public partial class UC_Settings : UserControl
         tbAssociateNote.Text = done
             ? string.Empty
             : "Windows would not let this be changed for your account.";
+    }
+
+    /// <summary>
+    /// Shows whether runs are recorded, read off the marker rather than remembered, for the same reason as the
+    /// association: something outside this window can change it.
+    /// </summary>
+    private void ShowRecording()
+    {
+        tgRecording.IsEnabled = recording is not null;
+        tgRecording.SetQuietly(recording?.IsOn ?? false);
+
+        tbRecordingNote.Visibility = recording is null ? Visibility.Visible : Visibility.Collapsed;
+        tbRecordingNote.Text = recording is null
+            ? "Where runs are recorded could not be told on this machine."
+            : string.Empty;
+    }
+
+    /// <summary>
+    /// Switches recording on or off, then shows what the marker actually says.
+    /// </summary>
+    /// <remarks>
+    /// Put back to what is on disk afterwards, so a refusal - a locked profile, a read-only folder - leaves the
+    /// switch telling the truth rather than showing a state that was never reached.
+    /// </remarks>
+    private void OnRecordingToggled(bool wanted)
+    {
+        if (recording is null)
+            return;
+
+        bool done;
+
+        try
+        {
+            if (wanted)
+                recording.TurnOn();
+            else
+                recording.TurnOff();
+
+            done = true;
+        }
+        catch (Exception e)
+        {
+            Log.Write(e);
+            done = false;
+        }
+
+        RecordingState now = recording.Read();
+
+        tgRecording.SetQuietly(now.IsOn);
+
+        tbRecordingNote.Visibility = done ? Visibility.Collapsed : Visibility.Visible;
+        tbRecordingNote.Text = done
+            ? string.Empty
+            : $"The marker file could not be changed: {recording.Marker}";
+
+        ShowRunsFolder();
+
+        RecordingChanged?.Invoke(now);
+    }
+
+    /// <summary>
+    /// Shows where recorded runs go, and offers to open the folder only when there is one.
+    /// </summary>
+    /// <remarks>
+    /// Never creates it. The folder appears with the first recorded run, and opening it is not a reason for it to
+    /// exist - an empty folder made by looking would read as recording having happened.
+    /// </remarks>
+    private void ShowRunsFolder()
+    {
+        string? runs = SafeRunsDirectory();
+        bool exists = runs is not null && Directory.Exists(runs);
+
+        tbRunsPath.Text = runs is null
+            ? "Not available on this machine."
+            : exists ? runs : $"{runs} (does not exist yet - it appears with the first recorded run)";
+
+        btOpenRuns.IsEnabled = exists;
     }
 
     private void Raise(WatchSettings next)
@@ -284,7 +377,15 @@ public partial class UC_Settings : UserControl
 
     private void btClearBreakpoints_Click(object sender, RoutedEventArgs e) => breakpoints?.Clear();
 
-    private void btOpenRuns_Click(object sender, RoutedEventArgs e) => Reveal(SafeRunsDirectory());
+    private void btOpenRuns_Click(object sender, RoutedEventArgs e)
+    {
+        string? runs = SafeRunsDirectory();
+
+        if (runs is not null && Directory.Exists(runs))
+            Open(runs);
+        else
+            ShowRunsFolder();
+    }
 
     private void btOpenSettings_Click(object sender, RoutedEventArgs e) => Reveal(Path.GetDirectoryName(tbSettingsPath.Text));
 
@@ -293,7 +394,9 @@ public partial class UC_Settings : UserControl
     /// </summary>
     /// <remarks>
     /// Creates it first when it is missing. The settings folder does not exist until something has been
-    /// saved, and "Open folder" doing nothing at all is the least helpful possible answer.
+    /// saved, and "Open folder" doing nothing at all is the least helpful possible answer. Only for the
+    /// tool's own folders: the runs folder is opened without this, because it sits in the journal root
+    /// and is evidence of recording, which looking must not fake.
     /// </remarks>
     internal static void Reveal(string? folder)
     {
@@ -303,7 +406,22 @@ public partial class UC_Settings : UserControl
         try
         {
             Directory.CreateDirectory(folder);
+        }
+        catch (Exception e)
+        {
+            // Not worth interrupting anyone over: the path is on screen and can be copied.
+            Log.Write(e);
+            return;
+        }
 
+        Open(folder);
+    }
+
+    /// <summary>Opens a folder that is already there in Explorer.</summary>
+    private static void Open(string folder)
+    {
+        try
+        {
             Process.Start(new ProcessStartInfo
             {
                 FileName = folder,

@@ -4,12 +4,12 @@ using TestFramework.Core.Debugger;
 namespace TestFramework.DebugUI.Launcher.Tests;
 
 /// <summary>
-/// Holds the folder the launcher creates to the folder Core actually looks at.
+/// Holds the marker the launcher creates to the marker Core actually looks at.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The launcher creates a directory; Core — in another package, in another process, unpackaged while
-/// the launcher is packaged — decides whether to record a run by whether that directory is there.
+/// The launcher creates a file; Core — in another package, in another process, unpackaged while the
+/// launcher is packaged — decides whether to record a run by whether that file is there.
 /// Neither side can see the other's constant, because the launcher deliberately does not reference
 /// Core, so the two paths agree only for as long as somebody remembers they have to.
 /// </para>
@@ -24,7 +24,7 @@ namespace TestFramework.DebugUI.Launcher.Tests;
 public sealed class JournalFolderAgreementTests
 {
     [Fact]
-    public void TheLauncherCreatesTheFolderCoreLooksAt()
+    public void TheLauncherCreatesTheMarkerCoreLooksAt()
     {
         // Core lets an environment variable redirect this, and caches whichever answer it read
         // first. Nothing in this assembly sets it, so on any ordinary machine the default is what
@@ -36,6 +36,9 @@ public sealed class JournalFolderAgreementTests
             string.IsNullOrWhiteSpace(redirected),
             $"TESTFRAMEWORK_DEBUG_JOURNAL_DIR is set to '{redirected}', so Core's default journal root cannot be read and this agreement cannot be checked.");
 
-        Assert.Equal(DebugJournal.Root, new LauncherPaths().JournalFolder);
+        LauncherPaths paths = new();
+
+        Assert.Equal(DebugJournal.Root, paths.JournalFolder);
+        Assert.Equal(DebugJournal.RecordingMarker, paths.RecordingMarker);
     }
 }

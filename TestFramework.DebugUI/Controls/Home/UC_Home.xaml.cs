@@ -18,6 +18,7 @@ using TestFramework.DebugUI.Controls.Dock;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Bundles;
 using TestFramework.DebugUI.State.Runs;
+using TestFramework.DebugUI.State.Shell;
 using TestFramework.DebugUI.State.Shell.Feed;
 
 using TestFramework.DebugUI.State.Transport;
@@ -102,6 +103,11 @@ public partial class UC_Home : UserControl, IDisposable, IPanelActions
             .Bind(RunsSelectors.SelectAll)
             .Select(runs => runs.Count == 0 ? Visibility.Visible : Visibility.Collapsed)
             .BindToDependencyProperty(tbEmpty, VisibilityProperty));
+
+        subscriptions.Add(StateStore<MainState>.Default
+            .Bind(ShellSelectors.SelectRecording)
+            .Select(recording => recording.EmptyRuns)
+            .BindToDependencyProperty(tbEmpty, TextBlock.TextProperty));
 
     }
 

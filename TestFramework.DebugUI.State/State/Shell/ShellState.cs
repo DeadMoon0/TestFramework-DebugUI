@@ -20,6 +20,9 @@ public record struct ShellState()
     /// </remarks>
     public TransportDetails Details = TransportDetails.Unknown;
 
+    /// <summary>Whether test runs on this machine are being recorded.</summary>
+    public RecordingState Recording = RecordingState.Unknown;
+
     /// <summary>
     /// The test a re-run was asked for, until its run arrives.
     /// </summary>

@@ -6,31 +6,58 @@ using TestFramework.DebugUI.Launcher;
 namespace TestFramework.DebugUI.Launcher.Tests;
 
 /// <summary>
-/// Covers what the launcher finds on disk, and the folder it must leave behind.
+/// Covers what the launcher finds on disk, and the recording marker it must leave behind once.
 /// </summary>
 public sealed class VersionStoreTests : IDisposable
 {
     private readonly string root = Path.Combine(Path.GetTempPath(), "tf-launcher-" + Guid.NewGuid().ToString("N"));
 
     [Fact]
-    public void TheJournalFolderIsCreatedSoThatRunsAreRecordedAtAll()
+    public void AFreshMachineGetsRecordingSwitchedOn()
     {
         // The launcher's reason for existing, as much as the updating is. Core decides whether to
-        // record a run by whether this folder is there, so until something creates it every run in
+        // record a run by whether the marker is there, so until something creates it every run in
         // the world goes unrecorded and the UI's whole replay path can never fire.
-        Store().EnsureJournalFolder();
+        Store().ArmRecordingOnce();
 
+        Assert.True(File.Exists(Paths().RecordingMarker));
+        Assert.True(File.Exists(Paths().RecordingArmedFlag));
+    }
+
+    [Fact]
+    public void RecordingSwitchedOffStaysOffOnTheNextStart()
+    {
+        // The UI's switch deletes the marker. A launcher that put it back on every start would make
+        // "off" mean "off until the tool is next opened".
+        Store().ArmRecordingOnce();
+        File.Delete(Paths().RecordingMarker);
+
+        Store().ArmRecordingOnce();
+
+        Assert.False(File.Exists(Paths().RecordingMarker));
         Assert.True(Directory.Exists(Paths().JournalFolder));
     }
 
     [Fact]
-    public void CreatingTheJournalFolderTwiceIsNotAnError()
+    public void AMachineArmedByTheFolderAloneGetsTheMarkerOnce()
+    {
+        // An older launcher created only the folder, which used to be the switch. Such a machine has
+        // been recording, so it must go on recording after the update rather than fall silent.
+        Directory.CreateDirectory(Paths().JournalFolder);
+
+        Store().ArmRecordingOnce();
+
+        Assert.True(File.Exists(Paths().RecordingMarker));
+    }
+
+    [Fact]
+    public void ArmingTwiceIsNotAnError()
     {
         // It runs on every start, and the second start is the normal one.
-        Store().EnsureJournalFolder();
-        Store().EnsureJournalFolder();
+        Store().ArmRecordingOnce();
+        Store().ArmRecordingOnce();
 
-        Assert.True(Directory.Exists(Paths().JournalFolder));
+        Assert.True(File.Exists(Paths().RecordingMarker));
     }
 
     [Fact]

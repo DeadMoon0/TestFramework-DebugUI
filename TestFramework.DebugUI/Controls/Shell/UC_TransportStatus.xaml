@@ -42,6 +42,16 @@
                                    Margin="0 2 0 0"/>
                     </StackPanel>
 
+                    <!--
+                        Next to the transport because it answers the question asked of the badge from the other
+                        side: whether a run that nobody is watching will still be there afterwards.
+                    -->
+                    <StackPanel Margin="12 8 12 0">
+                        <TextBlock x:Name="tbRecording" Style="{StaticResource BodyText}" TextWrapping="Wrap"/>
+                        <TextBlock Style="{StaticResource MutedText}" TextWrapping="Wrap" Margin="0 2 0 0"
+                                   Text="Each test run reads this when it starts. Switched in Settings."/>
+                    </StackPanel>
+
                     <Border Height="1" Background="{StaticResource SurfaceDivider}" Margin="12 10 12 0"/>
 
                     <TextBlock Style="{StaticResource PanelHeading}" Text="CONNECTIONS" Margin="10 8 10 4"/>

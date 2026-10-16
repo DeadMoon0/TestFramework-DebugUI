@@ -19,6 +19,10 @@ public static class ShellSelectors
     public static readonly Selector<MainState, TransportDetails> SelectTransportDetails =
         MainSelectors.SelectShell.Then(Selector.Property((ShellState shell) => shell.Details));
 
+    /// <summary>Whether test runs on this machine are being recorded.</summary>
+    public static readonly Selector<MainState, RecordingState> SelectRecording =
+        MainSelectors.SelectShell.Then(Selector.Property((ShellState shell) => shell.Recording));
+
     /// <summary>How many events arrived but could not be read.</summary>
     public static readonly Selector<MainState, int> SelectUnreadableEvents =
         MainSelectors.SelectShell.Then(Selector.Property((ShellState shell) => shell.UnreadableEvents));

@@ -22,6 +22,7 @@ using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Bundles;
 using TestFramework.DebugUI.State.Runs;
 using TestFramework.DebugUI.State.Settings;
+using TestFramework.DebugUI.State.Shell;
 using TestFramework.DebugUI.State.Shell.Feed;
 using TestFramework.DebugUI.State.Transport;
 using TestFramework.DebugUI.State.Diagnostics;
@@ -71,6 +72,9 @@ public partial class MainWindow : Window
     /// particular control happens to exist.
     /// </remarks>
     private readonly BreakpointService breakpoints;
+
+    /// <summary>Whether this machine records test runs; null when its journal root cannot be told.</summary>
+    private readonly RecordingSwitch? recording = RecordingSwitch.ForThisMachine();
 
     /// <summary>What is unread, and the worst of it — which is what the bell shows without being opened.</summary>
     private readonly record struct Unread(int Count, FeedSeverity Worst);
@@ -290,6 +294,11 @@ public partial class MainWindow : Window
         ucSettings.Closed += () => ucSettings.Visibility = Visibility.Collapsed;
         ucSettings.UseBreakpoints(breakpoints);
 
+        // The panel flips the marker; the state is what every other surface reads, so they change together.
+        ucSettings.UseRecording(recording);
+        ucSettings.RecordingChanged += now => StateStore<MainState>.Default.Dispatch(ShellActions.SetRecording, now);
+        PublishRecording();
+
         // A value found by searching opens where a value opened from the rail does. The bar stays up, so a
         // reader can work through several hits without retyping the query.
         ucSearch.Opened += OpenValue;
@@ -404,7 +413,10 @@ public partial class MainWindow : Window
     /// turns energy saver on with no window involved.
     /// </remarks>
     private void ShowSettings()
-        => ucSettings.Show(
+    {
+        PublishRecording();
+
+        ucSettings.Show(
             saved.Watch,
             settings.FilePath,
             saved.BreakOnFailure,
@@ -412,6 +424,17 @@ public partial class MainWindow : Window
             theme.Current.Id,
             theme.Store.DirectoryPath,
             BlurSupport.Detect());
+    }
+
+    /// <summary>
+    /// Reads the recording marker into the state.
+    /// </summary>
+    /// <remarks>
+    /// At start and whenever the settings open, rather than once: the launcher, or a person in Explorer, can
+    /// change the marker without this window being involved.
+    /// </remarks>
+    private void PublishRecording()
+        => StateStore<MainState>.Default.Dispatch(ShellActions.SetRecording, recording?.Read() ?? RecordingState.Unknown);
 
     /// <summary>
     /// Shows the themes folder, having first put something in it.

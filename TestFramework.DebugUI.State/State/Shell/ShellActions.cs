@@ -15,6 +15,10 @@ public static class ShellActions
     public static readonly StateAction<TransportDetails> SetTransportDetails =
         new(nameof(ShellActions), nameof(SetTransportDetails));
 
+    /// <summary>Records whether test runs on this machine are being recorded.</summary>
+    public static readonly StateAction<RecordingState> SetRecording =
+        new(nameof(ShellActions), nameof(SetRecording));
+
     /// <summary>
     /// Records that a re-run of one test was asked for, so its run is shown when it arrives.
     /// </summary>

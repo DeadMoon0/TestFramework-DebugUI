@@ -16,7 +16,7 @@ using TestFramework.DebugUI.Controls.Home;
 using TestFramework.DebugUI.State;
 using TestFramework.DebugUI.State.Board;
 using TestFramework.DebugUI.State.Runs;
-
+using TestFramework.DebugUI.State.Shell;
 using TestFramework.DebugUI.State.Transport;
 using TestFramework.DebugUI.Theme;
 
@@ -62,6 +62,7 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
 
     private ImmutableList<RunSummary> runs = ImmutableList<RunSummary>.Empty;
     private string? selected;
+    private RecordingState recording = RecordingState.Unknown;
 
     /// <summary>Creates the tree and binds it.</summary>
         /// <summary>What this tree can ask the shell to do.</summary>
@@ -95,6 +96,15 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
                 Rebuild();
             }));
 
+        // Only the empty state reads it, but that sentence makes a promise about the next run, and the
+        // promise changes the moment the switch does.
+        subscriptions.Add(StateStore<MainState>.Default
+            .Bind(ShellSelectors.SelectRecording)
+            .Subscribe(now =>
+            {
+                recording = now;
+                Rebuild();
+            }));
     }
 
     /// <summary>Raised when the reader asks for the whole journal rather than one run.</summary>
@@ -159,7 +169,7 @@ public partial class UC_Runs : UserControl, IDisposable, IPanelActions
         tbEmpty.Visibility = shown.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
         tbEmpty.Text = runs.Count == 0
-            ? "No runs yet. Start a test and it will appear here, whether or not this window was open when it ran."
+            ? recording.EmptyRuns
             : "No run matches that name.";
 
         if (shown.Count == 0)

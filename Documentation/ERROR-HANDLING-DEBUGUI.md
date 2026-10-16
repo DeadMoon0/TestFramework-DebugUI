@@ -84,8 +84,9 @@ run that is missing was most likely never recorded.
 
 Likely causes:
 
-- the journal's marker directory does not exist, which is what arms journalling - the launcher creates
-  it, so a machine where the tool has never been installed records nothing
+- the journal's `recording.on` marker does not exist, which is what arms journalling - the launcher
+  creates it once, and Settings can turn it off, so a machine where the tool has never been installed
+  or where recording was switched off records nothing; the transport status popup says which
 - the run's output folder was cleaned between the run and the attempt to reopen it
 
 Recovery:

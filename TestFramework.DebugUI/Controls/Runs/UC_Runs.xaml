@@ -80,7 +80,7 @@
             </ScrollViewer>
 
             <TextBlock x:Name="tbEmpty" Grid.Row="2" Style="{StaticResource MutedText}" Margin="14 4 14 0"
-                       Text="No runs yet. Start a test and it will appear here, whether or not this window was open when it ran."/>
+                       TextWrapping="Wrap"/>
         </Grid>
     </Border>
 </UserControl>

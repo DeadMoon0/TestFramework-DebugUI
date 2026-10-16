@@ -79,7 +79,8 @@ public sealed class StepCardLayoutTests
         // The composer rather than the whole board: what is under test is how a card is built, and it
         // no longer takes a control to build one.
         Canvas canvas = new();
-        BoardComposer composer = new(canvas, canvas, () => null, (_, _) => { }, () => { });
+        using BreakpointService breakpoints = new();
+        BoardComposer composer = new(canvas, canvas, breakpoints, (_, _) => { }, () => { });
 
         FrameworkElement card = (FrameworkElement)composer.BuildStep(new BoardVisuals(), LayoutResult.Empty, new LayoutNode
         {

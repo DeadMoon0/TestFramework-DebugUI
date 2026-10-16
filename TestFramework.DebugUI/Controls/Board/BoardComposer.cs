@@ -33,7 +33,7 @@ internal sealed class BoardComposer
 {
     private readonly FrameworkElement resources;
     private readonly Canvas canvas;
-    private readonly Func<BreakpointService?> breakpoints;
+    private readonly BreakpointService breakpoints;
     private readonly Action<string, int> stepSelected;
     private readonly Action summaryRequested;
 
@@ -43,13 +43,13 @@ internal sealed class BoardComposer
     /// <summary>Composes onto one canvas.</summary>
     /// <param name="resources">Where brushes and geometry are found; the board itself.</param>
     /// <param name="canvas">What is drawn into.</param>
-    /// <param name="breakpoints">The marks, asked for rather than held: the window supplies them later.</param>
+    /// <param name="breakpoints">The marks a card draws and toggles.</param>
     /// <param name="stepSelected">What a click on a card means.</param>
     /// <param name="summaryRequested">What a click on the verdict means.</param>
     public BoardComposer(
         FrameworkElement resources,
         Canvas canvas,
-        Func<BreakpointService?> breakpoints,
+        BreakpointService breakpoints,
         Action<string, int> stepSelected,
         Action summaryRequested)
     {
@@ -340,7 +340,7 @@ internal sealed class BoardComposer
         box.MouseRightButtonUp += (_, e) =>
         {
             e.Handled = true;
-            breakpoints()?.Toggle(stageName, stepId);
+            breakpoints.Toggle(stageName, stepId);
         };
     }
 
@@ -380,11 +380,11 @@ internal sealed class BoardComposer
             // Handled, so toggling a breakpoint does not also select the step underneath. The surface
             // ends its pan on the tunnelling event, so marking this one handled cannot strand it.
             e.Handled = true;
-            breakpoints()?.Toggle(stageName, stepId);
+            breakpoints.Toggle(stageName, stepId);
         };
 
         marker.MouseEnter += (_, _) => marker.Opacity = 1;
-        marker.MouseLeave += (_, _) => marker.Opacity = breakpoints()?.IsSet(stageName, stepId) == true ? 1 : BoardMetrics.RestingMarkerOpacity;
+        marker.MouseLeave += (_, _) => marker.Opacity = breakpoints.IsSet(stageName, stepId) ? 1 : BoardMetrics.RestingMarkerOpacity;
 
         return marker;
     }

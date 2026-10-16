@@ -40,6 +40,9 @@ internal sealed class BoardPainter
 
     private readonly StateStore<MainState> store;
 
+    /// <summary>The marks, which decide how a card's corner is drawn.</summary>
+    private readonly BreakpointService breakpoints;
+
     private BoardVisuals visuals = BoardVisuals.Empty;
 
     /// <summary>The arrangement the visuals were built from, which is what the pipes are walked from.</summary>
@@ -48,10 +51,12 @@ internal sealed class BoardPainter
     /// <summary>Repaints one board.</summary>
     /// <param name="resources">Where brushes are found; the board itself.</param>
     /// <param name="store">The store the board shows, which is read whenever a card is repainted.</param>
-    public BoardPainter(FrameworkElement resources, StateStore<MainState> store)
+    /// <param name="breakpoints">The marks, which decide how a card's corner is drawn.</param>
+    public BoardPainter(FrameworkElement resources, StateStore<MainState> store, BreakpointService breakpoints)
     {
         this.resources = resources;
         this.store = store;
+        this.breakpoints = breakpoints;
     }
 
     /// <summary>How this run's steps timed against the last run of the test that passed.</summary>
@@ -62,8 +67,6 @@ internal sealed class BoardPainter
     /// </remarks>
     public TimingDiff Timing { get; set; } = TimingDiff.None;
 
-    /// <summary>The marks, which decide how a card's corner is drawn.</summary>
-    public BreakpointService? Breakpoints { get; set; }
 
     /// <summary>Takes the elements a fresh board was built from.</summary>
     public void Paints(LayoutResult board, BoardVisuals drawn)
@@ -130,7 +133,7 @@ internal sealed class BoardPainter
                 // what is happening now without hunting through everything that is merely declared.
                 visual.Box.Opacity = HasRun(step) ? 1 : BoardMetrics.DormantOpacity;
 
-                ShowBreakpoint(visual.Breakpoint, Breakpoints?.IsSet(stage.Name, step.StepId) == true);
+                ShowBreakpoint(visual.Breakpoint, breakpoints.IsSet(stage.Name, step.StepId));
 
                 // The halt outranks the selection. A run stopped somewhere is the most important thing on
                 // the board and lasts only until it is released, whereas which step a reader last clicked

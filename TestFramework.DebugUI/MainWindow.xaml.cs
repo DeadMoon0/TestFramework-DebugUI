@@ -172,7 +172,7 @@ public partial class MainWindow : Window
 
         bTransportSlot.Child = new Controls.Shell.UC_TransportStatus(context);
 
-        ucBoard = new UC_Board(context);
+        ucBoard = new UC_Board(context, breakpoints);
         bBoardSlot.Child = ucBoard;
 
         ucDock = new UC_DockHost(context);
@@ -270,7 +270,7 @@ public partial class MainWindow : Window
         };
     }
 
-    /// <summary>Hands the board's requests to the window, and the breakpoints to the board.</summary>
+    /// <summary>Hands the board's requests to the window.</summary>
     private void WireBoard()
     {
         // The summary is a foreground question, so whoever asks for it - the verdict on the board, the
@@ -278,7 +278,6 @@ public partial class MainWindow : Window
         // business knowing what else is on screen.
         ucBoard.SummaryRequested += ShowSummary;
         ucBoard.StepSelected += Shell.SelectStep;
-        ucBoard.UseBreakpoints(breakpoints);
     }
 
     /// <summary>Acts on what the title bar asks for, and on the sharing it and the home page start.</summary>

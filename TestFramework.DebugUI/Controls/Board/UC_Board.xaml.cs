@@ -68,22 +68,26 @@ public partial class UC_Board : UserControl
     /// <summary>The marks drawn on this run, and where they are kept.</summary>
     private readonly BoardAnnotations annotations;
 
-    /// <summary>
-    /// The marks this board draws and sets, once the window has given it them.
-    /// </summary>
+    /// <summary>The marks this board draws and sets.</summary>
     /// <remarks>
-    /// Null until then, and every read of it treats that as "no marks" rather than as an error. A board
-    /// with no breakpoints behind it is a board nobody can mark, which is a truthful thing for it to
-    /// show; throwing would turn a wiring mistake into a crash while a run is being watched.
+    /// Which test those marks belong to is the service's own business — it follows the selected run.
+    /// The board used to tell it, which meant marks worked only because this one control existed and
+    /// happened to subscribe in its constructor.
     /// </remarks>
-    private BreakpointService? breakpoints;
+    private readonly BreakpointService breakpoints;
 
     /// <summary>Creates the board and binds it.</summary>
     /// <param name="shell">The store this board draws, and what it may ask the shell to do.</param>
-    public UC_Board(ShellContext shell)
+    /// <param name="breakpoints">
+    /// The marks it draws and sets. Taken here rather than handed over later, so there is no board that
+    /// exists without them and nothing that has to treat their absence as "no marks".
+    /// </param>
+    public UC_Board(ShellContext shell, BreakpointService breakpoints)
     {
         ArgumentNullException.ThrowIfNull(shell);
+        ArgumentNullException.ThrowIfNull(breakpoints);
         store = shell.Store;
+        this.breakpoints = breakpoints;
 
         InitializeComponent();
 
@@ -92,12 +96,12 @@ public partial class UC_Board : UserControl
 
         // Handed the two things a drawn card has to be able to do, because both belong to whoever is
         // watching the board rather than to the drawing of it.
-        painter = new BoardPainter(this, store);
+        painter = new BoardPainter(this, store, breakpoints);
 
         composer = new BoardComposer(
             this,
             cBoard,
-            () => breakpoints,
+            breakpoints,
             (stage, stepId) => StepSelected?.Invoke(stage, stepId),
             () => SummaryRequested?.Invoke());
 
@@ -140,35 +144,14 @@ public partial class UC_Board : UserControl
                 Fit();
         };
 
+        breakpoints.Changed += painter.Refresh;
+
         Unloaded += (_, _) =>
         {
-            if (breakpoints is not null)
-                breakpoints.Changed -= painter.Refresh;
+            breakpoints.Changed -= painter.Refresh;
 
             subscriptions.Dispose();
         };
-    }
-
-    /// <summary>
-    /// Gives the board the marks it draws.
-    /// </summary>
-    /// <remarks>
-    /// Which test those marks belong to is the service's own business — it follows the selected run.
-    /// The board used to tell it, which meant marks worked only because this one control existed and
-    /// happened to subscribe in its constructor.
-    /// </remarks>
-    public void UseBreakpoints(BreakpointService service)
-    {
-        ArgumentNullException.ThrowIfNull(service);
-
-        if (breakpoints is not null)
-            breakpoints.Changed -= painter.Refresh;
-
-        breakpoints = service;
-        painter.Breakpoints = service;
-        breakpoints.Changed += painter.Refresh;
-
-        painter.Refresh();
     }
 
     private void Render(RunGraph graph)

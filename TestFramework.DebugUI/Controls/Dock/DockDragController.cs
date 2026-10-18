@@ -27,6 +27,7 @@ namespace TestFramework.DebugUI.Controls.Dock;
 /// </remarks>
 internal sealed class DockDragController
 {
+    private readonly DockArrangement arrangement;
     /// <summary>The clipboard format a dragged panel travels under.</summary>
     /// <remarks>
     /// Named for this application, so a drag from somewhere else cannot be mistaken for one of ours — and so ours
@@ -51,13 +52,15 @@ internal sealed class DockDragController
     private Point? pressedAt;
 
     /// <summary>Takes drops for one host, and draws its hints.</summary>
+    /// <param name="arrangement">Where the panels are.</param>
     /// <param name="surface">
     /// The host. It takes the drop rather than each card, because most of the answers are about the space between
     /// cards and the edges of the window — places no card owns.
     /// </param>
     /// <param name="hints">The canvas a hint is drawn into.</param>
-    public DockDragController(FrameworkElement surface, Panel hints)
+    public DockDragController(DockArrangement arrangement, FrameworkElement surface, Panel hints)
     {
+        this.arrangement = arrangement;
         this.surface = surface;
         this.hints = hints;
 
@@ -121,7 +124,7 @@ internal sealed class DockDragController
             // drag the reader abandoned with Escape, and the two are told apart by where the pointer ended up
             // rather than by the result, because cancelling reports exactly the same thing as dropping nowhere.
             if (taken == DragDropEffects.None && OutsideEveryWindow(out Point where))
-                Arrangement.Apply(layout => layout.Float(panel, Near(where)));
+                arrangement.Apply(layout => layout.Float(panel, Near(where)));
         };
     }
 
@@ -273,7 +276,7 @@ internal sealed class DockDragController
         DockSide side = drop.Side;
         int index = drop.Index;
 
-        Arrangement.Apply(layout => layout.Move(dragged, side, index));
+        arrangement.Apply(layout => layout.Move(dragged, side, index));
     }
 
     /// <summary>

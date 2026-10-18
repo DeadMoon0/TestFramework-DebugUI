@@ -65,28 +65,34 @@ public partial class UC_DockHost : UserControl
     /// <summary>The edges of the wells, and how much of the window each side has.</summary>
     private readonly DockSplitters splitters;
 
+    /// <summary>Where the panels are.</summary>
+    private readonly DockArrangement arrangement;
+
     /// <summary>Creates the host, builds every panel and draws the current arrangement.</summary>
     /// <param name="shell">
     /// The store the panels show and what they may ask the shell to do, handed to each of them as it is built.
     /// </param>
-    public UC_DockHost(ShellContext shell)
+    /// <param name="arrangement">Where the panels are, shared with the window's panel strip.</param>
+    internal UC_DockHost(ShellContext shell, DockArrangement arrangement)
     {
         ArgumentNullException.ThrowIfNull(shell);
+        ArgumentNullException.ThrowIfNull(arrangement);
+        this.arrangement = arrangement;
 
         InitializeComponent();
 
         // Handed what it cannot know and nothing else: where a drag is measured, what is drawn, and how
         // to set the stars on this host's own grid.
-        splitters = new DockSplitters(this, () => drawn, Weigh);
+        splitters = new DockSplitters(arrangement, this, () => drawn, Weigh);
         splitters.InsetsChanged += insets => InsetsChanged?.Invoke(insets);
 
-        drag = new DockDragController(this, gDropHint) { Refresh = Remember };
+        drag = new DockDragController(arrangement, this, gDropHint) { Refresh = Remember };
 
         // The float knows how a window behaves; the chrome inside it is the host's, because a floated
         // panel wears the same header a docked one does.
-        floats = new DockFloats(this, drag, panel => panels[panel], panel => Header(panel, active: true, draggable: false), Strip);
+        floats = new DockFloats(arrangement, this, drag, panel => panels[panel], panel => Header(panel, active: true, draggable: false), Strip);
 
-        Arrangement.Changed += Show;
+        arrangement.Changed += Show;
 
         // No handler for the window changing size. The extents are star weights, so the layout system rescales
         // every well on its own — and a size written from inside a size-changed handler is exactly the loop that
@@ -98,7 +104,7 @@ public partial class UC_DockHost : UserControl
         LayoutUpdated += (_, _) => Remember();
 
 
-        Unloaded += (_, _) => Arrangement.Changed -= Show;
+        Unloaded += (_, _) => arrangement.Changed -= Show;
 
         // Built here rather than handed in later. The panels cannot be built without what they show, and
         // neither can this host: there is no moment at which it exists without its panels, so nothing has to
@@ -126,7 +132,7 @@ public partial class UC_DockHost : UserControl
     /// <summary>Draws the arrangement, rebuilding only what has actually changed shape.</summary>
     private void Show()
     {
-        DockLayout layout = Arrangement.Current;
+        DockLayout layout = arrangement.Current;
 
         if (drawn is not null && drawn.SameShapeAs(layout))
         {
@@ -440,7 +446,7 @@ public partial class UC_DockHost : UserControl
         // window could not be moved at all, and a popped-out panel is a window first.
         if (draggable)
         {
-            header.MouseLeftButtonUp += (_, _) => Arrangement.Apply(layout => layout.Activate(panel));
+            header.MouseLeftButtonUp += (_, _) => arrangement.Apply(layout => layout.Activate(panel));
 
             drag.MakeDraggable(header, panel);
         }
@@ -481,7 +487,7 @@ public partial class UC_DockHost : UserControl
             Child = content
         };
 
-        tab.MouseLeftButtonUp += (_, _) => Arrangement.Apply(layout => layout.Activate(panel));
+        tab.MouseLeftButtonUp += (_, _) => arrangement.Apply(layout => layout.Activate(panel));
 
         // Marked on the tab itself, not only on the strip that holds it: a floating window puts its strip inside
         // the caption, and the chrome asks the element it actually hit — so without this the chrome takes the
@@ -513,7 +519,7 @@ public partial class UC_DockHost : UserControl
             }
         };
 
-        close.Click += (_, _) => Arrangement.Apply(layout => layout.Close(panel));
+        close.Click += (_, _) => arrangement.Apply(layout => layout.Close(panel));
 
         return close;
     }

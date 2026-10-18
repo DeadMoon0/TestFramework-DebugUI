@@ -6,9 +6,7 @@ namespace TestFramework.DebugUI.Layout;
 
 public static partial class RunBoardLayout
 {
-    /// <summary>
-    /// Giving every horizontal run a track of its own, and then each row and channel its depth.
-    /// </summary>
+    // Giving every horizontal run a track of its own, and then each row and channel its depth.
     private sealed partial class Arrangement
     {
         /// <summary>

@@ -99,11 +99,11 @@ public sealed class VersionStore(LauncherPaths paths)
     internal async Task<bool> InstallAsync(ReleaseInfo release, HttpClient client, IProgress<double>? progress, TimeSpan stallTimeout, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(release);
+        ArgumentNullException.ThrowIfNull(client);
 
         // What is downloaded here is then started. Over anything but https, whoever sits on the path chooses it.
         if (!string.Equals(release.DownloadUrl.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException($"The release {release.Version} is offered from '{release.DownloadUrl}', which is not https, so it was not downloaded.");
-        ArgumentNullException.ThrowIfNull(client);
 
         string staging = Path.Combine(paths.StagingFolder, release.Version.ToString());
 

@@ -8,9 +8,7 @@ namespace TestFramework.DebugUI.Layout;
 
 public static partial class RunBoardLayout
 {
-    /// <summary>
-    /// Turning the finished arrangement into the nodes, ports and polylines a board is drawn from.
-    /// </summary>
+    // Turning the finished arrangement into the nodes, ports and polylines a board is drawn from.
     private sealed partial class Arrangement
     {
         private LayoutResult Materialise()

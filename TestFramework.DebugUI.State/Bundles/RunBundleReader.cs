@@ -206,6 +206,11 @@ public static class RunBundleReader
 
             foreach (BundleFile file in run.Files)
             {
+                // Required in the format, but the reader does not enforce it: a manifest without one is refused
+                // like any other path that does not name a file in the run.
+                if (string.IsNullOrWhiteSpace(file.RelativePath))
+                    throw Outside(run.Name, file.RelativePath ?? "(none)");
+
                 string relative = file.RelativePath.Replace('/', Path.DirectorySeparatorChar);
                 if (Path.IsPathRooted(relative) || !IsInside(artifacts, Path.GetFullPath(Path.Combine(artifacts, relative))))
                     throw Outside(run.Name, file.RelativePath);

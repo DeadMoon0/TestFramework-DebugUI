@@ -121,6 +121,9 @@ public partial class MainWindow : Window
     /// <summary>The row of panel icons in the title bar, which keeps itself in step with the arrangement.</summary>
     private readonly PanelStrip panelStrip;
 
+    /// <summary>Where the panels are: this window's, shared with its dock, its floating windows and its panel strip.</summary>
+    private readonly DockArrangement arrangement = new();
+
     /// <summary>
     /// Gets the controller this window drives.
     /// </summary>
@@ -179,7 +182,7 @@ public partial class MainWindow : Window
         ucBoard = new UC_Board(context, breakpoints);
         bBoardSlot.Child = ucBoard;
 
-        ucDock = new UC_DockHost(context);
+        ucDock = new UC_DockHost(context, arrangement);
         bDockSlot.Child = ucDock;
 
         // Built closed, as the markup used to declare them: each of these is brought out on request.
@@ -213,7 +216,7 @@ public partial class MainWindow : Window
         RestoreLayout();
         WireBoardInsets();
 
-        panelStrip = new PanelStrip(spPanels);
+        panelStrip = new PanelStrip(arrangement, spPanels);
 
         WireTray();
         WirePanelStrip();
@@ -401,8 +404,8 @@ public partial class MainWindow : Window
     {
         // Where every panel is, as the reader last left it. Restored before the window is shown so it does
         // not visibly rearrange itself, and repaired on the way in so a file from another build is survivable.
-        Arrangement.Restore(saved.Layout);
-        Arrangement.Changed += SaveLayout;
+        arrangement.Restore(saved.Layout);
+        arrangement.Changed += SaveLayout;
     }
 
     /// <summary>Keeps the board clear of the pinned wells as they and the window change size.</summary>
@@ -433,7 +436,7 @@ public partial class MainWindow : Window
     /// <summary>Keeps the title bar's panel icons in step with the arrangement, starting now.</summary>
     private void WirePanelStrip()
     {
-        Arrangement.Changed += panelStrip.Rebuild;
+        arrangement.Changed += panelStrip.Rebuild;
         panelStrip.Rebuild();
     }
 

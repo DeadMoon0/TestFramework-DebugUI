@@ -109,6 +109,11 @@ internal sealed class PipeFrameStream(PipeStream stream)
         catch (OperationCanceledException) when (bounded.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             End("The run stopped reading.", failure: true);
+
+            // Closed, not only marked: an open pipe keeps the run's connection slot and its session, so a
+            // healthy reconnect would be refused and every later control would wait out the bound again.
+            // Closing it ends the read loop that owns both.
+            stream.Dispose();
             return false;
         }
         catch (Exception e)

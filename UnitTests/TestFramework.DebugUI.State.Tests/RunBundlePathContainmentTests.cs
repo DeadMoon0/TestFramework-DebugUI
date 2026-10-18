@@ -32,6 +32,17 @@ public sealed class RunBundlePathContainmentTests : IDisposable
             Directory.Delete(root, recursive: true);
     }
 
+    /// <summary>Stands for a file listed with no path at all.</summary>
+    private const string NoPath = "no-path";
+
+    [Fact]
+    public void AFileListedWithoutAPathIsRefusedAsUnreadable()
+    {
+        string bundle = WriteBundle(journal: "run.jsonl", metadata: "run.meta.json", artifact: NoPath);
+
+        Assert.Throws<RunBundleReader.UnreadableException>(() => RunBundleReader.Read(bundle, Runs));
+    }
+
     [Fact]
     public void AnArtifactPathThatClimbsOutOfTheRunIsRefused()
     {
@@ -131,7 +142,8 @@ public sealed class RunBundlePathContainmentTests : IDisposable
 
         using (ZipArchive archive = ZipFile.Open(path, ZipArchiveMode.Create))
         {
-            Add(archive, BundleFormat.ManifestEntry, JsonConvert.SerializeObject(manifest));
+            // A file the manifest lists without a path cannot be written by the serializer, so it is spelled out.
+            Add(archive, BundleFormat.ManifestEntry, JsonConvert.SerializeObject(manifest).Replace($"\"RelativePath\":\"{NoPath}\"", "\"RelativePath\":null", StringComparison.Ordinal));
 
             foreach (BundleRun run in manifest.Runs)
             {

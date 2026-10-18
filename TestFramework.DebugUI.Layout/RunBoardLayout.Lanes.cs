@@ -7,10 +7,8 @@ namespace TestFramework.DebugUI.Layout;
 
 public static partial class RunBoardLayout
 {
-    /// <summary>
-    /// Deciding which pipes exist, and where each long one descends: a column inside the block or a lane
-    /// outside either edge.
-    /// </summary>
+    // Deciding which pipes exist, and where each long one descends: a column inside the block or a lane
+    // outside either edge.
     private sealed partial class Arrangement
     {
         /// <summary>

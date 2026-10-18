@@ -15,7 +15,6 @@ public sealed record LayoutOptions
     /// <summary>The default measurements.</summary>
     public static LayoutOptions Default { get; } = new();
 
-    /// <summary>Gets the spacing every coordinate is snapped to.</summary>
     /// <summary>
     /// The version of the arrangement these options and the routing produce.
     /// </summary>
@@ -27,6 +26,7 @@ public sealed record LayoutOptions
     /// </remarks>
     public const int Version = 3;
 
+    /// <summary>Gets the spacing every coordinate is snapped to.</summary>
     public double Grid { get; init; } = 10;
 
     /// <summary>

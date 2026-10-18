@@ -8,26 +8,27 @@ namespace TestFramework.DebugUI;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Deliberately not in the store, for the same reason <see cref="Breakpoints"/> is not: this is not a fact
-/// about a run. Nothing a reducer produces depends on it, nothing about a run changes it, and it would put
+/// Deliberately not in the store, for the same reason the breakpoints are not: this is not a fact about a
+/// run. Nothing a reducer produces depends on it, nothing about a run changes it, and it would put
 /// every rearrangement through a clone that every binding in the window is watching. A splitter drag would be
 /// the worst of it — and that one is answered twice over, because a drag only commits here when the pointer is
 /// released, exactly as the step panel's own width already does.
 /// </para>
 /// <para>
-/// One arrangement per process rather than per window, so a floating window and the main one cannot disagree
-/// about where a panel is. Static for the same reason the store and the shell controller are.
+/// One arrangement per main window, handed to everything that draws or moves a panel - the dock, its floating
+/// windows, the panel strip - so a floating window and the main one cannot disagree about where a panel is.
+/// An instance rather than a static, like the store: two windows, or two tests, never share one by accident.
 /// </para>
 /// </remarks>
-internal static class Arrangement
+internal sealed class DockArrangement
 {
-    private static DockLayout current = DockLayout.Default;
+    private DockLayout current = DockLayout.Default;
 
     /// <summary>Raised when the arrangement actually changed.</summary>
-    public static event Action? Changed;
+    public event Action? Changed;
 
     /// <summary>Where every panel is now.</summary>
-    public static DockLayout Current => current;
+    public DockLayout Current => current;
 
     /// <summary>
     /// Replaces the arrangement with a saved one.
@@ -37,7 +38,7 @@ internal static class Arrangement
     /// does not have, or omit one it does, and <see cref="DockLayout.Normalise"/> is what makes either of those
     /// survivable instead of fatal.
     /// </remarks>
-    public static void Restore(DockLayout? layout)
+    public void Restore(DockLayout? layout)
     {
         current = (layout ?? DockLayout.Default).Normalise();
         Changed?.Invoke();
@@ -51,7 +52,7 @@ internal static class Arrangement
     /// dropping a panel back where it came from, must not make the host tear down and rebuild every panel —
     /// which is what an unconditional event would cause, since the host redraws on it.
     /// </remarks>
-    public static void Apply(Func<DockLayout, DockLayout> change)
+    public void Apply(Func<DockLayout, DockLayout> change)
     {
         ArgumentNullException.ThrowIfNull(change);
 

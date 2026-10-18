@@ -99,5 +99,5 @@ public partial class MainWindow
         settings.Save(saved);
     }
 
-    private void SaveLayout() => Persist(saved with { Layout = Arrangement.Current });
+    private void SaveLayout() => Persist(saved with { Layout = arrangement.Current });
 }

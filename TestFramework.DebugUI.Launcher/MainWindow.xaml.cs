@@ -76,7 +76,7 @@ public partial class MainWindow : Window
         VersionStore store = new(paths);
         LaunchRecordStore records = new(paths);
 
-        // First, and outside the try: if this is all the launcher ever manages to do, runs on this
+        // First, before anything that can fail: if this is all the launcher ever manages to do, runs on this
         // machine still get recorded, and that is the half nobody can do for themselves.
         Say("Preparing…");
         store.ArmRecordingOnce();

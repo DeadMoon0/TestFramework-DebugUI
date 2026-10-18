@@ -27,6 +27,7 @@ namespace TestFramework.DebugUI.Controls.Dock;
 /// </remarks>
 internal sealed class DockSplitters
 {
+    private readonly DockArrangement arrangement;
     /// <summary>How thick the draggable edge of a well is.</summary>
     /// <remarks>
     /// Six, straddling the boundary, for the reason the step panel's own handle already gives: half over the
@@ -44,11 +45,13 @@ internal sealed class DockSplitters
     private double sizingExtent;
 
     /// <summary>Sizes the wells of one host.</summary>
+    /// <param name="arrangement">Where the panels are.</param>
     /// <param name="surface">What a drag is measured against, which is the host itself.</param>
     /// <param name="drawn">What is currently drawn, read rather than held so it is never stale.</param>
     /// <param name="weigh">Sets the three weights on the host's own grid, and gives the middle the rest.</param>
-    public DockSplitters(FrameworkElement surface, Func<DockLayout?> drawn, Action<double, double, double> weigh)
+    public DockSplitters(DockArrangement arrangement, FrameworkElement surface, Func<DockLayout?> drawn, Action<double, double, double> weigh)
     {
+        this.arrangement = arrangement;
         this.surface = surface;
         this.drawn = drawn;
         this.weigh = weigh;
@@ -81,7 +84,7 @@ internal sealed class DockSplitters
         {
             isSizing = true;
             sizing = side;
-            sizingExtent = Arrangement.Current.At(side).Extent;
+            sizingExtent = arrangement.Current.At(side).Extent;
             sizingFrom = horizontal ? e.GetPosition(surface).X : e.GetPosition(surface).Y;
             grip.CaptureMouse();
         };
@@ -118,7 +121,7 @@ internal sealed class DockSplitters
             DockSide settled = sizing;
             double extent = sizingExtent;
 
-            Arrangement.Apply(layout => layout.Resize(settled, extent));
+            arrangement.Apply(layout => layout.Resize(settled, extent));
         };
 
         return grip;
@@ -242,7 +245,7 @@ internal sealed class DockSplitters
             moved += (now - from) / rail.ActualHeight;
             from = now;
 
-            Preview(rail, Arrangement.Current.At(side).Divide(boundary, moved).Shares);
+            Preview(rail, arrangement.Current.At(side).Divide(boundary, moved).Shares);
         };
 
         grip.MouseLeftButtonUp += (_, _) =>
@@ -255,7 +258,7 @@ internal sealed class DockSplitters
 
             double settled = moved;
 
-            Arrangement.Apply(layout => layout.Divide(side, boundary, settled));
+            arrangement.Apply(layout => layout.Divide(side, boundary, settled));
         };
 
         return grip;

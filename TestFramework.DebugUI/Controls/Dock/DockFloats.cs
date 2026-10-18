@@ -25,6 +25,7 @@ namespace TestFramework.DebugUI.Controls.Dock;
 internal sealed class DockFloats
 {
     private readonly FrameworkElement surface;
+    private readonly DockArrangement arrangement;
     private readonly DockDragController drag;
     private readonly Func<PanelId, UserControl> panelFor;
     private readonly Func<PanelId, UIElement> header;
@@ -33,18 +34,21 @@ internal sealed class DockFloats
     private readonly List<DockFloatWindow> windows = [];
 
     /// <summary>Keeps one host's floating windows in step with the arrangement.</summary>
+    /// <param name="arrangement">Where the panels are.</param>
     /// <param name="surface">The host, whose window owns every float.</param>
     /// <param name="drag">What answers where a float dragged over the host would dock.</param>
     /// <param name="panelFor">The panel to put in a window, which the host built and keeps.</param>
     /// <param name="header">A single panel's own header, drawn as a docked one would be.</param>
     /// <param name="strip">The tab strip for a float holding more than one.</param>
     public DockFloats(
+        DockArrangement arrangement,
         FrameworkElement surface,
         DockDragController drag,
         Func<PanelId, UserControl> panelFor,
         Func<PanelId, UIElement> header,
         Func<DockFloat, UIElement> strip)
     {
+        this.arrangement = arrangement;
         this.surface = surface;
         this.drag = drag;
         this.panelFor = panelFor;
@@ -139,7 +143,7 @@ internal sealed class DockFloats
             int at = windows.IndexOf(window);
 
             if (at >= 0)
-                Arrangement.Apply(layout => layout.MoveIntoFloat(dragged, at, int.MaxValue));
+                arrangement.Apply(layout => layout.MoveIntoFloat(dragged, at, int.MaxValue));
         };
     }
 
@@ -151,7 +155,7 @@ internal sealed class DockFloats
             int at = windows.IndexOf(window);
 
             if (at >= 0)
-                Arrangement.Apply(layout => layout.MoveFloat(at, bounds));
+                arrangement.Apply(layout => layout.MoveFloat(at, bounds));
         };
     }
 
@@ -185,7 +189,7 @@ internal sealed class DockFloats
             DockSide side = drop.Side;
             int index = drop.Index;
 
-            Arrangement.Apply(layout => layout.Move(carried, side, index));
+            arrangement.Apply(layout => layout.Move(carried, side, index));
         };
     }
 
@@ -199,7 +203,7 @@ internal sealed class DockFloats
             if (at < 0)
                 return;
 
-            Arrangement.Apply(layout =>
+            arrangement.Apply(layout =>
             {
                 DockLayout closed = layout;
 
@@ -223,6 +227,6 @@ internal sealed class DockFloats
     {
         int at = windows.IndexOf(window);
 
-        return at >= 0 && at < Arrangement.Current.Floats.Count ? Arrangement.Current.Floats[at] : null;
+        return at >= 0 && at < arrangement.Current.Floats.Count ? arrangement.Current.Floats[at] : null;
     }
 }

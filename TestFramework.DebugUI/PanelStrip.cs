@@ -22,12 +22,15 @@ namespace TestFramework.DebugUI;
 /// </remarks>
 internal sealed class PanelStrip
 {
+    private readonly DockArrangement arrangement;
     private readonly Panel host;
 
     /// <summary>Draws the strip into a container of the title bar's.</summary>
+    /// <param name="arrangement">Where the panels are.</param>
     /// <param name="host">Where the icons go. Resources are found through it, so it must be in the tree.</param>
-    public PanelStrip(Panel host)
+    public PanelStrip(DockArrangement arrangement, Panel host)
     {
+        this.arrangement = arrangement;
         this.host = host;
     }
 
@@ -45,7 +48,7 @@ internal sealed class PanelStrip
     {
         host.Children.Clear();
 
-        DockLayout layout = Arrangement.Current;
+        DockLayout layout = arrangement.Current;
 
         foreach (ImmutableList<PanelId> card in DockGrouping.Cards(layout))
         {
@@ -168,7 +171,7 @@ internal sealed class PanelStrip
     /// which is not a state the window can be in. Opening is per panel, because a panel that is away has no card
     /// to share and no company to bring with it.
     /// </remarks>
-    private static void TogglePanel(PanelId panel) => Arrangement.Apply(layout =>
+    private void TogglePanel(PanelId panel) => arrangement.Apply(layout =>
     {
         if (!layout.IsOpen(panel))
             return layout.Move(panel, PanelRegistry.DefaultSideOf(panel), int.MaxValue);
@@ -193,7 +196,7 @@ internal sealed class PanelStrip
             if (button.Tag is not PanelId panel || button.Content is not Path glyph)
                 continue;
 
-            glyph.Stroke = (Brush)host.FindResource(Arrangement.Current.IsOpen(panel) ? ThemeKeys.Accent : ThemeKeys.TextSecondary);
+            glyph.Stroke = (Brush)host.FindResource(arrangement.Current.IsOpen(panel) ? ThemeKeys.Accent : ThemeKeys.TextSecondary);
         }
     }
 

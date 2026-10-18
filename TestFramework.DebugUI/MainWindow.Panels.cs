@@ -79,11 +79,11 @@ public partial class MainWindow
     }
 
     /// <summary>Brings a panel out, at its own default place if it was put away.</summary>
-    private static void Reveal(PanelId panel)
-        => Arrangement.Apply(layout => layout.Reveal(panel, PanelRegistry.DefaultSideOf(panel)));
+    private void Reveal(PanelId panel)
+        => arrangement.Apply(layout => layout.Reveal(panel, PanelRegistry.DefaultSideOf(panel)));
 
     /// <summary>Puts a panel away.</summary>
-    private static void Put(PanelId panel) => Arrangement.Apply(layout => layout.Close(panel));
+    private void Put(PanelId panel) => arrangement.Apply(layout => layout.Close(panel));
 
     /// <summary>Keeps the board out of whatever the pinned wells have reserved.</summary>
     private void ApplyBoardInsets()

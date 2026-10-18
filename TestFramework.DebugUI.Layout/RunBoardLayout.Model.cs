@@ -8,10 +8,8 @@ namespace TestFramework.DebugUI.Layout;
 
 public static partial class RunBoardLayout
 {
-    /// <summary>
-    /// The pieces an arrangement is made of: rows, the boxes in them, the pipes between them, and the
-    /// columns and tracks those pipes are given.
-    /// </summary>
+    // The pieces an arrangement is made of: rows, the boxes in them, the pipes between them, and the
+    // columns and tracks those pipes are given.
     private sealed partial class Arrangement
     {
         private readonly record struct StepKey(string StageName, int StepId);

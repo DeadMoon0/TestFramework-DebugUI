@@ -80,6 +80,22 @@ public class ConventionTests
     }
 
     [Fact]
+    public void NothingRaisesAProcessWideEvent()
+    {
+        // A static event is a store for the whole process with a different name: every window, and every test,
+        // that subscribes shares it, and a subscriber nobody removes keeps its window alive. What changes is an
+        // instance, handed to whatever watches it.
+        string[] offenders =
+        [
+            .. Shipped.SelectMany(shipped => shipped.Assembly.GetTypes())
+                .SelectMany(type => type.GetEvents(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
+                    .Select(raised => $"{type.FullName}.{raised.Name}"))
+        ];
+
+        Assert.Empty(offenders);
+    }
+
+    [Fact]
     public void NoViewReachesForAProcessWideStore()
     {
         // A view is handed the store it shows. One that reached for a process-wide default instead would

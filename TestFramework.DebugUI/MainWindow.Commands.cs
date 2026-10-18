@@ -86,7 +86,7 @@ public partial class MainWindow
             return;
         }
 
-        if (Arrangement.Current.IsOpen(PanelId.Inspector))
+        if (arrangement.Current.IsOpen(PanelId.Inspector))
         {
             Put(PanelId.Inspector);
             return;
@@ -104,7 +104,7 @@ public partial class MainWindow
             return;
         }
 
-        if (Arrangement.Current.IsOpen(PanelId.Summary))
+        if (arrangement.Current.IsOpen(PanelId.Summary))
         {
             Put(PanelId.Summary);
             return;
@@ -112,7 +112,7 @@ public partial class MainWindow
 
         // Last, and only what is in the centre: a page is the thing in front, and the rails down the sides are
         // not something the reader opened, so there is nothing there for Escape to put away.
-        if (Arrangement.Current.At(DockSide.Center).Active is { } page)
+        if (arrangement.Current.At(DockSide.Center).Active is { } page)
             Put(page);
     }
 

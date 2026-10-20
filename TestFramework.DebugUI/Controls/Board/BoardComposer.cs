@@ -162,6 +162,10 @@ internal sealed class BoardComposer
             TextWrapping = TextWrapping.Wrap
         };
 
+        // The checks no pipe can show - on a step, a set of steps, an expression - one line each. The layout made the
+        // room for them; the painter writes them, because they change as checks arrive.
+        StackPanel checks = new() { Margin = new Thickness(0, 6, 0, 0) };
+
         Border box = new()
         {
             Width = node.Width,
@@ -176,7 +180,7 @@ internal sealed class BoardComposer
             {
                 Margin = new Thickness(16, 6, 16, 6),
                 VerticalAlignment = VerticalAlignment.Center,
-                Children = { heading, why }
+                Children = { heading, why, checks }
             })
         };
 
@@ -186,7 +190,7 @@ internal sealed class BoardComposer
             summaryRequested();
         };
 
-        visuals.Verdict = new VerdictVisual(box, heading, why);
+        visuals.Verdict = new VerdictVisual(box, heading, why, checks);
         return box;
     }
 

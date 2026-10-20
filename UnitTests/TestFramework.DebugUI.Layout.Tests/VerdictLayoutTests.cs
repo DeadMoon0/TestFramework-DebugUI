@@ -1,4 +1,5 @@
 ﻿using System.Linq;
+using TestFramework.Core.Debugger;
 using TestFramework.DebugUI.State.Board;
 
 namespace TestFramework.DebugUI.Layout.Tests;
@@ -83,12 +84,82 @@ public sealed class VerdictLayoutTests
     }
 
     [Fact]
-    public void AnAssertionAgainstNothingOnTheBoardAtAllDrawsNoVerdict()
+    public void ARunCheckedOnlyThroughSomethingNoStepProducedStillHasAVerdict()
     {
+        // Most checks are of this kind - a step that completed, an expression. A run proved entirely by them is
+        // still a run that proved something, and the verdict is where the board says so.
         LayoutResult board = RunBoardLayout.Compute(GraphBuilder.Asserting(Checked(), ("nowhere", false)));
 
-        Assert.DoesNotContain(board.Nodes, node => node.Kind == LayoutNodeKind.Verdict);
+        Assert.Single(board.Nodes.Where(node => node.Kind == LayoutNodeKind.Verdict));
+        Assert.DoesNotContain(board.Edges, edge => edge.ToNodeId == "verdict");
     }
+
+    [Fact]
+    public void ACheckOnAStepIsNeverPipedFromAValueThatSharesItsName()
+    {
+        // The check names a step; a variable called the same is a different thing.
+        LayoutResult board = RunBoardLayout.Compute(Checking(Checked(), Check(DebugAssertionTargetKind.Step, "greeting", "HaveCompleted", true)));
+
+        Assert.DoesNotContain(board.Edges, edge => edge.ToNodeId == "verdict");
+        Assert.Equal(["greeting"], VerdictChecks.Unwired(Checking(Checked(), Check(DebugAssertionTargetKind.Step, "greeting", "HaveCompleted", true))).Select(check => check.Target));
+    }
+
+    [Fact]
+    public void TheVerdictGrowsALineForEachCheckItLists()
+    {
+        LayoutOptions options = new();
+
+        double one = VerdictHeight(Checking(Checked(), Step("a")));
+        double three = VerdictHeight(Checking(Checked(), Step("a"), Step("b"), Step("c")));
+
+        Assert.Equal(options.StepHeight + options.VerdictLineHeight, one);
+        Assert.Equal(options.StepHeight + (3 * options.VerdictLineHeight), three);
+    }
+
+    [Fact]
+    public void BeyondAFewChecksTheVerdictStopsGrowingAndCountsTheRest()
+    {
+        LayoutOptions options = new();
+        AssertionNode[] many = [.. Enumerable.Range(0, VerdictChecks.Listed + 5).Select(index => Step($"s{index}"))];
+
+        Assert.Equal(options.StepHeight + ((VerdictChecks.Listed + 1) * options.VerdictLineHeight), VerdictHeight(Checking(Checked(), many)));
+    }
+
+    [Fact]
+    public void ACheckOnAValueAStepProducedIsPipedRatherThanListed()
+    {
+        RunGraph run = Checking(Checked(), Check(DebugAssertionTargetKind.Variable, "greeting", "Be", true));
+
+        Assert.Empty(VerdictChecks.Unwired(run));
+        Assert.Equal(new LayoutOptions().StepHeight, VerdictHeight(run));
+    }
+
+    [Fact]
+    public void ACheckMadeRepeatedlyIsListedOnce_AndHeldOnlyIfItAlwaysHeld()
+    {
+        RunGraph run = Checking(
+            Checked(),
+            Check(DebugAssertionTargetKind.Step, "ping", "HaveCompleted", true),
+            Check(DebugAssertionTargetKind.Step, "ping", "HaveCompleted", false));
+
+        VerdictCheck check = Assert.Single(VerdictChecks.Unwired(run));
+        Assert.False(check.Held);
+    }
+
+    private static double VerdictHeight(RunGraph run)
+        => RunBoardLayout.Compute(run).Nodes.Single(node => node.Kind == LayoutNodeKind.Verdict).Height;
+
+    private static RunGraph Checking(RunGraph run, params AssertionNode[] checks) => run with { Assertions = [.. checks] };
+
+    private static AssertionNode Step(string name) => Check(DebugAssertionTargetKind.Step, name, "HaveCompleted", true);
+
+    private static AssertionNode Check(DebugAssertionTargetKind kind, string target, string name, bool held) => new()
+    {
+        TargetKind = kind,
+        Target = target,
+        AssertionName = name,
+        Succeeded = held
+    };
 
     [Fact]
     public void TheVerdictSitsBelowEverythingTheRunDid()

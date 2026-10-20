@@ -135,17 +135,18 @@ public static partial class RunBoardLayout
             foreach (StepIO output in graph.Stages.SelectMany(stage => stage.Steps).SelectMany(step => step.Outputs))
                 produced.TryAdd(output.Key, output);
 
+            IReadOnlySet<string> producedKeys = produced.Keys.ToHashSet(StringComparer.Ordinal);
+
+            // Drawn whenever the run checked anything. The checks no pipe can show are listed inside it, and a run
+            // proved entirely by those - steps that completed, an expression - used to get no verdict at all.
             ImmutableList<StepIO> asserted =
             [
                 .. graph.Assertions
+                    .Where(assertion => VerdictChecks.IsWired(assertion, producedKeys))
                     .Select(assertion => assertion.Target)
-                    .Where(produced.ContainsKey)
                     .Distinct(StringComparer.Ordinal)
                     .Select(target => produced[target])
             ];
-
-            if (asserted.Count == 0)
-                return;
 
             StepNode verdict = new()
             {
@@ -222,13 +223,18 @@ public static partial class RunBoardLayout
         /// <remarks>
         /// Per step rather than per board: a step that drew something needs the room to show it, and
         /// one that drew nothing would only be paying for empty space — a board of mostly-blank tall
-        /// cards is a board that fits smaller and reads worse. The verdict never grows: it is the
-        /// run's own summing up, and it says what it says in a line.
+        /// cards is a board that fits smaller and reads worse. The verdict grows by a line for each
+        /// check it lists - the ones no pipe can show - up to a few, and then one line for the rest.
         /// </remarks>
         private double HeightOf(Row row, StepNode step)
-            => !row.IsVerdict && graph.Widgets.Any(widget => widget.BelongsTo(row.StageName, step.StepId))
+        {
+            if (row.IsVerdict)
+                return measurements.StepHeight + (VerdictChecks.Lines(VerdictChecks.Unwired(graph).Count) * measurements.VerdictLineHeight);
+
+            return graph.Widgets.Any(widget => widget.BelongsTo(row.StageName, step.StepId))
                 ? measurements.StepHeightWithWidget
                 : measurements.StepHeight;
+        }
 
         private void ShiftRight(double distance)
         {

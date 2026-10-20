@@ -38,4 +38,5 @@ internal sealed record StepVisual(
     Border Breakpoint,
     Border Widget);
 
-internal sealed record VerdictVisual(Border Box, TextBlock Heading, TextBlock Why);
+/// <summary>The verdict's parts the painter fills in: its heading, the line under it, and the checks no pipe shows.</summary>
+internal sealed record VerdictVisual(Border Box, TextBlock Heading, TextBlock Why, StackPanel Checks);

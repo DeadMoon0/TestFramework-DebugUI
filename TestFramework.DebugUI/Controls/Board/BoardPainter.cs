@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
@@ -178,6 +179,36 @@ internal sealed class BoardPainter
 
         visuals.Verdict.Box.BorderBrush = (Brush)resources.FindResource(
             !decided ? ThemeKeys.StateRunning : tally.IsValid ? ThemeKeys.StateComplete : ThemeKeys.StateError);
+
+        WriteChecks(visuals.Verdict.Checks, VerdictChecks.Unwired(graph));
+    }
+
+    /// <summary>Lists the checks no pipe shows, a few of them, and says how many more there are.</summary>
+    private void WriteChecks(StackPanel lines, ImmutableList<VerdictCheck> checks)
+    {
+        lines.Children.Clear();
+
+        foreach (VerdictCheck check in checks.Take(VerdictChecks.Listed))
+        {
+            lines.Children.Add(new TextBlock
+            {
+                Text = $"{(check.Held ? "\u2713" : "\u2717")}  {check.Subject}  {check.Name}",
+                FontSize = 12,
+                Foreground = (Brush)resources.FindResource(check.Held ? ThemeKeys.TextSecondary : ThemeKeys.StateError),
+                TextTrimming = TextTrimming.CharacterEllipsis
+            });
+        }
+
+        if (checks.Count > VerdictChecks.Listed)
+        {
+            lines.Children.Add(new TextBlock
+            {
+                Text = $"and {checks.Count - VerdictChecks.Listed} more - the run's summary lists every check.",
+                FontSize = 12,
+                Foreground = (Brush)resources.FindResource(ThemeKeys.TextFaint),
+                TextTrimming = TextTrimming.CharacterEllipsis
+            });
+        }
     }
 
     /// <summary>The line under a step's name: whatever is worth knowing without opening it.</summary>

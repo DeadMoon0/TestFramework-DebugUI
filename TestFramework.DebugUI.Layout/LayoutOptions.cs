@@ -69,9 +69,12 @@ public sealed record LayoutOptions
     /// </remarks>
     public double StepHeightWithWidget { get; init; } = 240;
 
-    /// <summary>Gets the height the verdict grows by for each check it lists.</summary>
-    /// <remarks>A line of the check's own text, at the size the verdict writes it in.</remarks>
-    public double VerdictLineHeight { get; init; } = 18;
+    /// <summary>Gets the height of a check card in the assertions stage.</summary>
+    /// <remarks>
+    /// Shorter than a step: a check says what it checked and whether it held, and has no timing, widget or
+    /// outputs to make room for.
+    /// </remarks>
+    public double AssertionHeight { get; init; } = 96;
 
     /// <summary>
     /// Gets the horizontal gap between steps sharing a layer.

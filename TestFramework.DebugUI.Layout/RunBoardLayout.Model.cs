@@ -135,7 +135,7 @@ public static partial class RunBoardLayout
                 => LastChannel < other.FirstChannel || FirstChannel > other.LastChannel;
         }
 
-        private sealed class Row(int index, string stageName, ImmutableList<StepNode> steps, bool isVerdict = false)
+        private sealed class Row(int index, string stageName, ImmutableList<StepNode> steps, bool isAssertions = false)
         {
             internal int Index => index;
 
@@ -143,8 +143,8 @@ public static partial class RunBoardLayout
 
             internal ImmutableList<StepNode> Steps => steps;
 
-            /// <summary>Whether this row holds the verdict rather than steps the run executed.</summary>
-            internal bool IsVerdict => isVerdict;
+            /// <summary>Whether this row holds check cards rather than steps the run executed.</summary>
+            internal bool IsAssertions => isAssertions;
 
             internal double StepTop { get; set; }
 
@@ -166,7 +166,7 @@ public static partial class RunBoardLayout
 
             internal Dictionary<string, double> OutputX { get; } = new(StringComparer.Ordinal);
 
-            internal string NodeId => row.IsVerdict ? "verdict" : $"step:{row.StageName}/{step.StepId}";
+            internal string NodeId => row.IsAssertions ? $"assertion:{step.StepId}" : $"step:{row.StageName}/{step.StepId}";
 
             internal double Right(LayoutOptions measurements) => x + measurements.StepWidth;
 
@@ -201,9 +201,9 @@ public static partial class RunBoardLayout
             internal LayoutNode ToNode(LayoutOptions measurements) => new()
             {
                 Id = NodeId,
-                Kind = row.IsVerdict ? LayoutNodeKind.Verdict : LayoutNodeKind.Step,
+                Kind = row.IsAssertions ? LayoutNodeKind.Assertion : LayoutNodeKind.Step,
                 StageName = row.StageName,
-                StepId = row.IsVerdict ? null : step.StepId,
+                StepId = step.StepId,
                 X = x,
                 Y = row.StepTop,
                 Width = measurements.StepWidth,

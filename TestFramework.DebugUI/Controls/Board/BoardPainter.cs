@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
@@ -83,7 +82,7 @@ internal sealed class BoardPainter
     /// <summary>Dims every pipe whose value has not been produced yet.</summary>
     /// <remarks>
     /// A pipe is lit by its value existing rather than by its producer's state: a value can be
-    /// written by a step that then fails, and the flow did happen. The verdict's pipes are left
+    /// written by a step that then fails, and the flow did happen. The pipes into checks are left
     /// alone — they are coloured by whether the check held, which is not a question of flow.
     /// </remarks>
     private void RefreshPipes(RunGraph graph)
@@ -148,67 +147,7 @@ internal sealed class BoardPainter
             }
         }
 
-        RefreshVerdict(graph);
         RefreshPipes(graph);
-    }
-
-    /// <summary>
-    /// Repaints the verdict from the run as a whole.
-    /// </summary>
-    /// <remarks>
-    /// Counted by <see cref="RunTally"/>, the same function the summary page uses, so the box on the
-    /// board and the page behind it cannot give different answers to the same question.
-    /// </remarks>
-    private void RefreshVerdict(RunGraph graph)
-    {
-        if (visuals.Verdict is null)
-            return;
-
-        RunTally tally = RunTally.Of(graph);
-        bool decided = tally.IsFinished || tally.Failed > 0 || tally.AssertionsFailed > 0;
-
-        visuals.Verdict.Heading.Text = !decided ? "Checking" : tally.IsValid ? "Valid" : "Not valid";
-
-        visuals.Verdict.Why.Text = !decided
-            ? $"{tally.AssertionsPassed} check(s) held so far."
-            : tally.AssertionsFailed > 0
-                ? $"{tally.AssertionsFailed} of {tally.AssertionsPassed + tally.AssertionsFailed} check(s) did not hold."
-                : tally.Failed > 0
-                    ? $"Every check held, but {tally.Failed} step(s) failed."
-                    : $"All {tally.AssertionsPassed} check(s) held.";
-
-        visuals.Verdict.Box.BorderBrush = (Brush)resources.FindResource(
-            !decided ? ThemeKeys.StateRunning : tally.IsValid ? ThemeKeys.StateComplete : ThemeKeys.StateError);
-
-        WriteChecks(visuals.Verdict.Checks, VerdictChecks.Unwired(graph));
-    }
-
-    /// <summary>Lists the checks no pipe shows, a few of them, and says how many more there are.</summary>
-    private void WriteChecks(StackPanel lines, ImmutableList<VerdictCheck> checks)
-    {
-        lines.Children.Clear();
-
-        foreach (VerdictCheck check in checks.Take(VerdictChecks.Listed))
-        {
-            lines.Children.Add(new TextBlock
-            {
-                Text = $"{(check.Held ? "\u2713" : "\u2717")}  {check.Subject}  {check.Name}",
-                FontSize = 12,
-                Foreground = (Brush)resources.FindResource(check.Held ? ThemeKeys.TextSecondary : ThemeKeys.StateError),
-                TextTrimming = TextTrimming.CharacterEllipsis
-            });
-        }
-
-        if (checks.Count > VerdictChecks.Listed)
-        {
-            lines.Children.Add(new TextBlock
-            {
-                Text = $"and {checks.Count - VerdictChecks.Listed} more - the run's summary lists every check.",
-                FontSize = 12,
-                Foreground = (Brush)resources.FindResource(ThemeKeys.TextFaint),
-                TextTrimming = TextTrimming.CharacterEllipsis
-            });
-        }
     }
 
     /// <summary>The line under a step's name: whatever is worth knowing without opening it.</summary>

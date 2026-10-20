@@ -15,7 +15,7 @@ public enum LayoutNodeKind
     Step,
 
     /// <summary>
-    /// The verdict: every asserted value flows into it.
+    /// One check the run made, as a card in the assertions stage.
     /// </summary>
     /// <remarks>
     /// A run's steps say what happened; this says whether what happened was correct. Drawing it as a
@@ -23,7 +23,7 @@ public enum LayoutNodeKind
     /// can follow with your eye, rather than a list somewhere else that has to be reconciled with
     /// the board by hand.
     /// </remarks>
-    Verdict
+    Assertion
 }
 
 /// <summary>What a pipe carries.</summary>
@@ -33,11 +33,11 @@ public enum LayoutEdgeKind
     Consumption,
 
     /// <summary>
-    /// Runs from a value into the verdict, because that value was asserted on.
+    /// Runs from a value into a check card, because that value was asserted on.
     /// </summary>
     /// <remarks>
     /// Distinguished from a consumption so a view can colour it by whether the assertion held rather
-    /// than by what kind of value flowed: on the pipes into the verdict, holding or not holding is
+    /// than by what kind of value flowed: on the pipes into a check, holding or not holding is
     /// the only thing worth knowing.
     /// </remarks>
     Assertion
@@ -69,8 +69,14 @@ public sealed record LayoutNode
     /// <summary>Gets whether a value box holds a variable or an artifact.</summary>
     public DebugValueKind ValueKind { get; init; } = DebugValueKind.Variable;
 
-    /// <summary>Gets whether every assertion held, on a verdict box.</summary>
+    /// <summary>Gets whether the check held, on a check card - and whether every one did, on the assertions stage.</summary>
     public bool IsSatisfied { get; init; } = true;
+
+    /// <summary>Gets the check as the test wrote it, on a check card.</summary>
+    public string? Title { get; init; }
+
+    /// <summary>Gets what a check card checked, or how many checks held, on the assertions stage.</summary>
+    public string? Detail { get; init; }
 
     /// <summary>Gets the left edge.</summary>
     public required double X { get; init; }

@@ -61,7 +61,6 @@ public partial class UC_Board : UserControl
     /// nothing, so this repaints the card rather than relaying out the run.
     /// </remarks>
     private TimingDiff timing = TimingDiff.None;
-    private HashSet<string> brokenChecks = new(StringComparer.Ordinal);
     /// <summary>How far in the board is being looked at, and over which part.</summary>
     private readonly BoardViewport viewport;
 
@@ -158,20 +157,6 @@ public partial class UC_Board : UserControl
     {
         LayoutResult next = RunBoardLayout.Compute(graph);
 
-        // Which checks broke, so a pipe into the verdict can be coloured by its own outcome rather
-        // than by the run's. One failed check among five should show as one red pipe, not five.
-        //
-        // Only checks that were about a named value: a check against a bare value carries no
-        // identifier, and one against a step carries the step's name — which would colour a pipe for
-        // a variable that happens to share it.
-        brokenChecks =
-        [
-            .. graph.Assertions
-                .Where(assertion => !assertion.Succeeded)
-                .Where(assertion => assertion.TargetKind is DebugAssertionTargetKind.Variable or DebugAssertionTargetKind.Artifact)
-                .Select(assertion => assertion.Target)
-        ];
-
         // Value equality on the result is what makes this cheap: most events change a step's state
         // without moving anything, and rebuilding the canvas for those would throw away the whole
         // visual tree twenty times a second.
@@ -180,7 +165,7 @@ public partial class UC_Board : UserControl
         if (next != board)
         {
             board = next;
-            painter.Paints(board, composer.Compose(board, brokenChecks));
+            painter.Paints(board, composer.Compose(board));
         }
 
         // Fitted once, when a run first appears, and never again — refitting on every change would
@@ -201,7 +186,7 @@ public partial class UC_Board : UserControl
     private void Fit() => viewport.Fit(new Size(board.Width, board.Height));
 
     /// <summary>
-    /// Raised when the reader asks for the run's summary by clicking the verdict drawn on the board.
+    /// Raised when the reader asks for the run's summary by clicking a check drawn on the board.
     /// </summary>
     public event Action? SummaryRequested;
 
@@ -215,7 +200,7 @@ public partial class UC_Board : UserControl
     /// </remarks>
     public event Action<string, int>? StepSelected;
 
-    /// <summary>Asks for the summary, as clicking the verdict does.</summary>
+    /// <summary>Asks for the summary, as clicking a check does.</summary>
     /// <remarks>
     /// These three exist so the title bar and the keyboard shortcuts run the same code as each other
     /// rather than their own copies of it. Two paths to one action is how the two stop agreeing.

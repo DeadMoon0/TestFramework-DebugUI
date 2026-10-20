@@ -24,8 +24,6 @@ internal sealed class BoardVisuals
     /// <summary>The coloured stroke of each pipe, kept so it can dim or light as its value appears.</summary>
     public Dictionary<string, Path> Pipes { get; } = new(StringComparer.Ordinal);
 
-    /// <summary>The verdict box, when the run has one.</summary>
-    public VerdictVisual? Verdict { get; set; }
 }
 
 internal sealed record StepVisual(
@@ -37,6 +35,3 @@ internal sealed record StepVisual(
     TextBlock Elapsed,
     Border Breakpoint,
     Border Widget);
-
-/// <summary>The verdict's parts the painter fills in: its heading, the line under it, and the checks no pipe shows.</summary>
-internal sealed record VerdictVisual(Border Box, TextBlock Heading, TextBlock Why, StackPanel Checks);

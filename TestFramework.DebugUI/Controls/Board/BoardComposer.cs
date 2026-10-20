@@ -37,15 +37,21 @@ internal sealed class BoardComposer
     private readonly Action<string, int> stepSelected;
     private readonly Action summaryRequested;
 
-    /// <summary>Which checks failed, for the run being composed.</summary>
-    private IReadOnlySet<string> brokenChecks = new HashSet<string>(StringComparer.Ordinal);
+    /// <summary>The check cards on the board being composed, and the ones among them that did not hold.</summary>
+    /// <remarks>
+    /// Read off the cards themselves, so a pipe into a check is coloured by that check: two checks on one value,
+    /// one holding and one not, are one green pipe and one red one.
+    /// </remarks>
+    private IReadOnlySet<string> checkCards = new HashSet<string>(StringComparer.Ordinal);
+
+    private IReadOnlySet<string> failedChecks = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>Composes onto one canvas.</summary>
     /// <param name="resources">Where brushes and geometry are found; the board itself.</param>
     /// <param name="canvas">What is drawn into.</param>
     /// <param name="breakpoints">The marks a card draws and toggles.</param>
     /// <param name="stepSelected">What a click on a card means.</param>
-    /// <param name="summaryRequested">What a click on the verdict means.</param>
+    /// <param name="summaryRequested">What a click on a check means.</param>
     public BoardComposer(
         FrameworkElement resources,
         Canvas canvas,
@@ -62,13 +68,13 @@ internal sealed class BoardComposer
 
     /// <summary>Draws a whole board, and hands back what it drew.</summary>
     /// <param name="board">The geometry, which is the only thing that decides what goes where.</param>
-    /// <param name="brokenChecks">Which checks failed, so a pipe can be coloured by its own outcome.</param>
     /// <returns>Everything that can later be repainted without being rebuilt.</returns>
-    public BoardVisuals Compose(LayoutResult board, IReadOnlySet<string> brokenChecks)
+    public BoardVisuals Compose(LayoutResult board)
     {
         BoardVisuals visuals = new();
 
-        this.brokenChecks = brokenChecks;
+        checkCards = board.Nodes.Where(node => node.Kind == LayoutNodeKind.Assertion).Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
+        failedChecks = board.Nodes.Where(node => node.Kind == LayoutNodeKind.Assertion && !node.IsSatisfied).Select(node => node.Id).ToHashSet(StringComparer.Ordinal);
 
         canvas.Children.Clear();
 
@@ -88,10 +94,15 @@ internal sealed class BoardComposer
 
         foreach (LayoutNode node in board.Nodes.Where(node => node.Kind != LayoutNodeKind.Stage))
         {
-            UIElement visual = node.Kind == LayoutNodeKind.Verdict ? BuildVerdict(visuals, board, node) : BuildStep(visuals, board, node);
+            UIElement visual = node.Kind == LayoutNodeKind.Assertion ? BuildCheck(board, node) : BuildStep(visuals, board, node);
 
             Place(visual, node.X, node.Y);
         }
+
+        // The assertions stage's label goes over the pipes rather than under them: its checks take their pipes from
+        // above, so one always runs down through the band's header - and through the label, had it been drawn first.
+        foreach (LayoutNode node in board.Nodes.Where(node => node.Kind == LayoutNodeKind.Stage && IsAssertions(node)))
+            Place(BuildAssertionsLabel(node), node.X + 8, node.Y + 4);
 
         foreach (LayoutPort port in board.Ports)
             Place(BuildConnector(port), port.X - (BoardMetrics.ConnectorSize / 2), port.Y - (BoardMetrics.ConnectorSize / 2));
@@ -113,58 +124,96 @@ internal sealed class BoardComposer
     /// A stage is context, so it stays at the edge of visibility. Drawn any stronger it competes
     /// with the steps inside it, and the steps are the thing being read.
     /// </remarks>
-    private UIElement BuildStage(LayoutNode node) => new Border
+    private UIElement BuildStage(LayoutNode node)
     {
-        Width = node.Width,
-        Height = node.Height,
-        CornerRadius = new CornerRadius(4),
-        // A whisper of the text colour rather than a whisper of white: on a light theme the same wash
-        // has to go the other way, and the ink is the only thing in the palette that already knows which
-        // way that is.
-        Background = ThemeFollow.Wash(ThemeKeys.TextPrimary, 0x08),
-        BorderThickness = new Thickness(1),
-        BorderBrush = (Brush)resources.FindResource(ThemeKeys.PanelEdge),
+        // The assertions stage is the one band that is about the run rather than a part of it, so it carries the
+        // outcome's colour - green when every check held, red when one did not - where every other band is faint.
+        bool isAssertions = IsAssertions(node);
+        string tint = node.IsSatisfied ? ThemeKeys.StateComplete : ThemeKeys.StateError;
+
+        return new Border
+        {
+            Width = node.Width,
+            Height = node.Height,
+            CornerRadius = new CornerRadius(4),
+            // A whisper of the text colour rather than a whisper of white: on a light theme the same wash
+            // has to go the other way, and the ink is the only thing in the palette that already knows which
+            // way that is.
+            Background = isAssertions ? ThemeFollow.Wash(tint, 0x14) : ThemeFollow.Wash(ThemeKeys.TextPrimary, 0x08),
+            BorderThickness = new Thickness(isAssertions ? 1.5 : 1),
+            BorderBrush = (Brush)resources.FindResource(isAssertions ? tint : ThemeKeys.PanelEdge),
+            Child = isAssertions ? null : new TextBlock
+            {
+                Text = node.StageName.ToUpperInvariant(),
+                Foreground = (Brush)resources.FindResource(ThemeKeys.TextFaint),
+                Opacity = 0.55,
+                FontSize = 10,
+                Margin = new Thickness(12, 8, 0, 0),
+                VerticalAlignment = VerticalAlignment.Top,
+                HorizontalAlignment = HorizontalAlignment.Left
+            }
+        };
+    }
+
+    private static bool IsAssertions(LayoutNode stage) => string.Equals(stage.StageName, RunChecks.StageName, StringComparison.Ordinal);
+
+    /// <summary>The assertions stage's name and count, on a chip of its own so a pipe passes behind it.</summary>
+    private UIElement BuildAssertionsLabel(LayoutNode node) => new Border
+    {
+        CornerRadius = new CornerRadius(3),
+        Background = (Brush)resources.FindResource(ThemeKeys.SurfaceCard),
+        Padding = new Thickness(4, 1, 4, 1),
+        IsHitTestVisible = false,
         Child = new TextBlock
         {
-            Text = node.StageName.ToUpperInvariant(),
-            Foreground = (Brush)resources.FindResource(ThemeKeys.TextFaint),
-            Opacity = 0.55,
+            Text = $"ASSERTIONS  \u00b7  {node.Detail}",
+            Foreground = (Brush)resources.FindResource(node.IsSatisfied ? ThemeKeys.StateComplete : ThemeKeys.StateError),
             FontSize = 10,
-            Margin = new Thickness(12, 8, 0, 0),
-            VerticalAlignment = VerticalAlignment.Top,
-            HorizontalAlignment = HorizontalAlignment.Left
+            FontWeight = FontWeights.SemiBold
         }
     };
 
     /// <summary>
-    /// Builds the verdict: the box every asserted value flows into.
+    /// Builds a check: a card in the assertions stage saying what was checked and whether it held.
     /// </summary>
     /// <remarks>
-    /// The one card on the board that is not a thing the run did. It is the conclusion drawn from the
-    /// pipes arriving at it, which is why it is drawn as their destination rather than as a panel
-    /// somewhere else — "why is this run valid" becomes something the eye can follow.
+    /// Built from the layout alone - the check's name, its subject and its outcome are on the node - because a
+    /// check that changes changes the layout, and the card is drawn afresh with it. A check on a value has that
+    /// value plugged into its top edge, so "why is this run valid" is something the eye can follow up the pipe.
     /// </remarks>
-    private UIElement BuildVerdict(BoardVisuals visuals, LayoutResult board, LayoutNode node)
+    private UIElement BuildCheck(LayoutResult board, LayoutNode node)
     {
-        TextBlock heading = new()
+        string state = node.IsSatisfied ? ThemeKeys.StateComplete : ThemeKeys.StateError;
+
+        Border status = new() { Width = 10, Height = 10, CornerRadius = new CornerRadius(5), Background = (Brush)resources.FindResource(state) };
+
+        TextBlock name = new()
         {
+            Text = node.Title,
             Foreground = (Brush)resources.FindResource(ThemeKeys.TextPrimary),
-            FontSize = 20,
-            FontWeight = FontWeights.Bold,
+            FontSize = 16,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(8, 0, 0, 0)
+        };
+
+        StackPanel heading = new() { Orientation = Orientation.Horizontal, Children = { status, name } };
+
+        TextBlock subject = new()
+        {
+            Text = node.Detail,
+            Foreground = (Brush)resources.FindResource(ThemeKeys.TextSecondary),
+            FontSize = 12,
+            Margin = new Thickness(0, 4, 0, 0),
             TextTrimming = TextTrimming.CharacterEllipsis
         };
 
-        TextBlock why = new()
+        TextBlock outcome = new()
         {
-            Foreground = (Brush)resources.FindResource(ThemeKeys.TextSecondary),
-            FontSize = 12,
-            Margin = new Thickness(0, 6, 0, 0),
-            TextWrapping = TextWrapping.Wrap
+            Text = node.IsSatisfied ? "held" : "did not hold",
+            Foreground = (Brush)resources.FindResource(node.IsSatisfied ? ThemeKeys.TextFaint : ThemeKeys.StateError),
+            FontSize = 11,
+            Margin = new Thickness(0, 4, 0, 0)
         };
-
-        // The checks no pipe can show - on a step, a set of steps, an expression - one line each. The layout made the
-        // room for them; the painter writes them, because they change as checks arrive.
-        StackPanel checks = new() { Margin = new Thickness(0, 6, 0, 0) };
 
         Border box = new()
         {
@@ -173,14 +222,14 @@ internal sealed class BoardComposer
             CornerRadius = new CornerRadius(4),
             Background = (Brush)resources.FindResource(ThemeKeys.SurfaceCard),
             BorderThickness = new Thickness(2),
-            BorderBrush = Brushes.Transparent,
+            BorderBrush = (Brush)resources.FindResource(state),
             Cursor = Cursors.Hand,
             ToolTip = "Open the run's summary.",
             Child = Plated(board, node, new StackPanel
             {
                 Margin = new Thickness(16, 6, 16, 6),
                 VerticalAlignment = VerticalAlignment.Center,
-                Children = { heading, why, checks }
+                Children = { heading, subject, outcome }
             })
         };
 
@@ -190,7 +239,6 @@ internal sealed class BoardComposer
             summaryRequested();
         };
 
-        visuals.Verdict = new VerdictVisual(box, heading, why, checks);
         return box;
     }
 
@@ -445,10 +493,10 @@ internal sealed class BoardComposer
     /// </remarks>
     private UIElement BuildConnector(LayoutPort port)
     {
-        // A connector on the verdict is coloured like the pipe arriving at it. It is the same claim
+        // A connector on a check is coloured like the pipe arriving at it. It is the same claim
         // at both ends, and a green socket at the end of a red pipe reads as two different things.
-        Brush flow = string.Equals(port.NodeId, "verdict", StringComparison.Ordinal)
-            ? (Brush)resources.FindResource(brokenChecks.Contains(port.Key) ? ThemeKeys.StateError : ThemeKeys.StateComplete)
+        Brush flow = checkCards.Contains(port.NodeId)
+            ? (Brush)resources.FindResource(failedChecks.Contains(port.NodeId) ? ThemeKeys.StateError : ThemeKeys.StateComplete)
             : (Brush)resources.FindResource(port.Kind == DebugValueKind.Artifact ? ThemeKeys.FlowArtifact : ThemeKeys.FlowVariable);
 
         Border ring = new()
@@ -492,11 +540,11 @@ internal sealed class BoardComposer
 
         PathGeometry geometry = new() { Figures = { path } };
 
-        // A pipe into the verdict is carrying a claim, not a value, so it is coloured by whether the
+        // A pipe into a check is carrying a claim, not a value, so it is coloured by whether the
         // claim held. Colouring it by variable-or-artifact there would waste the only place on the
         // board where pass and fail can be seen without reading anything.
         Brush flow = edge.Kind == LayoutEdgeKind.Assertion
-            ? (Brush)resources.FindResource(brokenChecks.Contains(edge.Key) ? ThemeKeys.StateError : ThemeKeys.StateComplete)
+            ? (Brush)resources.FindResource(failedChecks.Contains(edge.ToNodeId) ? ThemeKeys.StateError : ThemeKeys.StateComplete)
             : (Brush)resources.FindResource(edge.ValueKind == DebugValueKind.Artifact ? ThemeKeys.FlowArtifact : ThemeKeys.FlowVariable);
 
         yield return new Path

@@ -106,28 +106,28 @@ public static partial class RunBoardLayout
                 }
             }
 
-            AddVerdictRow(index);
+            AddAssertionRows(index);
         }
 
         /// <summary>
-        /// Adds the verdict as a last row that every asserted value flows into.
+        /// Adds the assertions stage below the run: one card per check, a few to a row.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// Modelled as a row holding one box rather than as a case of its own, so it inherits the
-        /// routing wholesale: its pipes get tracks, lanes and corners from the same passes that draw
-        /// every other pipe. A verdict wired up by a parallel code path would be the one thing on the
+        /// Each check is laid out as a step whose one input is the value it checked, so it inherits the
+        /// routing wholesale: its pipe gets tracks, lanes and corners from the same passes that draw
+        /// every other pipe. Checks wired up by a parallel code path would be the one thing on the
         /// board free to cross something.
         /// </para>
         /// <para>
-        /// Only values a step actually produced are wired in. An assertion against something the
-        /// board never drew has nothing to run a pipe from, and inventing a source for it would draw
-        /// a flow that did not happen.
+        /// Only values a step actually produced are wired in. A check against something the board never
+        /// drew has nothing to run a pipe from, and inventing a source for it would draw a flow that did
+        /// not happen - so that card simply has nothing plugged into it.
         /// </para>
         /// </remarks>
-        private void AddVerdictRow(int index)
+        private void AddAssertionRows(int index)
         {
-            if (graph.Assertions.Count == 0)
+            if (checks.Count == 0)
                 return;
 
             Dictionary<string, StepIO> produced = new(StringComparer.Ordinal);
@@ -135,28 +135,27 @@ public static partial class RunBoardLayout
             foreach (StepIO output in graph.Stages.SelectMany(stage => stage.Steps).SelectMany(step => step.Outputs))
                 produced.TryAdd(output.Key, output);
 
-            IReadOnlySet<string> producedKeys = produced.Keys.ToHashSet(StringComparer.Ordinal);
-
-            // Drawn whenever the run checked anything. The checks no pipe can show are listed inside it, and a run
-            // proved entirely by those - steps that completed, an expression - used to get no verdict at all.
-            ImmutableList<StepIO> asserted =
-            [
-                .. graph.Assertions
-                    .Where(assertion => VerdictChecks.IsWired(assertion, producedKeys))
-                    .Select(assertion => assertion.Target)
-                    .Distinct(StringComparer.Ordinal)
-                    .Select(target => produced[target])
-            ];
-
-            StepNode verdict = new()
+            for (int first = 0; first < checks.Count; first += RunChecks.PerRow)
             {
-                StepId = 0,
-                Name = "Verdict",
-                Inputs = asserted
-            };
+                ImmutableList<StepNode> cards =
+                [
+                    .. checks
+                        .Skip(first)
+                        .Take(RunChecks.PerRow)
+                        .Select((check, offset) => new StepNode
+                        {
+                            StepId = first + offset,
+                            Name = check.Name,
+                            Inputs = check.Value is { } value ? [produced[value]] : []
+                        })
+                ];
 
-            rows.Add(new Row(index, VerdictStage, [verdict], isVerdict: true));
+                rows.Add(new Row(index++, RunChecks.StageName, cards, isAssertions: true));
+            }
         }
+
+        /// <summary>The run's checks, one per card, in the order the assertions stage draws them.</summary>
+        private readonly ImmutableList<RunCheck> checks = RunChecks.Of(graph);
 
         /// <summary>
         /// Fixes every x coordinate: the steps, their connectors, and the values beneath them.
@@ -223,13 +222,13 @@ public static partial class RunBoardLayout
         /// <remarks>
         /// Per step rather than per board: a step that drew something needs the room to show it, and
         /// one that drew nothing would only be paying for empty space — a board of mostly-blank tall
-        /// cards is a board that fits smaller and reads worse. The verdict grows by a line for each
-        /// check it lists - the ones no pipe can show - up to a few, and then one line for the rest.
+        /// cards is a board that fits smaller and reads worse. A check card is shorter still: it has
+        /// nothing to show but what it checked and whether it held.
         /// </remarks>
         private double HeightOf(Row row, StepNode step)
         {
-            if (row.IsVerdict)
-                return measurements.StepHeight + (VerdictChecks.Lines(VerdictChecks.Unwired(graph).Count) * measurements.VerdictLineHeight);
+            if (row.IsAssertions)
+                return measurements.AssertionHeight;
 
             return graph.Widgets.Any(widget => widget.BelongsTo(row.StageName, step.StepId))
                 ? measurements.StepHeightWithWidget
@@ -253,14 +252,6 @@ public static partial class RunBoardLayout
 
         private const double MinimumValueWidth = 60;
 
-        /// <summary>
-        /// The stage the verdict row claims to belong to.
-        /// </summary>
-        /// <remarks>
-        /// A name no stage can have, because the verdict is not a stage: it keeps the row out of the
-        /// step lookup's way without the rest of the arrangement needing to know it is special.
-        /// </remarks>
-        private const string VerdictStage = "$verdict";
     }
 
     /// <summary>Keeps declaration order while dropping a key declared more than once.</summary>

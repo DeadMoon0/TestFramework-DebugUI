@@ -18,14 +18,10 @@ public static partial class RunBoardLayout
 
             nodes.AddRange(BuildStageBands());
 
-            // The verdict is the one box whose appearance depends on the run as a whole rather than
-            // on the thing it draws, so it is the one box the arrangement has to finish itself.
-            bool satisfied = graph.Assertions.All(assertion => assertion.Succeeded);
-
             foreach (StepBox step in steps.Values)
             {
                 LayoutNode node = step.ToNode(measurements);
-                nodes.Add(node.Kind == LayoutNodeKind.Verdict ? node with { IsSatisfied = satisfied } : node);
+                nodes.Add(node.Kind == LayoutNodeKind.Assertion ? AsCheck(node) : node);
             }
 
             foreach (Wire wire in wires)
@@ -142,12 +138,12 @@ public static partial class RunBoardLayout
         /// What a pipe into a given consumer carries.
         /// </summary>
         /// <remarks>
-        /// A pipe into the verdict is an assertion rather than a consumption: nothing downstream uses
+        /// A pipe into a check is an assertion rather than a consumption: nothing downstream uses
         /// the value, it is being checked. The distinction is what lets the view colour those pipes by
         /// whether the check held.
         /// </remarks>
         private static LayoutEdgeKind KindOf(Wire wire)
-            => wire.Consumer.Row.IsVerdict ? LayoutEdgeKind.Assertion : LayoutEdgeKind.Consumption;
+            => wire.Consumer.Row.IsAssertions ? LayoutEdgeKind.Assertion : LayoutEdgeKind.Consumption;
 
         private LayoutPort Port(string nodeId, StepIO declared, bool isInput, bool connected, double x, double y)
         {
@@ -172,12 +168,19 @@ public static partial class RunBoardLayout
             return port;
         }
 
+        /// <summary>A check card, finished with what the check was and whether it held.</summary>
+        private LayoutNode AsCheck(LayoutNode node)
+        {
+            RunCheck check = checks[node.StepId ?? 0];
+
+            return node with { Title = check.Name, Detail = check.Subject, IsSatisfied = check.Held };
+        }
+
         private IEnumerable<LayoutNode> BuildStageBands()
         {
-            // The verdict belongs to no stage: it is a statement about the run, and banding it would
-            // read as a stage the run executed.
+            // The checks are banded like any stage, below the stages the run executed; what tells them apart is
+            // how the view colours a band that is about the run's checks.
             foreach (IGrouping<string, Row> stage in rows
-                         .Where(row => !row.IsVerdict)
                          .GroupBy(row => row.StageName, StringComparer.Ordinal))
             {
                 List<LayoutNode> members = [];
@@ -196,11 +199,15 @@ public static partial class RunBoardLayout
                 double top = measurements.Snap(members.Min(node => node.Y) - measurements.StageHeaderHeight);
                 double bottom = measurements.Snap(members.Max(node => node.Bottom) + measurements.StagePadding);
 
+                bool isAssertions = string.Equals(stage.Key, RunChecks.StageName, StringComparison.Ordinal);
+
                 yield return new LayoutNode
                 {
                     Id = "stage:" + stage.Key,
                     Kind = LayoutNodeKind.Stage,
                     StageName = stage.Key,
+                    IsSatisfied = !isAssertions || checks.All(check => check.Held),
+                    Detail = isAssertions ? $"{checks.Count(check => check.Held)} of {checks.Count} held" : null,
                     X = left,
                     Y = top,
                     Width = right - left,

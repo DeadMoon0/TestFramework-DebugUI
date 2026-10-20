@@ -89,6 +89,7 @@ internal static class ThemeKeys
 
     // Icons, as geometry rather than as pictures, so they take the colour of whatever draws them.
     public const string IconClose = "IconClose";
+    public const string IconPopOut = "IconPopOut";
     public const string IconChevron = "IconChevron";
     public const string IconPanelRuns = "IconPanelRuns";
     public const string IconPanelValues = "IconPanelValues";

@@ -175,6 +175,24 @@ internal sealed class DockDragController
     }
 
     /// <summary>
+    /// Puts a docked panel into a window of its own, where it already was on the screen.
+    /// </summary>
+    /// <remarks>
+    /// The same window a drag out would give it, and the other way to get one: a drag is a gesture to discover,
+    /// and this is a button. Placed over the card it came from and as big as it was, so nothing jumps.
+    /// </remarks>
+    /// <param name="panel">The panel to float.</param>
+    /// <param name="onScreen">Where its card is, in physical pixels.</param>
+    public void PopOut(PanelId panel, Rect onScreen)
+        => arrangement.Apply(layout => layout.Float(panel, OnItsMonitor(new DockBounds
+        {
+            Left = onScreen.Left,
+            Top = onScreen.Top,
+            Width = onScreen.Width,
+            Height = onScreen.Height
+        }.Sane(), onScreen.TopLeft)));
+
+    /// <summary>
     /// Notes where every card ended up, once the layout has actually placed them.
     /// </summary>
     /// <remarks>
@@ -361,16 +379,22 @@ internal sealed class DockDragController
     /// monitor the pointer is on.
     /// </remarks>
     private static DockBounds Near(Point where)
-    {
-        NativeMethods.RECT work = NativeMethods.WorkAreaAt(where);
+        => OnItsMonitor(
+            new DockBounds
+            {
+                Left = where.X - 60,
+                Top = where.Y - 14,
+                Width = 480,
+                Height = 560
+            }.Sane(),
+            where);
 
-        return new DockBounds
-        {
-            Left = where.X - 60,
-            Top = where.Y - 14,
-            Width = 480,
-            Height = 560
-        }.Sane().Within(new DockBounds
+    /// <summary>Bounds kept wholly inside the work area of the monitor a point is on.</summary>
+    private static DockBounds OnItsMonitor(DockBounds bounds, Point anchor)
+    {
+        NativeMethods.RECT work = NativeMethods.WorkAreaAt(anchor);
+
+        return bounds.Within(new DockBounds
         {
             Left = work.Left,
             Top = work.Top,

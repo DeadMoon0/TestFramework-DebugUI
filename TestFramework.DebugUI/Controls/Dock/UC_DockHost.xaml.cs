@@ -401,6 +401,7 @@ public partial class UC_DockHost : UserControl
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
         TextBlock title = new()
         {
@@ -424,10 +425,18 @@ public partial class UC_DockHost : UserControl
         }
 
         Button close = CloseButton(panel);
-        Grid.SetColumn(close, 2);
+        Grid.SetColumn(close, 3);
 
         row.Children.Add(title);
         row.Children.Add(close);
+
+        // Only on a docked card. A floating window's header is the same one, and there the panel is already out.
+        if (draggable)
+        {
+            Button popOut = PopOutButton(panel);
+            Grid.SetColumn(popOut, 2);
+            row.Children.Add(popOut);
+        }
 
         Border header = new()
         {
@@ -497,6 +506,43 @@ public partial class UC_DockHost : UserControl
         drag.MakeDraggable(tab, panel);
 
         return tab;
+    }
+
+    /// <summary>The header's way to put the panel into a window of its own, besides dragging it out.</summary>
+    private Button PopOutButton(PanelId panel)
+    {
+        Button popOut = new()
+        {
+            Style = (Style)FindResource(ThemeKeys.IconButton),
+            Margin = new Thickness(0, 2, 0, 2),
+            ToolTip = "Pop this panel out into its own window",
+            Content = new Path
+            {
+                Data = (Geometry)FindResource(ThemeKeys.IconPopOut),
+                Stroke = (Brush)FindResource(ThemeKeys.TextFaint),
+                StrokeThickness = 1.4,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                StrokeLineJoin = PenLineJoin.Round,
+                Width = 18,
+                Height = 18,
+                Stretch = Stretch.None
+            }
+        };
+
+        popOut.Click += (_, _) =>
+        {
+            // Where the card is now - header and panel together - so the window opens over it, the same size.
+            FrameworkElement body = panels[panel];
+            FrameworkElement header = (FrameworkElement)popOut.Parent;
+
+            Point corner = header.PointToScreen(new Point(0, 0));
+            Point opposite = body.PointToScreen(new Point(body.ActualWidth, body.ActualHeight));
+
+            drag.PopOut(panel, new Rect(corner, opposite));
+        };
+
+        return popOut;
     }
 
     private Button CloseButton(PanelId panel)

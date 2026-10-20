@@ -42,7 +42,7 @@ internal sealed class DockDragController
     /// </remarks>
     private const double DragThreshold = 6;
 
-    private readonly FrameworkElement surface;
+    private readonly Control surface;
     private readonly Panel hints;
 
     /// <summary>Every card on screen, collected as they are drawn so a drag has an answer for every pixel.</summary>
@@ -51,6 +51,9 @@ internal sealed class DockDragController
     /// <summary>Where the pointer went down on a header, until it has moved far enough to mean a drag.</summary>
     private Point? pressedAt;
 
+    /// <summary>The hint drawn above a floating window while it is moved, created the first time one is.</summary>
+    private DockHintWindow? above;
+
     /// <summary>Takes drops for one host, and draws its hints.</summary>
     /// <param name="arrangement">Where the panels are.</param>
     /// <param name="surface">
@@ -58,7 +61,7 @@ internal sealed class DockDragController
     /// cards and the edges of the window — places no card owns.
     /// </param>
     /// <param name="hints">The canvas a hint is drawn into.</param>
-    public DockDragController(DockArrangement arrangement, FrameworkElement surface, Panel hints)
+    public DockDragController(DockArrangement arrangement, Control surface, Panel hints)
     {
         this.arrangement = arrangement;
         this.surface = surface;
@@ -109,23 +112,66 @@ internal sealed class DockDragController
             if (Math.Abs(now.X - from.X) < DragThreshold && Math.Abs(now.Y - from.Y) < DragThreshold)
                 return;
 
-            pressedAt = null;
-
-            Refresh?.Invoke();
-
-            DataObject carried = new(PanelFormat, panel);
-
-            // Blocks until the drag ends, which is what lets the arrangement be changed exactly once, on release.
-            DragDropEffects taken = DragDrop.DoDragDrop(handle, carried, DragDropEffects.Move);
-
-            ClearHint();
-
-            // Nothing accepted it. That is either a drop into empty space — which means a window of its own — or a
-            // drag the reader abandoned with Escape, and the two are told apart by where the pointer ended up
-            // rather than by the result, because cancelling reports exactly the same thing as dropping nowhere.
-            if (taken == DragDropEffects.None && OutsideEveryWindow(out Point where))
-                arrangement.Apply(layout => layout.Float(panel, Near(where)));
+            Carry(handle, panel);
         };
+
+        // Leaving the handle with the button held is travel too. A header is 26 pixels tall and not captured, so a
+        // quick pull downwards left it between two mouse moves and the drag never began.
+        handle.MouseLeave += (_, e) =>
+        {
+            if (e.LeftButton == MouseButtonState.Pressed && pressedAt is not null)
+                Carry(handle, panel);
+        };
+    }
+
+    /// <summary>Carries a panel from where it is to wherever it is let go.</summary>
+    private void Carry(FrameworkElement handle, PanelId panel)
+    {
+        pressedAt = null;
+
+        Refresh?.Invoke();
+
+        DataObject carried = new(PanelFormat, panel);
+
+        // Cancelling reports exactly the same "nothing took it" as a drop no target accepted, so the drag source
+        // watches for Escape itself. Telling the two apart by where the pointer ended up instead meant a drop had to
+        // land outside every window of ours to float - and a maximised window leaves no such place.
+        bool cancelled = false;
+        QueryContinueDragEventHandler watch = (_, query) => cancelled |= query.EscapePressed;
+        handle.QueryContinueDrag += watch;
+
+        // The host is see-through where it has no card: the board underneath takes the pointer there, so a drag
+        // over an empty side or the open middle never reached it - no hint, and no way to dock into an empty well.
+        // For as long as one of our panels is in the air, the whole host takes it.
+        Brush? background = surface.Background;
+        surface.Background = Brushes.Transparent;
+
+        DragDropEffects taken;
+        try
+        {
+            // Blocks until the drag ends, which is what lets the arrangement be changed exactly once, on release.
+            taken = DragDrop.DoDragDrop(handle, carried, DragDropEffects.Move);
+        }
+        finally
+        {
+            handle.QueryContinueDrag -= watch;
+            surface.Background = background;
+        }
+
+        ClearHint();
+
+        if (cancelled)
+        {
+            NativeMethods.DiscardPendingEscape();
+            return;
+        }
+
+        // Let go where no well, card or float took it: the panel gets a window of its own, there.
+        if (taken == DragDropEffects.None)
+        {
+            Point where = NativeMethods.CursorPosition();
+            arrangement.Apply(layout => layout.Float(panel, Near(where)));
+        }
     }
 
     /// <summary>
@@ -229,8 +275,37 @@ internal sealed class DockDragController
         hints.Children.Add(hint);
     }
 
-    /// <summary>Takes the hint away.</summary>
-    public void ClearHint() => hints.Children.Clear();
+    /// <summary>
+    /// Draws the hint above every window rather than in the host, for a floating window being moved over it.
+    /// </summary>
+    /// <remarks>The float is under the pointer, so a hint drawn in the host would be underneath it.</remarks>
+    public void ShowHintAbove(DockDrop? drop)
+    {
+        if (drop is null)
+        {
+            above?.Hide();
+            return;
+        }
+
+        // The host's coordinates are device-independent; the corners, taken to the screen, come back in the
+        // physical pixels the overlay is placed in.
+        Point corner = surface.PointToScreen(drop.Hint.TopLeft);
+        Point opposite = surface.PointToScreen(drop.Hint.BottomRight);
+
+        above ??= new DockHintWindow { Owner = Window.GetWindow(surface) };
+        above.ShowAt(
+            new Rect(corner, opposite),
+            drop.IsInsertion,
+            (Brush)surface.FindResource(ThemeKeys.Accent),
+            ThemeFollow.Wash(ThemeKeys.Accent, 0x30));
+    }
+
+    /// <summary>Takes the hint away, wherever it is drawn.</summary>
+    public void ClearHint()
+    {
+        hints.Children.Clear();
+        above?.Hide();
+    }
 
     /// <summary>Shows where the panel under the pointer would land.</summary>
     private void WhileDragging(object sender, DragEventArgs e)
@@ -279,50 +354,28 @@ internal sealed class DockDragController
         arrangement.Apply(layout => layout.Move(dragged, side, index));
     }
 
-    /// <summary>
-    /// Whether the pointer is outside every window of this application, and where.
-    /// </summary>
-    /// <remarks>
-    /// Asked at the end of a drag nothing accepted. A pointer still over one of our windows means the reader
-    /// cancelled — Escape reports the same "nothing took it" as a drop into the desktop — and cancelling must not
-    /// leave a new window behind.
-    /// </remarks>
-    private static bool OutsideEveryWindow(out Point where)
-    {
-        where = NativeMethods.CursorPosition();
-
-        foreach (Window window in Application.Current.Windows)
-        {
-            if (!window.IsVisible)
-                continue;
-
-            // Read from Win32 rather than from Left and Top, so the comparison happens in the same physical
-            // pixels the pointer was reported in. The two spaces part company the moment a second monitor runs
-            // at a different scale, which is precisely when somebody is dragging a panel onto it.
-            IntPtr handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
-
-            if (handle == IntPtr.Zero || !NativeMethods.GetWindowRect(handle, out NativeMethods.RECT at))
-                continue;
-
-            Rect bounds = new(at.Left, at.Top, at.Right - at.Left, at.Bottom - at.Top);
-
-            if (bounds.Contains(where))
-                return false;
-        }
-
-        return true;
-    }
-
     /// <summary>A float placed under the pointer rather than at its corner.</summary>
     /// <remarks>
     /// Offset by a little, so the new window appears where the panel was let go instead of hanging its title bar
-    /// off the cursor — and so the pointer is over the window's body, ready to drag it again.
+    /// off the cursor — and so the pointer is over the window's body, ready to drag it again. Kept wholly on the
+    /// monitor the pointer is on.
     /// </remarks>
-    private static DockBounds Near(Point where) => new DockBounds
+    private static DockBounds Near(Point where)
     {
-        Left = where.X - 60,
-        Top = where.Y - 14,
-        Width = 480,
-        Height = 560
-    }.Sane();
+        NativeMethods.RECT work = NativeMethods.WorkAreaAt(where);
+
+        return new DockBounds
+        {
+            Left = where.X - 60,
+            Top = where.Y - 14,
+            Width = 480,
+            Height = 560
+        }.Sane().Within(new DockBounds
+        {
+            Left = work.Left,
+            Top = work.Top,
+            Width = work.Right - work.Left,
+            Height = work.Bottom - work.Top
+        });
+    }
 }

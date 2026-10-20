@@ -194,37 +194,32 @@ internal static class WindowChromeInterop
     /// Tells a maximising window how big it is allowed to get.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Without this a borderless window maximises over the taskbar, because the frame that would
     /// otherwise have accounted for it is the thing this window does not have.
+    /// </para>
+    /// <para>
+    /// Asked of the monitor the window is on. It used to be asked of the one the pointer was on, and a pointer
+    /// anywhere but the primary monitor - left there by a drag, or the window maximised from a shortcut - gave
+    /// the whole monitor instead of its work area, and the window covered the taskbar. The position is relative
+    /// to that monitor's own corner, which is what Windows reads it as.
+    /// </para>
     /// </remarks>
     private static void WmGetMinMaxInfo(IntPtr hwnd, IntPtr lParam)
     {
-        GetCursorPos(out POINT lMousePosition);
+        IntPtr monitor = MonitorFromWindow(hwnd, MonitorOptions.MONITOR_DEFAULTTONEAREST);
+        MONITORINFO info = new();
 
-        IntPtr lPrimaryScreen = MonitorFromPoint(new POINT(0, 0), MonitorOptions.MONITOR_DEFAULTTOPRIMARY);
-        MONITORINFO lPrimaryScreenInfo = new();
-        if (GetMonitorInfo(lPrimaryScreen, lPrimaryScreenInfo) == false)
+        if (monitor == IntPtr.Zero || !GetMonitorInfo(monitor, info))
             return;
 
-        IntPtr lCurrentScreen = MonitorFromPoint(lMousePosition, MonitorOptions.MONITOR_DEFAULTTONEAREST);
+        MINMAXINFO limits = (MINMAXINFO)Marshal.PtrToStructure(lParam, typeof(MINMAXINFO))!;
 
-        MINMAXINFO lMmi = (MINMAXINFO)Marshal.PtrToStructure(lParam, typeof(MINMAXINFO))!;
+        limits.ptMaxPosition.X = info.rcWork.Left - info.rcMonitor.Left;
+        limits.ptMaxPosition.Y = info.rcWork.Top - info.rcMonitor.Top;
+        limits.ptMaxSize.X = info.rcWork.Right - info.rcWork.Left;
+        limits.ptMaxSize.Y = info.rcWork.Bottom - info.rcWork.Top;
 
-        if (lPrimaryScreen.Equals(lCurrentScreen))
-        {
-            lMmi.ptMaxPosition.X = lPrimaryScreenInfo.rcWork.Left;
-            lMmi.ptMaxPosition.Y = lPrimaryScreenInfo.rcWork.Top;
-            lMmi.ptMaxSize.X = lPrimaryScreenInfo.rcWork.Right - lPrimaryScreenInfo.rcWork.Left;
-            lMmi.ptMaxSize.Y = lPrimaryScreenInfo.rcWork.Bottom - lPrimaryScreenInfo.rcWork.Top;
-        }
-        else
-        {
-            lMmi.ptMaxPosition.X = lPrimaryScreenInfo.rcMonitor.Left;
-            lMmi.ptMaxPosition.Y = lPrimaryScreenInfo.rcMonitor.Top;
-            lMmi.ptMaxSize.X = lPrimaryScreenInfo.rcMonitor.Right - lPrimaryScreenInfo.rcMonitor.Left;
-            lMmi.ptMaxSize.Y = lPrimaryScreenInfo.rcMonitor.Bottom - lPrimaryScreenInfo.rcMonitor.Top;
-        }
-
-        Marshal.StructureToPtr(lMmi, lParam, true);
+        Marshal.StructureToPtr(limits, lParam, true);
     }
 }

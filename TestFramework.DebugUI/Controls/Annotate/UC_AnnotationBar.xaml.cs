@@ -193,7 +193,7 @@ public partial class UC_AnnotationBar : UserControl
     private void Paint(Button button, Path glyph, bool chosen)
     {
         button.Background = chosen ? (Brush)FindResource(ThemeKeys.Accent) : Brushes.Transparent;
-        glyph.Stroke = (Brush)FindResource(chosen ? ThemeKeys.TextPrimary : ThemeKeys.TextSecondary);
+        glyph.Stroke = (Brush)FindResource(chosen ? ThemeKeys.AccentInk : ThemeKeys.TextSecondary);
     }
 
     private void Choose(string ink)

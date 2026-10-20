@@ -43,6 +43,29 @@ public sealed record DockBounds
         Width = Math.Max(MinimumWidth, Width),
         Height = Math.Max(MinimumHeight, Height)
     };
+
+    /// <summary>The same bounds moved, and shrunk if they must be, so the whole window lies inside an area.</summary>
+    /// <remarks>
+    /// The area is a monitor's work area. A float placed at the pointer near an edge used to hang off it - half on
+    /// the next monitor, where Windows then drew it at that monitor's scale, or under the taskbar with no caption
+    /// left to drag it back by.
+    /// </remarks>
+    /// <param name="area">Where the window has to fit.</param>
+    public DockBounds Within(DockBounds area)
+    {
+        ArgumentNullException.ThrowIfNull(area);
+
+        double width = Math.Min(Width, area.Width);
+        double height = Math.Min(Height, area.Height);
+
+        return this with
+        {
+            Width = width,
+            Height = height,
+            Left = Math.Clamp(Left, area.Left, area.Left + area.Width - width),
+            Top = Math.Clamp(Top, area.Top, area.Top + area.Height - height)
+        };
+    }
 }
 
 /// <summary>

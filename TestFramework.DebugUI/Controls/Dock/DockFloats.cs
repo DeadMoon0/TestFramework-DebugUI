@@ -164,19 +164,19 @@ internal sealed class DockFloats
     {
         // Moving a float over the main window is the only way a single panel gets docked again: it has no tab to
         // drag, and its caption belongs to the window. So the system's own move doubles as the drag, and the hint
-        // appears under it exactly as it would for one.
+        // appears as it would for one - drawn above the float, since the float is what is under the pointer.
         window.Dragging += where =>
         {
             if (Carrying(window) is not { } afloat)
                 return;
 
-            drag.ShowHint(afloat.Active is { } carried ? drag.Resolve(where, carried) : null);
+            drag.ShowHintAbove(afloat.Active is { } carried ? drag.Resolve(where, carried) : null);
         };
+
+        window.MoveEnded += drag.ClearHint;
 
         window.Dropped += where =>
         {
-            drag.ClearHint();
-
             if (Carrying(window) is not { } afloat)
                 return;
 

@@ -91,7 +91,13 @@ public class DockDropTests
         Assert.Equal(DockSide.Left, DockDrop.Resolve(new Point(40, 400), Host, [], PanelId.Runs)!.Side);
         Assert.Equal(DockSide.Right, DockDrop.Resolve(new Point(960, 400), Host, [], PanelId.Runs)!.Side);
         Assert.Equal(DockSide.Bottom, DockDrop.Resolve(new Point(500, 760), Host, [], PanelId.Runs)!.Side);
-        Assert.Equal(DockSide.Center, DockDrop.Resolve(new Point(500, 300), Host, [], PanelId.Runs)!.Side);
+    }
+
+    [Fact]
+    public void TheOpenBoardIsNoTarget_SoLettingGoThereFloatsThePanel()
+    {
+        // The one place a maximised window offers for popping a panel out.
+        Assert.Null(DockDrop.Resolve(new Point(500, 300), Host, [], PanelId.Runs));
     }
 
     [Fact]

@@ -49,10 +49,25 @@ public partial class DockFloatWindow : Window
     public event Action<Point>? Dragging;
 
     /// <summary>Raised when the reader stops dragging the window, with where they let go.</summary>
+    /// <remarks>Only for a move that went somewhere: not for a resize, and not for a move cancelled with Escape.</remarks>
     public event Action<Point>? Dropped;
 
-    /// <summary>Whether the reader is dragging the window right now.</summary>
+    /// <summary>Raised whenever the system's move loop ends, however it ended - the moment a hint has to go.</summary>
+    public event Action? MoveEnded;
+
+    /// <summary>Whether the system's move loop is running for this window right now.</summary>
     private bool dragging;
+
+    /// <summary>Whether the running loop is sizing the window rather than moving it.</summary>
+    /// <remarks>
+    /// Told by the message the loop sends rather than by comparing sizes. A window carried onto a monitor at
+    /// another scale is resized by Windows halfway through a move, and a size comparison took that move for a
+    /// resize - so the float neither showed a hint nor docked.
+    /// </remarks>
+    private bool sizing;
+
+    /// <summary>Where the window was when the system's move loop began.</summary>
+    private DockBounds? movedFrom;
 
     /// <summary>
     /// Watches for the start and end of a system move.
@@ -66,14 +81,41 @@ public partial class DockFloatWindow : Window
     {
         const int EnterSizeMove = 0x0231;
         const int ExitSizeMove = 0x0232;
+        const int Sizing = 0x0214;
 
         if (message == EnterSizeMove)
+        {
             dragging = true;
+            sizing = false;
+            movedFrom = Bounds();
+        }
+
+        if (message == Sizing && dragging)
+            sizing = true;
 
         if (message == ExitSizeMove && dragging)
         {
             dragging = false;
-            Dropped?.Invoke(NativeMethods.CursorPosition());
+
+            // Only a move docks. A resize ends the same way, and so does a move cancelled with Escape - which puts
+            // the window back where it started - and either one, let go over the main window, used to dock it.
+            bool docks = !sizing && movedFrom is { } from && !(Same(from.Left, Bounds().Left) && Same(from.Top, Bounds().Top));
+
+            movedFrom = null;
+            sizing = false;
+
+            // After the loop, not inside it. Windows still reports the window's final position once this message
+            // returns, and a dock applied here hands this window to another float first - which that late report
+            // then moved to where this one had been let go.
+            Point where = NativeMethods.CursorPosition();
+
+            Dispatcher.BeginInvoke(() =>
+            {
+                MoveEnded?.Invoke();
+
+                if (docks)
+                    Dropped?.Invoke(where);
+            });
         }
 
         return IntPtr.Zero;
@@ -262,7 +304,8 @@ public partial class DockFloatWindow : Window
 
         Moved?.Invoke(Bounds());
 
-        if (dragging)
+        // A resize runs in the same loop, and a window being sized is not being carried anywhere.
+        if (dragging && !sizing)
             Dragging?.Invoke(NativeMethods.CursorPosition());
     }
 

@@ -60,9 +60,13 @@ internal sealed record DockDrop
     /// </para>
     /// <para>
     /// Away from every rail card, the edges of the window answer: the outer bands dock to a side, and what is
-    /// left is the centre. The order matters. The centre card fills the whole canvas, so if it were consulted
-    /// with the rails it would cover every band and an empty side would have nothing to aim at — dropping a panel
-    /// along the bottom would quietly add it to the centre's tabs instead.
+    /// left is the centre's card, when it has one. The order matters. The centre card fills the whole canvas, so if
+    /// it were consulted with the rails it would cover every band and an empty side would have nothing to aim at —
+    /// dropping a panel along the bottom would quietly add it to the centre's tabs instead.
+    /// </para>
+    /// <para>
+    /// The open board with no centre card is no target at all, and that is what floats a panel. Answering it with
+    /// the centre left a maximised window without a single place to let go of a panel and get a window for it.
     /// </para>
     /// </remarks>
     public static DockDrop? Resolve(Point at, Size host, IReadOnlyList<DockCard> cards, PanelId dragged)
@@ -123,10 +127,7 @@ internal sealed record DockDrop
                 return new DockDrop { Side = DockSide.Center, Index = card.Index + 1, Hint = card.Bounds };
         }
 
-        return Edge(
-            DockSide.Center,
-            new Rect(host.Width * band, 0, host.Width * (1 - (2 * band)), host.Height * (1 - band)),
-            cards);
+        return null;
     }
 
     /// <summary>How wide the strip along each edge is, as a fraction of the window.</summary>

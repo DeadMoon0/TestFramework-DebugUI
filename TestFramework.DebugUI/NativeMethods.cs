@@ -36,6 +36,9 @@ namespace TestFramework.DebugUI
 		[DllImport("user32.dll", SetLastError = true)]
 		public static extern IntPtr MonitorFromPoint(POINT pt, MonitorOptions dwFlags);
 
+		[DllImport("user32.dll")]
+		public static extern IntPtr MonitorFromWindow(IntPtr handle, MonitorOptions dwFlags);
+
 		[DllImport("user32.dll", SetLastError = true)]
 		[return: MarshalAs(UnmanagedType.Bool)]
 		public static extern bool SetWindowPos(IntPtr handle, IntPtr after, int x, int y, int width, int height, uint flags);
@@ -57,6 +60,53 @@ namespace TestFramework.DebugUI
 		/// </remarks>
 		public static System.Windows.Point CursorPosition()
 			=> GetCursorPos(out POINT at) ? new System.Windows.Point(at.X, at.Y) : default;
+
+		/// <summary>
+		/// The work area of the monitor a point is on, in physical pixels - the monitor less its taskbar.
+		/// </summary>
+		/// <remarks>The nearest monitor for a point on none, so there is always an answer.</remarks>
+		public static RECT WorkAreaAt(System.Windows.Point at)
+		{
+			IntPtr monitor = MonitorFromPoint(new POINT((int)at.X, (int)at.Y), MonitorOptions.MONITOR_DEFAULTTONEAREST);
+			MONITORINFO info = new();
+
+			return monitor != IntPtr.Zero && GetMonitorInfo(monitor, info) ? info.rcWork : new RECT(0, 0, 1920, 1080);
+		}
+
+		[StructLayout(LayoutKind.Sequential)]
+		private struct MSG
+		{
+			public IntPtr Handle;
+			public uint Message;
+			public IntPtr WParam;
+			public IntPtr LParam;
+			public uint Time;
+			public POINT Point;
+		}
+
+		[DllImport("user32.dll")]
+		[return: MarshalAs(UnmanagedType.Bool)]
+		private static extern bool PeekMessage(out MSG message, IntPtr handle, uint first, uint last, uint remove);
+
+		/// <summary>
+		/// Takes the Escape presses still waiting in this thread's queue out of it.
+		/// </summary>
+		/// <remarks>
+		/// The press that cancels a drag ends the drag and is then delivered to the window as well, where Escape
+		/// also means "close the topmost thing" - so cancelling a drag put the inspector away. Only Escape is
+		/// taken: a queued key is left alone unless it is that one.
+		/// </remarks>
+		public static void DiscardPendingEscape()
+		{
+			const uint KeyDown = 0x0100;
+			const uint KeyUp = 0x0101;
+			const uint Remove = 0x0001;
+			const uint Keep = 0x0000;
+			const int Escape = 0x1B;
+
+			while (PeekMessage(out MSG next, IntPtr.Zero, KeyDown, KeyUp, Keep) && (int)next.WParam == Escape)
+				PeekMessage(out _, next.Handle, next.Message, next.Message, Remove);
+		}
 
 		public enum MonitorOptions : uint
 		{

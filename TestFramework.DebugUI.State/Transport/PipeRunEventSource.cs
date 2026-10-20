@@ -83,6 +83,9 @@ public sealed partial class PipeRunEventSource : IRunEventSource, IDisposable
     private readonly CancellationToken shutdownToken;
     private readonly ConcurrentDictionary<string, PipeSession> sessions = new(StringComparer.Ordinal);
 
+    /// <summary>The runs seen finishing, so a check sent to one afterwards is not taken for a crashed run.</summary>
+    private readonly FinishedRunMemory finishedRuns = new(capacity: 512);
+
     private int started;
     private bool disposed;
     private Task? acceptLoop;

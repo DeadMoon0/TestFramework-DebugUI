@@ -199,7 +199,9 @@ public sealed partial class PipeRunEventSource
     /// </remarks>
     private PipeSession? Attach(string sessionId, NamedPipeServerStream server, PipeFrameStream framing)
     {
-        PipeSession session = new(sessionId, server, framing);
+        // A run that already finished, being added to: the checks made on it once its test had it back. Its
+        // connection closing is the end of that addition, not a run going away halfway.
+        PipeSession session = new(sessionId, server, framing) { SawFinish = finishedRuns.Finished(sessionId) };
 
         while (!sessions.TryAdd(sessionId, session))
         {
@@ -241,7 +243,10 @@ public sealed partial class PipeRunEventSource
         SessionEnded?.Invoke(new SessionEnded { SessionId = session.SessionId, Finished = session.SawFinish });
 
         if (session.SawFinish)
+        {
+            finishedRuns.Remember(session.SessionId);
             return;
+        }
 
         // The producer went away without finishing. That is what a killed or crashed test host looks
         // like from here, and it is worth saying: the run is on screen and simply stops, which is

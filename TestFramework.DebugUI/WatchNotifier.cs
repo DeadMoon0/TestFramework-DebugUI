@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Reactive.Concurrency;
 using System.Reactive.Disposables;
 using Axiom.State;
 using TestFramework.DebugUI.State;
@@ -25,19 +26,39 @@ namespace TestFramework.DebugUI;
 /// finished the last time this looked must not be announced again — otherwise selecting a run, or a
 /// refresh finding forty recorded runs, would raise forty notifications.
 /// </para>
+/// <para>
+/// A run is judged a moment after it finishes, not at the moment. The checks a test makes on the run it got back
+/// arrive after the finish, so a run that proved everything was still "unproven" right when it finished - and
+/// was announced as needing a look.
+/// </para>
 /// </remarks>
 public sealed class WatchNotifier : IDisposable
 {
     private readonly CompositeDisposable subscriptions = [];
     private readonly HashSet<string> announced = new(StringComparer.Ordinal);
 
+    /// <summary>Runs that have finished and are waiting out the settle time, with how they look now.</summary>
+    private readonly Dictionary<string, RunSummary> settling = new(StringComparer.Ordinal);
+
+    private readonly IScheduler scheduler;
+
     private bool primed;
+
+    /// <summary>How long after finishing a run is judged.</summary>
+    /// <remarks>Late checks follow their run within milliseconds; a second leaves room for a slow machine.</remarks>
+    public static readonly TimeSpan SettleTime = TimeSpan.FromSeconds(1);
 
     /// <summary>Starts watching.</summary>
     /// <param name="store">The store whose run list is watched.</param>
-    public WatchNotifier(StateStore<MainState> store)
+    /// <param name="scheduler">Where the settle time is waited out; the window's dispatcher unless a test says otherwise.</param>
+    public WatchNotifier(StateStore<MainState> store, IScheduler? scheduler = null)
     {
         ArgumentNullException.ThrowIfNull(store);
+
+        // The window's own context, so the notice is raised on the thread the tray icon belongs to.
+        this.scheduler = scheduler ?? new SynchronizationContextScheduler(
+            System.Threading.SynchronizationContext.Current
+            ?? throw new InvalidOperationException("Watching needs the window's thread, or a scheduler handed in."));
 
         subscriptions.Add(store
             .Bind(RunsSelectors.SelectAll)
@@ -78,19 +99,36 @@ public sealed class WatchNotifier : IDisposable
 
         foreach (RunSummary run in runs.Where(IsSettled))
         {
+            if (settling.ContainsKey(run.SessionId))
+            {
+                settling[run.SessionId] = run;
+                continue;
+            }
+
             if (!announced.Add(run.SessionId))
                 continue;
 
-            if (!ShouldAnnounce(run))
-                continue;
-
-            Finished?.Invoke(new RunFinishedNotice
+            settling[run.SessionId] = run;
+            subscriptions.Add(scheduler.Schedule(run.SessionId, SettleTime, (_, sessionId) =>
             {
-                SessionId = run.SessionId,
-                Test = run.ShortName,
-                Health = run.Health
-            });
+                Judge(sessionId);
+                return Disposable.Empty;
+            }));
         }
+    }
+
+    /// <summary>Announces a run, if it is worth it, as it looks once the settle time is over.</summary>
+    private void Judge(string sessionId)
+    {
+        if (!settling.Remove(sessionId, out RunSummary? run) || !ShouldAnnounce(run))
+            return;
+
+        Finished?.Invoke(new RunFinishedNotice
+        {
+            SessionId = run.SessionId,
+            Test = run.ShortName,
+            Health = run.Health
+        });
     }
 
     /// <summary>
